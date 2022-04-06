@@ -4,7 +4,7 @@ extern crate lazy_static;
 mod mgba;
 
 fn main() {
-    let mut core = mgba::Core::new_gba().unwrap();
+    let mut core = mgba::Core::new_gba("tango").unwrap();
     let rom_vf = mgba::VFile::open("bn6f.gba", 0).unwrap();
     core.load_rom(rom_vf);
     core.reset();

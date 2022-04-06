@@ -39,14 +39,14 @@ impl Drop for VFile {
 pub struct Core(*mut c::mCore);
 
 impl Core {
-    pub fn new_gba() -> Option<Self> {
+    pub fn new_gba(config_name: &str) -> Option<Self> {
         let ptr = unsafe { c::GBACoreCreate() };
         if ptr.is_null() {
             None
         } else {
             unsafe {
                 ptr.as_ref().unwrap().init.unwrap()(ptr);
-                let config_name_cstr = CString::new("tango").unwrap();
+                let config_name_cstr = CString::new(config_name).unwrap();
                 c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
                 c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
             }
@@ -73,7 +73,10 @@ impl Core {
 
 impl Drop for Core {
     fn drop(&mut self) {
-        unsafe { self.0.as_ref().unwrap().deinit.unwrap()(self.0) }
+        unsafe {
+            c::mCoreConfigDeinit(&mut self.0.as_mut().unwrap().config);
+            self.0.as_ref().unwrap().deinit.unwrap()(self.0);
+        }
     }
 }
 
