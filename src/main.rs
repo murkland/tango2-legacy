@@ -8,7 +8,7 @@ fn main() {
     let rom_vf = mgba::VFile::open("bn6f.gba", 0).unwrap();
     core.load_rom(rom_vf);
     core.reset();
-    mgba::set_default_logger(&|| {});
+    mgba::set_default_logger(Box::new(&|category, level, message| print!("{}", message)));
 
     let now = std::time::Instant::now();
     for i in 1..1000 {
