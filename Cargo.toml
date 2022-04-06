@@ -1,0 +1,10 @@
+[package]
+name = "tango"
+version = "0.3.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.53.1"
