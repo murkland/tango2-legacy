@@ -1,8 +1,8 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
 mod c {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(dead_code)]
     include!(concat!(env!("OUT_DIR"), "/mgba_bindings.rs"));
 }
 
@@ -11,7 +11,7 @@ pub struct Core {
 }
 
 impl Core {
-    pub fn newGBA() -> Option<Self> {
+    pub fn new_gba() -> Option<Self> {
         let ptr = unsafe { c::GBACoreCreate() };
         if ptr.is_null() {
             None
