@@ -20,6 +20,14 @@ impl Core {
         }
     }
 
+    pub unsafe fn as_ptr(&self) -> *const c::mCore {
+        self.0
+    }
+
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut c::mCore {
+        self.0
+    }
+
     pub fn load_rom(&mut self, mut vf: vfile::VFile) -> bool {
         unsafe { self.0.as_ref().unwrap().loadROM.unwrap()(self.0, vf.release()) }
     }
