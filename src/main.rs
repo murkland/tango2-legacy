@@ -37,7 +37,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let pixels = std::sync::Arc::clone(&pixels);
         thread.frame_callback = Some(Box::new(move || {
-            pixels.lock().unwrap().get_frame().copy_from_slice(&vbuf);
+            let mut pixels = pixels.lock().unwrap();
+            let frame = pixels.get_frame();
+            frame.copy_from_slice(&vbuf);
+            for i in (0..frame.len()).step_by(4) {
+                frame[i + 3] = 0xff;
+            }
         }));
     }
     thread.start();
