@@ -8,7 +8,7 @@ pub struct Game {
     vbuf2: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     window: winit::window::Window,
     pixels: pixels::Pixels,
-    thread: Box<mgba::thread::Thread>,
+    thread: mgba::thread::Thread,
     _stream: rodio::OutputStream,
     gui: gui::Gui,
 }
