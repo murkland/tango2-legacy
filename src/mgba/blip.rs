@@ -1,8 +1,8 @@
 use super::c;
 
 pub struct Blip<'a> {
-    pub core: &'a super::core::Core,
-    pub ptr: *mut c::blip_t,
+    pub(crate) _core: &'a super::core::Core,
+    pub(crate) ptr: *mut c::blip_t,
 }
 
 impl<'a> Blip<'a> {
@@ -14,7 +14,7 @@ impl<'a> Blip<'a> {
         unsafe { c::blip_samples_avail(self.ptr) }
     }
 
-    pub fn read_samples(&self, out: &mut Vec<i16>, count: i32, stereo: bool) -> i32 {
+    pub fn read_samples(&self, out: &mut [i16], count: i32, stereo: bool) -> i32 {
         unsafe {
             c::blip_read_samples(
                 self.ptr,

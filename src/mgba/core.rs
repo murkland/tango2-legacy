@@ -1,9 +1,12 @@
 use super::blip;
 use super::c;
+use super::gba;
 use super::vfile;
 use std::ffi::CString;
 
 pub struct Core(*mut c::mCore);
+
+unsafe impl Send for Core {}
 
 impl Core {
     pub fn new_gba(config_name: &str) -> Option<Self> {
@@ -12,6 +15,10 @@ impl Core {
             None
         } else {
             unsafe {
+                ptr.as_mut().unwrap().opts.sampleRate = 48000;
+                ptr.as_mut().unwrap().opts.videoSync = false;
+                ptr.as_mut().unwrap().opts.audioSync = true;
+
                 ptr.as_ref().unwrap().init.unwrap()(ptr);
                 let config_name_cstr = CString::new(config_name).unwrap();
                 c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
@@ -50,11 +57,12 @@ impl Core {
     }
 
     pub fn get_audio_channel(&mut self, ch: i32) -> blip::Blip {
-        let blip_ptr = unsafe { self.0.as_ref().unwrap().getAudioChannel.unwrap()(self.0, ch) };
-        blip::Blip {
-            core: self,
-            ptr: blip_ptr,
-        }
+        let ptr = unsafe { self.0.as_ref().unwrap().getAudioChannel.unwrap()(self.0, ch) };
+        blip::Blip { _core: self, ptr }
+    }
+
+    pub fn frequency(&mut self) -> i32 {
+        unsafe { self.0.as_ref().unwrap().frequency.unwrap()(self.0) }
     }
 
     pub fn set_video_buffer(&mut self, buffer: &mut Vec<u8>, stride: u64) {
@@ -78,6 +86,11 @@ impl Core {
             );
         }
         (width, height)
+    }
+
+    pub fn get_gba(&mut self) -> gba::GBA {
+        let ptr = unsafe { self.0.as_ref().unwrap().board as *mut c::GBA };
+        gba::GBA { core: self, ptr }
     }
 }
 

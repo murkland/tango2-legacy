@@ -4,7 +4,7 @@ use super::core;
 pub struct Thread<'a> {
     _core: std::sync::Arc<std::sync::Mutex<core::Core>>,
     raw: c::mCoreThread,
-    pub frame_callback: Option<Box<dyn FnMut() + Send + Sync + 'a>>,
+    pub frame_callback: Option<Box<dyn FnMut() + Send + 'a>>,
 }
 
 #[allow(non_snake_case)]
