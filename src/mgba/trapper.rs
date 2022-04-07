@@ -36,7 +36,7 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
     let trapper =
         components[c::mCPUComponentType_CPU_COMPONENT_MISC_1 as usize] as *mut _ as *mut Trapper;
     if imm == TRAPPER_IMM {
-        let caller = arm_core.get_gpr(15) as u32 - 4;
+        let caller = arm_core.get_gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
         let trap = (*trapper).r#impl.traps.get(&caller).unwrap();
         c::ARMRunFake(arm_core.0, trap.original as u32);
         (trap.handler)();
