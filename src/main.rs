@@ -5,14 +5,13 @@ mod mgba;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
+    mgba::log::set_default_logger(Box::new(&|category, level, message| {
+        log::info!("{}", message)
+    }));
 
     let mut core = mgba::core::Core::new_gba("tango").unwrap();
     let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
     core.load_rom(rom_vf);
-    core.reset();
-    mgba::log::set_default_logger(Box::new(&|category, level, message| {
-        log::info!("{}", message)
-    }));
 
     let (width, height) = core.desired_video_dimensions();
     let mut vbuf = vec![0u8; (width * height * 4) as usize];
