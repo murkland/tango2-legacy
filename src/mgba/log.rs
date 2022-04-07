@@ -14,8 +14,16 @@ lazy_static! {
             log: Some(c_log),
             filter: &mut *MLOG_FILTER.lock().unwrap(),
         }));
-    static ref LOG_FUNC: send_wrapper::SendWrapper<std::sync::Mutex<Option<Box<dyn Fn(i32, u32, String) -> ()>>>> =
-        send_wrapper::SendWrapper::new(std::sync::Mutex::new(None));
+    static ref LOG_FUNC: send_wrapper::SendWrapper<std::sync::Mutex<Box<dyn Fn(i32, u32, String) -> ()>>> =
+        send_wrapper::SendWrapper::new(std::sync::Mutex::new(Box::new(
+            &|category, level, message| {
+                let category_name =
+                    unsafe { std::ffi::CStr::from_ptr(c::mLogCategoryName(category)) }
+                        .to_str()
+                        .unwrap();
+                log::info!("{}: {}", category_name, message);
+            }
+        )));
 }
 
 unsafe extern "C" fn c_log(
@@ -25,15 +33,10 @@ unsafe extern "C" fn c_log(
     fmt: *const i8,
     args: *mut i8,
 ) {
-    LOG_FUNC.lock().unwrap().as_ref().unwrap()(
-        category,
-        level,
-        vsprintf::vsprintf(fmt, args).unwrap(),
-    );
+    LOG_FUNC.lock().unwrap().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
 }
 
-pub fn set_default_logger(f: Box<dyn Fn(i32, u32, String) -> ()>) {
-    *LOG_FUNC.lock().unwrap() = Some(f);
+pub fn init() {
     unsafe {
         c::mLogSetDefaultLogger(&mut *MLOGGER.lock().unwrap());
     }

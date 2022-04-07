@@ -128,6 +128,32 @@ impl Core {
     pub fn raw_write_32(&self, address: u32, segment: i32, v: u32) {
         unsafe { (*self.0).rawWrite32.unwrap()(self.0, address, segment, v) }
     }
+
+    pub fn get_game_title(&self) -> String {
+        let mut title = vec![0u8; 16];
+        unsafe { (*self.0).getGameTitle.unwrap()(self.0, title.as_mut_ptr() as *mut _ as *mut i8) }
+        let cstr = match std::ffi::CString::new(title) {
+            Ok(r) => r,
+            Err(err) => {
+                let nul_pos = err.nul_position();
+                std::ffi::CString::new(&err.into_vec()[0..nul_pos]).unwrap()
+            }
+        };
+        cstr.to_str().unwrap().to_string()
+    }
+
+    pub fn get_game_code(&self) -> String {
+        let mut code = vec![0u8; 12];
+        unsafe { (*self.0).getGameCode.unwrap()(self.0, code.as_mut_ptr() as *mut _ as *mut i8) }
+        let cstr = match std::ffi::CString::new(code) {
+            Ok(r) => r,
+            Err(err) => {
+                let nul_pos = err.nul_position();
+                std::ffi::CString::new(&err.into_vec()[0..nul_pos]).unwrap()
+            }
+        };
+        cstr.to_str().unwrap().to_string()
+    }
 }
 
 impl Drop for Core {

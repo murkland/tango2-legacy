@@ -11,10 +11,10 @@ impl ARMCore {
     }
 
     pub fn get_gpr(&self, r: usize) -> i32 {
-        return unsafe { (*self.0).__bindgen_anon_1.__bindgen_anon_1.gprs[r] };
+        return unsafe { (*self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r];
     }
 
     pub fn set_gpr(&mut self, r: usize, v: i32) {
-        unsafe { (*self.0).__bindgen_anon_1.__bindgen_anon_1.gprs[r] = v };
+        unsafe { (*self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r] = v;
     }
 }

@@ -3,14 +3,16 @@ use super::c;
 pub struct State(pub(super) c::GBASerializedState);
 
 impl State {
-    pub fn rom_title(&self) -> &str {
-        unsafe {
-            std::ffi::CStr::from_bytes_with_nul_unchecked(
-                &*(&self.0.title as *const [i8] as *const [u8]),
-            )
-        }
-        .to_str()
-        .unwrap()
+    pub fn rom_title(&self) -> String {
+        let title = unsafe { &*(&self.0.title as *const [i8] as *const [u8]) };
+        let cstr = match std::ffi::CString::new(title) {
+            Ok(r) => r,
+            Err(err) => {
+                let nul_pos = err.nul_position();
+                std::ffi::CString::new(&err.into_vec()[0..nul_pos]).unwrap()
+            }
+        };
+        cstr.to_str().unwrap().to_string()
     }
 
     pub fn rom_crc32(&self) -> u32 {

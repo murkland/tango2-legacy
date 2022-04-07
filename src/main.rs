@@ -6,9 +6,7 @@ mod mgba;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    mgba::log::set_default_logger(Box::new(&|category, level, message| {
-        log::info!("{}", message)
-    }));
+    mgba::log::init();
 
     let core = std::sync::Arc::new(std::sync::Mutex::new({
         let mut core = mgba::core::Core::new_gba("tango").unwrap();
@@ -16,6 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
         core.load_rom(rom_vf);
+
+        log::info!("loaded game: {}", core.get_game_title());
         core
     }));
 
