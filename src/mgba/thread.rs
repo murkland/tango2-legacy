@@ -2,7 +2,7 @@ use super::c;
 use super::core;
 
 pub struct Thread<'a> {
-    _core: &'a core::Core,
+    _core: std::sync::Arc<std::sync::Mutex<core::Core>>,
     raw: c::mCoreThread,
     pub frame_callback: Option<Box<dyn FnMut() + Send + Sync + 'a>>,
 }
@@ -16,8 +16,8 @@ unsafe extern "C" fn mgba_mCoreThread_frameCallback(ptr: *mut c::mCoreThread) {
 }
 
 impl<'a> Thread<'a> {
-    pub fn new(core: &'a mut core::Core) -> Self {
-        let core_ptr = unsafe { core.as_mut_ptr() };
+    pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
+        let core_ptr = unsafe { core.lock().unwrap().as_mut_ptr() };
         let mut t = Thread {
             _core: core,
             raw: unsafe { std::mem::zeroed::<c::mCoreThread>() },

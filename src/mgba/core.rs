@@ -1,3 +1,4 @@
+use super::blip;
 use super::c;
 use super::vfile;
 use std::ffi::CString;
@@ -38,6 +39,22 @@ impl Core {
 
     pub fn reset(&mut self) {
         unsafe { self.0.as_ref().unwrap().reset.unwrap()(self.0) }
+    }
+
+    pub fn get_audio_buffer_size(&self) -> u64 {
+        unsafe { self.0.as_ref().unwrap().getAudioBufferSize.unwrap()(self.0) }
+    }
+
+    pub fn set_audio_buffer_size(&mut self, size: u64) {
+        unsafe { self.0.as_ref().unwrap().setAudioBufferSize.unwrap()(self.0, size) }
+    }
+
+    pub fn get_audio_channel(&mut self, ch: i32) -> blip::Blip {
+        let blip_ptr = unsafe { self.0.as_ref().unwrap().getAudioChannel.unwrap()(self.0, ch) };
+        blip::Blip {
+            core: self,
+            ptr: blip_ptr,
+        }
     }
 
     pub fn set_video_buffer(&mut self, buffer: &mut Vec<u8>, stride: u64) {

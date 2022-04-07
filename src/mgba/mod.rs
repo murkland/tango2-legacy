@@ -1,3 +1,4 @@
+pub mod blip;
 mod c;
 pub mod core;
 pub mod log;
