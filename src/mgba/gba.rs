@@ -6,7 +6,7 @@ pub struct GBA(pub(super) *mut c::GBA);
 
 impl GBA {
     pub fn get_sync(&mut self) -> Option<sync::Sync> {
-        let ptr = unsafe { (*self.0).sync };
+        let ptr = unsafe { *self.0 }.sync;
         if ptr.is_null() {
             None
         } else {
