@@ -19,7 +19,8 @@ impl Game {
             let mut core = mgba::core::Core::new_gba("tango").unwrap();
             core.set_audio_buffer_size(1024);
 
-            let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
+            let rom_vf =
+                mgba::vfile::VFile::open("bn6f.gba", mgba::vfile::flags::O_RDONLY).unwrap();
             core.load_rom(rom_vf);
 
             log::info!("loaded game: {}", core.get_game_title());
