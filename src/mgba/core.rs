@@ -15,9 +15,13 @@ impl Core {
             None
         } else {
             unsafe {
-                ptr.as_mut().unwrap().opts.sampleRate = 48000;
-                ptr.as_mut().unwrap().opts.videoSync = false;
-                ptr.as_mut().unwrap().opts.audioSync = true;
+                {
+                    // TODO: Make this more generic maybe.
+                    let opts = &mut ptr.as_mut().unwrap().opts;
+                    opts.sampleRate = 48000;
+                    opts.videoSync = false;
+                    opts.audioSync = true;
+                }
 
                 ptr.as_ref().unwrap().init.unwrap()(ptr);
                 let config_name_cstr = CString::new(config_name).unwrap();
