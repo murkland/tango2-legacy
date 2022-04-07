@@ -46,11 +46,11 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
 }
 
 impl Trapper {
-    pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
+    pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Box<Self> {
         let mut cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
         cpu_component.init = Some(c_trapper_init);
         cpu_component.deinit = Some(c_trapper_deinit);
-        Trapper {
+        Box::new(Trapper {
             cpu_component,
             real_bkpt16: None,
             r#impl: Impl {
@@ -58,7 +58,7 @@ impl Trapper {
                 traps: std::collections::HashMap::new(),
             },
             _pin: std::marker::PhantomPinned,
-        }
+        })
     }
 
     pub fn add(&mut self, addr: u32, handler: Box<dyn Fn()>) {
