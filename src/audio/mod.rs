@@ -14,7 +14,7 @@ impl MGBAAudioSource {
     ) -> Self {
         let buf = {
             let core = core.as_ref().lock().unwrap();
-            vec![0; (core.get_audio_buffer_size() * 2 * 2) as usize]
+            vec![0; (core.get_audio_buffer_size() * 2) as usize]
         };
         Self {
             core,

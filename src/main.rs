@@ -42,15 +42,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_title("tango")
             .with_inner_size(size)
             .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
+            .build(&event_loop)?
     };
 
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture =
             pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
-        pixels::Pixels::new(width, height, surface_texture)?
+        pixels::PixelsBuilder::new(width, height, surface_texture)
+            .request_adapter_options(pixels::wgpu::RequestAdapterOptions {
+                power_preference: pixels::wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
+            .build()?
     };
 
     let mut thread = {
@@ -58,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mgba::thread::Thread::new(core)
     };
 
-    let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+    let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
     let audio_source = {
         let core = std::sync::Arc::clone(&core);
         audio::MGBAAudioSource::new(core, 48000)
@@ -85,10 +90,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
-        if let winit::event::Event::MainEventsCleared = event {
-            let vbuf2 = vbuf2.lock().unwrap();
-            pixels.get_frame().copy_from_slice(&vbuf2);
-            pixels.render().unwrap();
+        if let winit::event::Event::RedrawRequested(_) = event {
+            {
+                let vbuf2 = vbuf2.lock().unwrap();
+                pixels.get_frame().copy_from_slice(&vbuf2);
+                pixels.render().unwrap();
+            }
         }
 
         if input.update(&event) {
@@ -101,5 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pixels.resize_surface(size.width, size.height);
             }
         }
+
+        window.request_redraw();
     });
 }
