@@ -59,14 +59,14 @@ impl Trapper {
         })
     }
 
-    pub fn add(&mut self, addr: u32, handler: Box<dyn Fn()>) {
+    pub fn add(self: &mut Box<Self>, addr: u32, handler: Box<dyn Fn()>) {
         let core = self.r#impl.core.lock().unwrap();
         let original = core.raw_read_16(addr, -1);
         core.raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
         self.r#impl.traps.insert(addr, Trap { original, handler });
     }
 
-    pub fn attach(&mut self) {
+    pub fn attach(self: &mut Box<Self>) {
         let mut arm_core = {
             let mut core = self.r#impl.core.lock().unwrap();
             core.get_gba().get_cpu().0

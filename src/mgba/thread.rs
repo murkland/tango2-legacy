@@ -28,15 +28,15 @@ impl Thread {
         t
     }
 
-    pub fn start(&mut self) -> bool {
+    pub fn start(self: &mut Box<Self>) -> bool {
         unsafe { c::mCoreThreadStart(&mut self.raw) }
     }
 
-    pub fn join(&mut self) {
+    pub fn join(self: &mut Box<Self>) {
         unsafe { c::mCoreThreadJoin(&mut self.raw) }
     }
 
-    pub fn end(&mut self) {
+    pub fn end(self: &mut Box<Self>) {
         unsafe { c::mCoreThreadEnd(&mut self.raw) }
     }
 }
