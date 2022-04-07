@@ -16,7 +16,7 @@ impl VFile {
         }
     }
 
-    pub unsafe fn release(&mut self) -> *mut c::VFile {
+    pub(crate) unsafe fn release(&mut self) -> *mut c::VFile {
         let ptr = self.0;
         self.0 = std::ptr::null_mut();
         ptr
