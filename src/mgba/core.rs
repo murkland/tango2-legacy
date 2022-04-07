@@ -1,6 +1,7 @@
 use super::blip;
 use super::c;
 use super::gba;
+use super::state;
 use super::vfile;
 use std::ffi::CString;
 
@@ -95,6 +96,29 @@ impl Core {
     pub fn get_gba(&mut self) -> gba::GBA {
         let ptr = unsafe { self.0.as_ref().unwrap().board as *mut c::GBA };
         gba::GBA { core: self, ptr }
+    }
+
+    pub fn save_state(&self) -> Option<state::State> {
+        unsafe {
+            let mut state = std::mem::zeroed::<state::State>();
+            if self.0.as_ref().unwrap().saveState.unwrap()(
+                self.0,
+                &mut state.0 as *mut _ as *mut std::os::raw::c_void,
+            ) {
+                Some(state)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn load_state(&mut self, state: &state::State) {
+        unsafe {
+            self.0.as_ref().unwrap().loadState.unwrap()(
+                self.0,
+                &state.0 as *const _ as *const std::os::raw::c_void,
+            );
+        }
     }
 }
 
