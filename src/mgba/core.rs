@@ -5,7 +5,7 @@ use super::state;
 use super::vfile;
 use std::ffi::CString;
 
-pub struct Core(*mut c::mCore);
+pub struct Core(pub(crate) *mut c::mCore);
 
 unsafe impl Send for Core {}
 
@@ -31,10 +31,6 @@ impl Core {
             }
             Some(Core(ptr))
         }
-    }
-
-    pub(crate) unsafe fn as_mut_ptr(&mut self) -> *mut c::mCore {
-        self.0
     }
 
     pub fn load_rom(&mut self, mut vf: vfile::VFile) -> bool {

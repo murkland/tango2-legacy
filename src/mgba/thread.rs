@@ -17,7 +17,7 @@ unsafe extern "C" fn mgba_mCoreThread_frameCallback(ptr: *mut c::mCoreThread) {
 
 impl<'a> Thread<'a> {
     pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
-        let core_ptr = unsafe { core.lock().unwrap().as_mut_ptr() };
+        let core_ptr = core.lock().unwrap().0;
         let mut t = Thread {
             _core: core,
             raw: unsafe { std::mem::zeroed::<c::mCoreThread>() },
