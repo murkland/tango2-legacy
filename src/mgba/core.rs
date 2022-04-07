@@ -33,11 +33,7 @@ impl Core {
         }
     }
 
-    pub unsafe fn as_ptr(&self) -> *const c::mCore {
-        self.0
-    }
-
-    pub unsafe fn as_mut_ptr(&mut self) -> *mut c::mCore {
+    pub(crate) unsafe fn as_mut_ptr(&mut self) -> *mut c::mCore {
         self.0
     }
 
