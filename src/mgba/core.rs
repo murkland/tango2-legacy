@@ -5,7 +5,7 @@ use super::state;
 use super::vfile;
 use std::ffi::CString;
 
-pub struct Core(pub(crate) *mut c::mCore);
+pub struct Core(pub(super) *mut c::mCore);
 
 unsafe impl Send for Core {}
 

@@ -2,8 +2,8 @@ use super::c;
 use super::sync;
 
 pub struct GBA<'a> {
-    pub(crate) core: &'a super::core::Core,
-    pub(crate) ptr: *mut c::GBA,
+    pub(super) core: &'a super::core::Core,
+    pub(super) ptr: *mut c::GBA,
 }
 
 impl<'a> GBA<'a> {

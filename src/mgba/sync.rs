@@ -1,8 +1,8 @@
 use super::c;
 
 pub struct Sync<'a> {
-    pub(crate) _core: &'a super::core::Core,
-    pub(crate) ptr: *mut c::mCoreSync,
+    pub(super) _core: &'a super::core::Core,
+    pub(super) ptr: *mut c::mCoreSync,
 }
 
 impl<'a> Sync<'a> {

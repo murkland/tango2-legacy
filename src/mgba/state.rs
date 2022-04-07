@@ -1,6 +1,6 @@
 use super::c;
 
-pub struct State(pub(crate) c::GBASerializedState);
+pub struct State(pub(super) c::GBASerializedState);
 
 impl State {
     pub fn rom_title(&self) -> &str {

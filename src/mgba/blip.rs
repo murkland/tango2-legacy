@@ -1,8 +1,8 @@
 use super::c;
 
 pub struct Blip<'a> {
-    pub(crate) _core: &'a super::core::Core,
-    pub(crate) ptr: *mut c::blip_t,
+    pub(super) _core: &'a super::core::Core,
+    pub(super) ptr: *mut c::blip_t,
 }
 
 impl<'a> Blip<'a> {
