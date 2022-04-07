@@ -17,6 +17,9 @@ lazy_static = "1.4.0"
 vsprintf = "2.0.0"
 winit_input_helper = "0.11.1"
 log = "0.4"
+imgui = "0.8"
+imgui-wgpu = "0.19"
+imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-26"] }
 
 [build-dependencies]
 bindgen = "0.53.1"

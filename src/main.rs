@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 mod audio;
+mod gui;
 mod mgba;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,6 +95,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         core.get_gba().get_sync().unwrap().set_fps_target(60.0);
     }
 
+    let mut gui = gui::Gui::new(&window, &pixels);
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
@@ -101,10 +104,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let vbuf2 = vbuf2.lock().unwrap().clone();
                 pixels.get_frame().copy_from_slice(&vbuf2);
-                pixels.render().unwrap();
             }
+
+            gui.prepare(&window).expect("gui.prepare() failed");
+            pixels
+                .render_with(|encoder, render_target, context| {
+                    context.scaling_renderer.render(encoder, render_target);
+                    gui.render(&window, encoder, render_target, context)?;
+                    Ok(())
+                })
+                .unwrap();
         }
 
+        gui.handle_event(&window, &event);
         if input.update(&event) {
             if input.quit() {
                 *control_flow = winit::event_loop::ControlFlow::Exit;
@@ -150,8 +162,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             core.set_keys(keys);
-        }
 
-        window.request_redraw();
+            window.request_redraw();
+        }
     });
 }
