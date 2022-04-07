@@ -7,7 +7,6 @@ pub struct Trapper {
     cpu_component: c::mCPUComponent,
     real_bkpt16: Option<unsafe extern "C" fn(*mut c::ARMCore, i32)>,
     r#impl: Impl,
-    _pin: std::marker::PhantomPinned,
 }
 
 struct Trap {
@@ -57,7 +56,6 @@ impl Trapper {
                 core,
                 traps: std::collections::HashMap::new(),
             },
-            _pin: std::marker::PhantomPinned,
         })
     }
 
