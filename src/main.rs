@@ -26,17 +26,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     trapper.attach();
 
-    {
-        let core = std::sync::Arc::clone(&core);
-        let mut core = core.lock().unwrap();
-        core.reset();
-        let now = std::time::Instant::now();
-        for _i in 0..1000 {
-            core.run_frame();
-        }
-        println!("took {:?}", now.elapsed());
-    }
-
     let (width, height, vbuf) = {
         let core = std::sync::Arc::clone(&core);
         let mut core = core.lock().unwrap();
