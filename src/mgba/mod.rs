@@ -3,6 +3,7 @@ pub mod blip;
 mod c;
 pub mod core;
 pub mod gba;
+pub mod input;
 pub mod log;
 pub mod state;
 pub mod sync;

@@ -101,6 +101,10 @@ impl Core {
         };
     }
 
+    pub fn set_keys(&mut self, keys: u32) {
+        unsafe { (*self.0).setKeys.unwrap()(self.0, keys) }
+    }
+
     pub fn raw_read_8(&self, address: u32, segment: i32) -> u8 {
         unsafe { (*self.0).rawRead8.unwrap()(self.0, address, segment) as u8 }
     }

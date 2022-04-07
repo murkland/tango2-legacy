@@ -114,6 +114,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(size) = input.window_resized() {
                 pixels.resize_surface(size.width, size.height);
             }
+
+            let mut core = core.lock().unwrap();
+
+            let mut keys = 0u32;
+            if input.key_held(winit::event::VirtualKeyCode::Left) {
+                keys |= mgba::input::keys::LEFT;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Right) {
+                keys |= mgba::input::keys::RIGHT;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Up) {
+                keys |= mgba::input::keys::UP;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Down) {
+                keys |= mgba::input::keys::DOWN;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Z) {
+                keys |= mgba::input::keys::A;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::X) {
+                keys |= mgba::input::keys::B;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::A) {
+                keys |= mgba::input::keys::L;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::S) {
+                keys |= mgba::input::keys::R;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Return) {
+                keys |= mgba::input::keys::START;
+            }
+            if input.key_held(winit::event::VirtualKeyCode::Back) {
+                keys |= mgba::input::keys::SELECT;
+            }
+
+            core.set_keys(keys);
         }
 
         window.request_redraw();
