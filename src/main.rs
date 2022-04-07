@@ -20,11 +20,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = winit::event_loop::EventLoop::new();
     let mut input = winit_input_helper::WinitInputHelper::new();
 
-    let window = winit::window::WindowBuilder::new()
-        .with_title("tango")
-        .with_inner_size(winit::dpi::LogicalSize::new(width, height))
-        .build(&event_loop)
-        .unwrap();
+    let window = {
+        let size = winit::dpi::LogicalSize::new(width * 3, height * 3);
+        winit::window::WindowBuilder::new()
+            .with_title("tango")
+            .with_inner_size(size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
 
     let pixels = std::sync::Arc::new(std::sync::Mutex::new({
         let window_size = window.inner_size();
@@ -50,17 +54,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Poll;
 
-        match event {
-            winit::event::Event::MainEventsCleared => {
-                pixels.lock().unwrap().render().unwrap();
+        if let winit::event::Event::MainEventsCleared = event {
+            pixels.lock().unwrap().render().unwrap();
+        }
+
+        if input.update(&event) {
+            if input.quit() {
+                *control_flow = winit::event_loop::ControlFlow::Exit;
+                return;
             }
-            _ => {
-                if input.update(&event) {
-                    if input.quit() {
-                        *control_flow = winit::event_loop::ControlFlow::Exit;
-                        return;
-                    }
-                }
+
+            if let Some(size) = input.window_resized() {
+                println!(":V");
+                pixels
+                    .lock()
+                    .unwrap()
+                    .resize_surface(size.width, size.height);
             }
         }
     });
