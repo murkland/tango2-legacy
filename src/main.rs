@@ -10,7 +10,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
     core.load_rom(rom_vf);
     core.reset();
-    mgba::log::set_default_logger(Box::new(&|category, level, message| print!("{}", message)));
+    mgba::log::set_default_logger(Box::new(&|category, level, message| {
+        log::info!("{}", message)
+    }));
 
     let (width, height) = core.desired_video_dimensions();
 
