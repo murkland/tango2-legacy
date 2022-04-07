@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mgba::thread::Thread::new(core)
     };
 
-    let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
+    let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
     let audio_source = {
         let core = std::sync::Arc::clone(&core);
         audio::MGBAAudioSource::new(core, 48000)
@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let winit::event::Event::RedrawRequested(_) = event {
             {
-                let vbuf2 = vbuf2.lock().unwrap();
+                let vbuf2 = vbuf2.lock().unwrap().clone();
                 pixels.get_frame().copy_from_slice(&vbuf2);
                 pixels.render().unwrap();
             }
