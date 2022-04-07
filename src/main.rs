@@ -15,6 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let (width, height) = core.desired_video_dimensions();
+    let mut vbuf = vec![0u8; (width * height * 4) as usize];
+    core.set_video_buffer(&mut vbuf, width.into());
 
     let event_loop = winit::event_loop::EventLoop::new();
     let mut input = winit_input_helper::WinitInputHelper::new();
@@ -31,6 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
         pixels::Pixels::new(width, height, surface_texture)?
     };
+    pixels.get_frame().copy_from_slice(&vbuf);
 
     event_loop.run(move |event, _, control_flow| {
         if let winit::event::Event::RedrawRequested(_) = event {

@@ -32,6 +32,16 @@ impl Core {
         unsafe { self.0.as_ref().unwrap().reset.unwrap()(self.0) }
     }
 
+    pub fn set_video_buffer(&mut self, buffer: &mut Vec<u8>, stride: u64) {
+        unsafe {
+            self.0.as_ref().unwrap().setVideoBuffer.unwrap()(
+                self.0,
+                buffer.as_mut_ptr() as *mut u32,
+                stride,
+            )
+        }
+    }
+
     pub fn desired_video_dimensions(&self) -> (u32, u32) {
         let mut width: u32 = 0;
         let mut height: u32 = 0;
