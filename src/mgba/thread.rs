@@ -1,9 +1,9 @@
 use super::c;
 use super::core;
 
-pub struct Thread<'a> {
+pub struct Thread {
     raw: c::mCoreThread,
-    pub frame_callback: Option<Box<dyn Fn() + Send + 'a>>,
+    pub frame_callback: Option<Box<dyn Fn() + Send>>,
 }
 
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
@@ -13,7 +13,7 @@ unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     }
 }
 
-impl<'a> Thread<'a> {
+impl Thread {
     pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Box<Self> {
         let core_ptr = core.lock().unwrap().0;
         let mut t = Box::new(Thread {
