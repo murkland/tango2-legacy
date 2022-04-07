@@ -7,7 +7,6 @@ pub struct Thread<'a> {
     pub frame_callback: Option<Box<dyn FnMut() + Send + 'a>>,
 }
 
-#[allow(non_snake_case)]
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     let t = (*ptr).userData as *mut Thread;
     if let Some(cb) = &mut (*t).frame_callback {

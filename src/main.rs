@@ -13,15 +13,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let core = std::sync::Arc::new(std::sync::Mutex::new({
         let mut core = mgba::core::Core::new_gba("tango").unwrap();
         core.set_audio_buffer_size(1024);
+
+        let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
+        core.load_rom(rom_vf);
         core
     }));
+
+    let mut trapper = {
+        let core = std::sync::Arc::clone(&core);
+        let trapper = mgba::trapper::Trapper::new(core);
+        trapper
+    };
+    trapper.attach();
+
+    {
+        let core = std::sync::Arc::clone(&core);
+        let mut core = core.lock().unwrap();
+        core.reset();
+        let now = std::time::Instant::now();
+        for _i in 0..1000 {
+            core.run_frame();
+        }
+        println!("took {:?}", now.elapsed());
+    }
 
     let (width, height, vbuf) = {
         let core = std::sync::Arc::clone(&core);
         let mut core = core.lock().unwrap();
-        let rom_vf = mgba::vfile::VFile::open("bn6f.gba", 0).unwrap();
-        core.load_rom(rom_vf);
-
         let (width, height) = core.desired_video_dimensions();
         let mut vbuf = vec![0u8; (width * height * 4) as usize];
         core.set_video_buffer(&mut vbuf, width.into());

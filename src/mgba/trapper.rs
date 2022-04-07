@@ -22,7 +22,14 @@ struct Impl {
 
 const TRAPPER_IMM: i32 = 0xef;
 
-#[allow(non_snake_case)]
+unsafe extern "C" fn c_trapper_init(
+    _cpu: *mut std::os::raw::c_void,
+    _cpu_component: *mut c::mCPUComponent,
+) {
+}
+
+unsafe extern "C" fn c_trapper_deinit(_cpu_component: *mut c::mCPUComponent) {}
+
 unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
     let gba = (*arm_core).master as *mut _ as *mut c::GBA;
     let arm_core = (*gba).cpu;
@@ -43,7 +50,9 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
 
 impl Trapper {
     pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
-        let cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
+        let mut cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
+        cpu_component.init = Some(c_trapper_init);
+        cpu_component.deinit = Some(c_trapper_deinit);
         Trapper {
             cpu_component,
             real_bkpt16: None,

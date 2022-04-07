@@ -18,7 +18,6 @@ lazy_static! {
         send_wrapper::SendWrapper::new(std::sync::Mutex::new(None));
 }
 
-#[allow(non_snake_case)]
 unsafe extern "C" fn c_log(
     _logger: *mut c::mLogger,
     category: i32,
