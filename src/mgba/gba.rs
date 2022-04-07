@@ -8,7 +8,7 @@ pub struct GBA<'a> {
 
 impl<'a> GBA<'a> {
     pub fn get_sync(&mut self) -> Option<sync::Sync<'a>> {
-        let ptr = unsafe { self.ptr.as_ref().unwrap().sync };
+        let ptr = unsafe { (*self.ptr).sync };
         if ptr.is_null() {
             None
         } else {

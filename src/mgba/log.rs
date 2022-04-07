@@ -11,7 +11,7 @@ lazy_static! {
     };
     static ref MLOGGER: send_wrapper::SendWrapper<std::sync::Mutex<c::mLogger>> =
         send_wrapper::SendWrapper::new(std::sync::Mutex::new(c::mLogger {
-            log: Some(mgba_mLogger_log),
+            log: Some(c_log),
             filter: &mut *MLOG_FILTER.lock().unwrap(),
         }));
     static ref LOG_FUNC: send_wrapper::SendWrapper<std::sync::Mutex<Option<Box<dyn Fn(i32, u32, String) -> ()>>>> =
@@ -19,7 +19,7 @@ lazy_static! {
 }
 
 #[allow(non_snake_case)]
-unsafe extern "C" fn mgba_mLogger_log(
+unsafe extern "C" fn c_log(
     _logger: *mut c::mLogger,
     category: i32,
     level: u32,

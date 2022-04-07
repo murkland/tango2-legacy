@@ -8,7 +8,7 @@ pub struct Thread<'a> {
 }
 
 #[allow(non_snake_case)]
-unsafe extern "C" fn mgba_mCoreThread_frameCallback(ptr: *mut c::mCoreThread) {
+unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     let t = (*ptr).userData as *mut Thread;
     if let Some(cb) = &mut (*t).frame_callback {
         cb();
@@ -26,7 +26,7 @@ impl<'a> Thread<'a> {
         t.raw.core = core_ptr;
         t.raw.logger.d = unsafe { *c::mLogGetContext() };
         t.raw.userData = &mut t as *mut _ as *mut std::os::raw::c_void;
-        t.raw.frameCallback = Some(mgba_mCoreThread_frameCallback);
+        t.raw.frameCallback = Some(c_frame_callback);
         t
     }
 

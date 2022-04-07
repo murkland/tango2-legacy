@@ -29,7 +29,7 @@ impl Drop for VFile {
             return;
         }
         unsafe {
-            self.0.as_ref().unwrap().close.unwrap()(self.0);
+            (*self.0).close.unwrap()(self.0);
         }
     }
 }
