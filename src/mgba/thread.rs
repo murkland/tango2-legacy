@@ -3,7 +3,7 @@ use super::core;
 
 pub struct Thread<'a> {
     raw: c::mCoreThread,
-    pub frame_callback: Option<Box<dyn FnMut() + Send + 'a>>,
+    pub frame_callback: Option<Box<dyn Fn() + Send + 'a>>,
 }
 
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
