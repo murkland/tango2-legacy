@@ -12,7 +12,7 @@ struct TrapperCStruct {
 }
 
 struct Trap {
-    handler: Box<dyn Fn()>,
+    handler: Box<dyn Fn(&mut core::Core)>,
     original: u16,
 }
 
@@ -41,7 +41,8 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
         let caller = arm_core.get_gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
         let trap = (*trapper).r#impl.traps.get(&caller).unwrap();
         c::ARMRunFake(arm_core.0, trap.original as u32);
-        (trap.handler)();
+        let mut core = (*trapper).r#impl.core.lock().unwrap();
+        (trap.handler)(&mut core);
     }
     (*trapper).real_bkpt16.unwrap()(arm_core.0, imm)
 }
@@ -62,7 +63,7 @@ impl Trapper {
         Trapper(trapper_c_struct)
     }
 
-    pub fn add(&mut self, addr: u32, handler: Box<dyn Fn()>) {
+    pub fn add(&mut self, addr: u32, handler: Box<dyn Fn(&mut core::Core)>) {
         let core = self.0.r#impl.core.lock().unwrap();
         let original = core.raw_read_16(addr, -1);
         core.raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
