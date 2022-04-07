@@ -31,21 +31,18 @@ unsafe extern "C" fn c_trapper_init(
 unsafe extern "C" fn c_trapper_deinit(_cpu_component: *mut c::mCPUComponent) {}
 
 unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
-    let gba = (*arm_core).master as *mut _ as *mut c::GBA;
-    let arm_core = (*gba).cpu;
-    let components = std::slice::from_raw_parts_mut(
-        (*arm_core).components,
-        c::mCPUComponentType_CPU_COMPONENT_MAX as usize,
-    );
+    let mut gba = gba::GBA((*arm_core).master as *mut _ as *mut c::GBA);
+    let mut arm_core = gba.get_cpu();
+    let components = arm_core.get_components_mut();
     let trapper =
         components[c::mCPUComponentType_CPU_COMPONENT_MISC_1 as usize] as *mut _ as *mut Trapper;
     if imm == TRAPPER_IMM {
-        let caller = ((*arm_core).__bindgen_anon_1.__bindgen_anon_1.gprs[15] - 4) as u32;
+        let caller = arm_core.get_gpr(15) as u32 - 4;
         let trap = (*trapper).r#impl.traps.get(&caller).unwrap();
-        c::ARMRunFake(arm_core, trap.original as u32);
+        c::ARMRunFake(arm_core.0, trap.original as u32);
         (trap.handler)();
     }
-    (*trapper).real_bkpt16.unwrap()(arm_core, imm)
+    (*trapper).real_bkpt16.unwrap()(arm_core.0, imm)
 }
 
 impl Trapper {
@@ -74,7 +71,7 @@ impl Trapper {
     pub fn attach(&mut self) {
         let mut arm_core = {
             let mut core = self.r#impl.core.lock().unwrap();
-            unsafe { *core.get_gba().ptr }.cpu as *mut _ as *mut c::ARMCore
+            core.get_gba().get_cpu().0
         };
         self.real_bkpt16 = unsafe { *arm_core }.irqh.bkpt16;
         unsafe {

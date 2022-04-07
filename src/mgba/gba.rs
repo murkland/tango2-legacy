@@ -1,22 +1,21 @@
+use super::arm_core;
 use super::c;
 use super::sync;
 
-pub struct GBA<'a> {
-    pub(super) core: &'a super::core::Core,
-    pub(super) ptr: *mut c::GBA,
-}
+pub struct GBA(pub(super) *mut c::GBA);
 
-impl<'a> GBA<'a> {
-    pub fn get_sync(&mut self) -> Option<sync::Sync<'a>> {
-        let ptr = unsafe { (*self.ptr).sync };
+impl GBA {
+    pub fn get_sync(&mut self) -> Option<sync::Sync> {
+        let ptr = unsafe { (*self.0).sync };
         if ptr.is_null() {
             None
         } else {
-            Some(sync::Sync {
-                _core: self.core,
-                ptr,
-            })
+            Some(sync::Sync(ptr))
         }
+    }
+
+    pub fn get_cpu(&mut self) -> arm_core::ARMCore {
+        arm_core::ARMCore(unsafe { *self.0 }.cpu)
     }
 }
 

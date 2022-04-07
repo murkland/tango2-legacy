@@ -54,8 +54,7 @@ impl Core {
     }
 
     pub fn get_audio_channel(&mut self, ch: i32) -> blip::Blip {
-        let ptr = unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) };
-        blip::Blip { _core: self, ptr }
+        blip::Blip(unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) })
     }
 
     pub fn frequency(&mut self) -> i32 {
@@ -76,14 +75,13 @@ impl Core {
     }
 
     pub fn get_gba(&mut self) -> gba::GBA {
-        let ptr = unsafe { (*self.0).board as *mut c::GBA };
-        gba::GBA { core: self, ptr }
+        gba::GBA(unsafe { (*self.0).board as *mut c::GBA })
     }
 
     pub fn save_state(&self) -> Option<state::State> {
         unsafe {
             let mut state = std::mem::zeroed::<state::State>();
-            if unsafe { (*self.0) }.saveState.unwrap()(
+            if unsafe { *self.0 }.saveState.unwrap()(
                 self.0,
                 &mut state.0 as *mut _ as *mut std::os::raw::c_void,
             ) {

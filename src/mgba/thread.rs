@@ -2,7 +2,6 @@ use super::c;
 use super::core;
 
 pub struct Thread<'a> {
-    _core: std::sync::Arc<std::sync::Mutex<core::Core>>,
     raw: c::mCoreThread,
     pub frame_callback: Option<Box<dyn FnMut() + Send + 'a>>,
 }
@@ -18,7 +17,6 @@ impl<'a> Thread<'a> {
     pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
         let core_ptr = core.lock().unwrap().0;
         let mut t = Thread {
-            _core: core,
             raw: unsafe { std::mem::zeroed::<c::mCoreThread>() },
             frame_callback: None,
         };
