@@ -81,7 +81,7 @@ impl Core {
     pub fn save_state(&self) -> Option<state::State> {
         unsafe {
             let mut state = std::mem::zeroed::<state::State>();
-            if unsafe { *self.0 }.saveState.unwrap()(
+            if (*self.0).saveState.unwrap()(
                 self.0,
                 &mut state.0 as *mut _ as *mut std::os::raw::c_void,
             ) {
