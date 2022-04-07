@@ -31,6 +31,19 @@ impl Core {
     pub fn reset(&mut self) {
         unsafe { self.0.as_ref().unwrap().reset.unwrap()(self.0) }
     }
+
+    pub fn desired_video_dimensions(&self) -> (u32, u32) {
+        let mut width: u32 = 0;
+        let mut height: u32 = 0;
+        unsafe {
+            self.0.as_ref().unwrap().desiredVideoDimensions.unwrap()(
+                self.0,
+                &mut width,
+                &mut height,
+            );
+        }
+        (width, height)
+    }
 }
 
 impl Drop for Core {
