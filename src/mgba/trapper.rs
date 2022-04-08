@@ -33,12 +33,12 @@ unsafe extern "C" fn c_trapper_deinit(_cpu_component: *mut c::mCPUComponent) {}
 
 unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
     let mut gba = gba::GBA::wrap((*arm_core).master as *mut _ as *mut c::GBA);
-    let arm_core = gba.get_cpu_mut();
-    let components = arm_core.get_components_mut();
+    let arm_core = gba.cpu_mut();
+    let components = arm_core.components_mut();
     let trapper = components[c::mCPUComponentType_CPU_COMPONENT_MISC_1 as usize] as *mut _
         as *mut TrapperCStruct;
     if imm == TRAPPER_IMM {
-        let caller = arm_core.get_gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
+        let caller = arm_core.gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
         let trap = (*trapper).r#impl.traps.get(&caller).unwrap();
         c::ARMRunFake(arm_core.ptr, trap.original as u32);
         let mut core = (*trapper).r#impl.core.lock().unwrap();
@@ -73,7 +73,7 @@ impl Trapper {
     pub fn attach(&mut self) {
         let mut arm_core = {
             let mut core = self.0.r#impl.core.lock().unwrap();
-            core.get_gba().get_cpu().ptr
+            core.gba().cpu().ptr
         };
         self.0.real_bkpt16 = unsafe { *arm_core }.irqh.bkpt16;
         unsafe {

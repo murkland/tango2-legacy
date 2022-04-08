@@ -28,7 +28,7 @@ impl Game {
             )?;
             core.load_save(save_vf);
 
-            log::info!("loaded game: {}", core.get_game_title());
+            log::info!("loaded game: {}", core.game_title());
             core
         }));
 
@@ -88,8 +88,8 @@ impl Game {
         {
             let core = std::sync::Arc::clone(&main_core);
             let mut core = core.lock().unwrap();
-            core.get_gba_mut()
-                .get_sync_mut()
+            core.gba_mut()
+                .sync_mut()
                 .as_mut()
                 .unwrap()
                 .set_fps_target(60.0);

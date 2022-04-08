@@ -9,7 +9,7 @@ impl<'a> Sync {
         Sync { ptr }
     }
 
-    pub fn get_fps_target(&self) -> f32 {
+    pub fn fps_target(&self) -> f32 {
         unsafe { self.ptr.as_ref().unwrap().fpsTarget }
     }
 

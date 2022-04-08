@@ -9,24 +9,24 @@ impl ARMCore {
         ARMCore { ptr }
     }
 
-    pub unsafe fn get_components_mut(&mut self) -> &mut [*mut c::mCPUComponent] {
+    pub unsafe fn components_mut(&mut self) -> &mut [*mut c::mCPUComponent] {
         std::slice::from_raw_parts_mut(
             (*self.ptr).components,
             c::mCPUComponentType_CPU_COMPONENT_MAX as usize,
         )
     }
 
-    pub fn get_gpr(&self, r: u32) -> i32 {
-        return unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r as usize];
+    pub fn gpr(&self, r: usize) -> i32 {
+        unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r]
     }
 
-    pub fn set_gpr(&mut self, r: u32, v: i32) {
-        unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r as usize] = v;
+    pub fn set_gpr(&mut self, r: usize, v: i32) {
+        return unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r] = v;
     }
 
     pub fn thumb_write_pc(&mut self) {
         // uint32_t pc = cpu->gprs[ARM_PC] & -WORD_SIZE_THUMB;
-        let mut pc = (self.get_gpr(c::ARM_PC) & -(c::WordSize_WORD_SIZE_THUMB as i32)) as u32;
+        let mut pc = (self.gpr(c::ARM_PC as usize) & -(c::WordSize_WORD_SIZE_THUMB as i32)) as u32;
         // cpu->memory.setActiveRegion(cpu, pc);
         unsafe {
             (*self.ptr).memory.setActiveRegion.unwrap()(self.ptr, pc as u32);
@@ -46,6 +46,6 @@ impl ARMCore {
                 as *const u16) as u32;
         }
         // cpu->gprs[ARM_PC] = pc;
-        self.set_gpr(c::ARM_PC, pc as i32);
+        self.set_gpr(c::ARM_PC as usize, pc as i32);
     }
 }

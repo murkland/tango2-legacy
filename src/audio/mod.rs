@@ -14,7 +14,7 @@ impl MGBAAudioSource {
     ) -> Self {
         let buf = {
             let core = core.as_ref().lock().unwrap();
-            vec![0; (core.get_audio_buffer_size() * 2) as usize]
+            vec![0; (core.audio_buffer_size() * 2) as usize]
         };
         Self {
             core,
@@ -29,16 +29,16 @@ impl MGBAAudioSource {
 
         let clock_rate = core.frequency();
 
-        let n = core.get_audio_buffer_size() as i32;
+        let n = core.audio_buffer_size() as i32;
 
         let mut faux_clock = 1.0;
-        if let Some(sync) = core.get_gba_mut().get_sync_mut().as_mut() {
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
-            faux_clock = gba::audio_calculate_ratio(1.0, sync.get_fps_target(), 1.0);
+            faux_clock = gba::audio_calculate_ratio(1.0, sync.fps_target(), 1.0);
         }
 
         {
-            let mut left = core.get_audio_channel(0);
+            let mut left = core.audio_channel(0);
             left.set_rates(
                 clock_rate as f64,
                 self.sample_rate as f64 * faux_clock as f64,
@@ -51,7 +51,7 @@ impl MGBAAudioSource {
         }
 
         {
-            let mut right = core.get_audio_channel(1);
+            let mut right = core.audio_channel(1);
             right.set_rates(
                 clock_rate as f64,
                 self.sample_rate as f64 * faux_clock as f64,
@@ -63,7 +63,7 @@ impl MGBAAudioSource {
             right.read_samples(&mut self.buf[1..], available, true);
         }
 
-        if let Some(sync) = core.get_gba_mut().get_sync_mut().as_mut() {
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.consume_audio();
         }
     }

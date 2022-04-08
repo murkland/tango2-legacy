@@ -22,15 +22,15 @@ impl GBA {
         }
     }
 
-    pub fn get_sync_mut(&mut self) -> &mut Option<sync::Sync> {
+    pub fn sync_mut(&mut self) -> &mut Option<sync::Sync> {
         &mut self.sync
     }
 
-    pub fn get_cpu_mut(&mut self) -> &mut arm_core::ARMCore {
+    pub fn cpu_mut(&mut self) -> &mut arm_core::ARMCore {
         &mut self.arm_core
     }
 
-    pub fn get_cpu(&self) -> &arm_core::ARMCore {
+    pub fn cpu(&self) -> &arm_core::ARMCore {
         &self.arm_core
     }
 }

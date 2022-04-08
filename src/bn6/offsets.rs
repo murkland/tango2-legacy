@@ -48,7 +48,7 @@ pub struct Offsets {
     pub ewram: EWRAMOffsets,
 }
 
-pub fn get_offsets(title: &str) -> Option<Offsets> {
+pub fn offsets(title: &str) -> Option<Offsets> {
     match title {
         "MEGAMAN6_FXX" => Some(Offsets {
             ewram: EWRAM_OFFSETS,

@@ -54,7 +54,7 @@ impl Core {
         unsafe { (*self.ptr).reset.unwrap()(self.ptr) }
     }
 
-    pub fn get_audio_buffer_size(&self) -> u64 {
+    pub fn audio_buffer_size(&self) -> u64 {
         unsafe { (*self.ptr).getAudioBufferSize.unwrap()(self.ptr) }
     }
 
@@ -62,7 +62,7 @@ impl Core {
         unsafe { (*self.ptr).setAudioBufferSize.unwrap()(self.ptr, size) }
     }
 
-    pub fn get_audio_channel(&mut self, ch: i32) -> blip::Blip {
+    pub fn audio_channel(&mut self, ch: i32) -> blip::Blip {
         blip::Blip(unsafe { (*self.ptr).getAudioChannel.unwrap()(self.ptr, ch) })
     }
 
@@ -83,11 +83,11 @@ impl Core {
         (width, height)
     }
 
-    pub fn get_gba_mut(&mut self) -> &mut gba::GBA {
+    pub fn gba_mut(&mut self) -> &mut gba::GBA {
         &mut self.gba
     }
 
-    pub fn get_gba(&self) -> &gba::GBA {
+    pub fn gba(&self) -> &gba::GBA {
         &self.gba
     }
 
@@ -159,7 +159,7 @@ impl Core {
         }
     }
 
-    pub fn get_game_title(&self) -> String {
+    pub fn game_title(&self) -> String {
         let mut title = [0u8; 16];
         unsafe {
             (*self.ptr).getGameTitle.unwrap()(self.ptr, title.as_mut_ptr() as *mut _ as *mut i8)
@@ -174,7 +174,7 @@ impl Core {
         cstr.to_str().unwrap().to_string()
     }
 
-    pub fn get_game_code(&self) -> String {
+    pub fn game_code(&self) -> String {
         let mut code = [0u8; 12];
         unsafe {
             (*self.ptr).getGameCode.unwrap()(self.ptr, code.as_mut_ptr() as *mut _ as *mut i8)
