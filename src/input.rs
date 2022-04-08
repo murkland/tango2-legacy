@@ -9,16 +9,18 @@ pub struct Input {
 
 pub struct Queue {
     notify: tokio::sync::Notify,
-    queues: tokio::sync::Mutex<[std::collections::VecDeque<Input>; 2]>,
+    queues: std::sync::Mutex<[std::collections::VecDeque<Input>; 2]>,
     local_player_index: u8,
     local_delay: u32,
 }
 
 impl Queue {
     pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
+        let notify = tokio::sync::Notify::new();
+        notify.notify_waiters();
         Queue {
-            notify: tokio::sync::Notify::new(),
-            queues: tokio::sync::Mutex::new([
+            notify,
+            queues: std::sync::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
             ]),
@@ -28,16 +30,21 @@ impl Queue {
     }
 
     pub async fn add_input(&mut self, player_index: u8, input: Input) {
-        let mut queues = self.queues.lock().await;
-        let queue = &mut queues[player_index as usize];
-        while queue.len() == queue.capacity() {
+        loop {
             self.notify.notified().await;
+
+            let mut queues = self.queues.lock().unwrap();
+            let queue = &mut queues[player_index as usize];
+            if queue.len() == queue.capacity() {
+                continue;
+            }
+            queue.push_back(input);
+            return;
         }
-        queue.push_back(input);
     }
 
     pub async fn queue_length(&self, player_index: u8) -> usize {
-        let queues = self.queues.lock().await;
+        let queues = self.queues.lock().unwrap();
         queues[player_index as usize].len()
     }
 
@@ -45,8 +52,8 @@ impl Queue {
         self.local_delay
     }
 
-    pub async fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
-        let mut queues = self.queues.lock().await;
+    pub fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
+        let mut queues = self.queues.lock().unwrap();
 
         let to_commit = {
             let mut n =
