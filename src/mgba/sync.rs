@@ -24,10 +24,14 @@ impl<'a> SyncMutRef<'a> {
     }
 
     pub fn lock_audio(&mut self) {
-        unsafe { c::mCoreSyncLockAudio(*self.0) }
+        unsafe {
+            c::mCoreSyncLockAudio(*self.0);
+        }
     }
 
     pub fn consume_audio(&mut self) {
-        unsafe { c::mCoreSyncConsumeAudio(*self.0) }
+        unsafe {
+            c::mCoreSyncConsumeAudio(*self.0);
+        }
     }
 }
