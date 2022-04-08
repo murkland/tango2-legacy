@@ -8,7 +8,7 @@ pub struct SyncRef<'a> {
 
 impl<'a> SyncRef<'a> {
     pub fn fps_target(&self) -> f32 {
-        unsafe { self.ptr.as_ref().unwrap().fpsTarget }
+        unsafe { (*self.ptr).fpsTarget }
     }
 }
 
