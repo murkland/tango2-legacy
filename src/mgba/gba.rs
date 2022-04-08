@@ -3,41 +3,62 @@ use super::c;
 use super::sync;
 
 #[repr(transparent)]
-pub struct GBARef<'a>(pub(super) &'a *const c::GBA);
+pub struct GBARef<'a> {
+    pub(super) ptr: *const c::GBA,
+    pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
+}
 
 impl<'a> GBARef<'a> {
     pub fn cpu(&self) -> arm_core::ARMCoreRef<'a> {
-        arm_core::ARMCoreRef::<'a>(unsafe { std::mem::transmute(&(**self.0).cpu) })
+        arm_core::ARMCoreRef {
+            ptr: unsafe { (*self.ptr).cpu },
+            _lifetime: self._lifetime,
+        }
     }
 
     pub fn sync(&mut self) -> Option<sync::SyncRef> {
-        if unsafe { (**self.0).sync.is_null() } {
+        let sync_ptr = unsafe { (*self.ptr).sync };
+        if sync_ptr.is_null() {
             None
         } else {
-            Some(sync::SyncRef(unsafe {
-                std::mem::transmute(&(**self.0).sync)
-            }))
+            Some(sync::SyncRef {
+                ptr: sync_ptr,
+                _lifetime: self._lifetime,
+            })
         }
     }
 }
 
 #[repr(transparent)]
-pub struct GBAMutRef<'a>(pub(super) &'a mut *mut c::GBA);
+pub struct GBAMutRef<'a> {
+    pub(super) ptr: *mut c::GBA,
+    pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
+}
 
 impl<'a> GBAMutRef<'a> {
     pub fn as_ref(&self) -> GBARef {
-        GBARef(unsafe { std::mem::transmute(&*self.0) })
+        GBARef {
+            ptr: self.ptr,
+            _lifetime: self._lifetime,
+        }
     }
 
     pub fn cpu_mut(&self) -> arm_core::ARMCoreMutRef<'a> {
-        arm_core::ARMCoreMutRef::<'a>(unsafe { &mut (**self.0).cpu })
+        arm_core::ARMCoreMutRef {
+            ptr: unsafe { (*self.ptr).cpu },
+            _lifetime: self._lifetime,
+        }
     }
 
     pub fn sync_mut(&mut self) -> Option<sync::SyncMutRef> {
-        if unsafe { (**self.0).sync.is_null() } {
+        let sync_ptr = unsafe { (*self.ptr).sync };
+        if sync_ptr.is_null() {
             None
         } else {
-            Some(sync::SyncMutRef(unsafe { &mut (**self.0).sync }))
+            Some(sync::SyncMutRef {
+                ptr: sync_ptr,
+                _lifetime: self._lifetime,
+            })
         }
     }
 }

@@ -60,7 +60,7 @@ impl Core {
     pub fn audio_channel(&mut self, ch: i32) -> blip::BlipMutRef {
         blip::BlipMutRef {
             ptr: unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) },
-            _marker: std::marker::PhantomData,
+            _lifetime: std::marker::PhantomData,
         }
     }
 
@@ -82,11 +82,17 @@ impl Core {
     }
 
     pub fn gba_mut(&mut self) -> gba::GBAMutRef {
-        gba::GBAMutRef(unsafe { std::mem::transmute(&mut (*self.0).board) })
+        gba::GBAMutRef {
+            ptr: unsafe { (*self.0).board as *mut c::GBA },
+            _lifetime: std::marker::PhantomData,
+        }
     }
 
     pub fn gba(&self) -> gba::GBARef {
-        gba::GBARef(unsafe { std::mem::transmute(&mut (*self.0).board) })
+        gba::GBARef {
+            ptr: unsafe { (*self.0).board as *const c::GBA },
+            _lifetime: std::marker::PhantomData,
+        }
     }
 
     pub fn save_state(&self) -> Option<state::State> {

@@ -3,7 +3,7 @@ use super::c;
 #[repr(transparent)]
 pub struct BlipMutRef<'a> {
     pub(super) ptr: *mut c::blip_t,
-    pub(super) _marker: std::marker::PhantomData<&'a ()>,
+    pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a> BlipMutRef<'a> {
