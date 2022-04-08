@@ -1,6 +1,7 @@
 use super::c;
 use super::core;
 
+#[repr(transparent)]
 pub struct Thread(Box<ThreadImpl>);
 
 pub struct ThreadImpl {

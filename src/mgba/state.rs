@@ -1,5 +1,6 @@
 use super::c;
 
+#[repr(transparent)]
 pub struct State(pub(super) c::GBASerializedState);
 
 impl State {

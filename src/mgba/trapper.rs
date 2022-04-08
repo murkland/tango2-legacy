@@ -2,6 +2,7 @@ use super::c;
 use super::core;
 use super::gba;
 
+#[repr(transparent)]
 pub struct Trapper(Box<TrapperCStruct>);
 
 #[repr(C)]
