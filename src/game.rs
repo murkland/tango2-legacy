@@ -2,7 +2,7 @@ use crate::{audio, bn6, gui, mgba};
 
 pub struct Game {
     main_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
-    trapper: mgba::trapper::Trapper,
+    _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
     vbuf: std::sync::Arc<Vec<u8>>,
@@ -284,7 +284,7 @@ impl Game {
 
         let mut game = Game {
             main_core,
-            trapper,
+            _trapper: trapper,
             event_loop,
             input,
             window,

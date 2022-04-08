@@ -32,7 +32,7 @@ unsafe extern "C" fn c_trapper_init(
 unsafe extern "C" fn c_trapper_deinit(_cpu_component: *mut c::mCPUComponent) {}
 
 unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
-    let mut gba = gba::GBAMutRef {
+    let gba = gba::GBAMutRef {
         ptr: (*arm_core).master as *mut c::GBA,
         _lifetime: std::marker::PhantomData,
     };
