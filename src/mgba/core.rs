@@ -8,6 +8,7 @@ use std::ffi::CString;
 pub struct Core {
     pub(super) ptr: *mut c::mCore,
     gba: gba::GBA,
+    audio_channels: [blip::Blip; 2],
 }
 
 unsafe impl Send for Core {}
@@ -35,6 +36,10 @@ impl Core {
         Ok(Core {
             ptr,
             gba: gba::GBA::wrap(unsafe { (*ptr).board as *mut c::GBA }),
+            audio_channels: [
+                blip::Blip(unsafe { (*ptr).getAudioChannel.unwrap()(ptr, 0) }),
+                blip::Blip(unsafe { (*ptr).getAudioChannel.unwrap()(ptr, 1) }),
+            ],
         })
     }
 
@@ -62,8 +67,8 @@ impl Core {
         unsafe { (*self.ptr).setAudioBufferSize.unwrap()(self.ptr, size) }
     }
 
-    pub fn audio_channel(&mut self, ch: i32) -> blip::Blip {
-        blip::Blip(unsafe { (*self.ptr).getAudioChannel.unwrap()(self.ptr, ch) })
+    pub fn audio_channel(&mut self, ch: usize) -> &mut blip::Blip {
+        &mut self.audio_channels[ch]
     }
 
     pub fn frequency(&mut self) -> i32 {

@@ -14,7 +14,7 @@ impl GBA {
         GBA {
             ptr,
             arm_core: arm_core::ARMCore::wrap(unsafe { *ptr }.cpu),
-            sync: if ptr.is_null() {
+            sync: if sync_ptr.is_null() {
                 None
             } else {
                 Some(sync::Sync::wrap(sync_ptr))
