@@ -10,27 +10,26 @@ pub struct Core(pub(super) *mut c::mCore);
 unsafe impl Send for Core {}
 
 impl Core {
-    pub fn new_gba(config_name: &str) -> Option<Self> {
+    pub fn new_gba(config_name: &str) -> anyhow::Result<Self> {
         let ptr = unsafe { c::GBACoreCreate() };
         if ptr.is_null() {
-            None
-        } else {
-            unsafe {
-                {
-                    // TODO: Make this more generic maybe.
-                    let opts = &mut ptr.as_mut().unwrap().opts;
-                    opts.sampleRate = 48000;
-                    opts.videoSync = false;
-                    opts.audioSync = true;
-                }
-
-                (*ptr).init.unwrap()(ptr);
-                let config_name_cstr = CString::new(config_name).unwrap();
-                c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
-                c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
-            }
-            Some(Core(ptr))
+            anyhow::bail!("failed to create core");
         }
+        unsafe {
+            {
+                // TODO: Make this more generic maybe.
+                let opts = &mut ptr.as_mut().unwrap().opts;
+                opts.sampleRate = 48000;
+                opts.videoSync = false;
+                opts.audioSync = true;
+            }
+
+            (*ptr).init.unwrap()(ptr);
+            let config_name_cstr = CString::new(config_name).unwrap();
+            c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
+            c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
+        }
+        Ok(Core(ptr))
     }
 
     pub fn load_rom(&mut self, mut vf: vfile::VFile) -> bool {
@@ -121,10 +120,10 @@ impl Core {
         unsafe { (*self.0).rawRead32.unwrap()(self.0, address, segment) as u32 }
     }
 
-    pub fn raw_read_range(&self, address: u32, segment: i32, size: usize) -> Vec<u8> {
-        let mut buf = vec![0; size];
+    pub fn raw_read_range<const N: usize>(&self, address: u32, segment: i32) -> [u8; N] {
+        let mut buf = [0; N];
         let ptr = buf.as_mut_ptr();
-        for i in 0..size {
+        for i in 0..N {
             unsafe {
                 *ptr.add(i) = self.raw_read_8(address + i as u32, segment);
             }
@@ -144,7 +143,7 @@ impl Core {
         unsafe { (*self.0).rawWrite32.unwrap()(self.0, address, segment, v) }
     }
 
-    pub fn raw_write_range(&mut self, address: u32, segment: i32, buf: &Vec<u8>) {
+    pub fn raw_write_range(&mut self, address: u32, segment: i32, buf: &[u8]) {
         for (i, v) in buf.iter().enumerate() {
             self.raw_write_8(address + i as u32, segment, *v);
         }

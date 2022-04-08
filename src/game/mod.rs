@@ -16,18 +16,16 @@ pub struct Game {
 impl Game {
     pub fn new() -> Result<Game, Box<dyn std::error::Error>> {
         let main_core = std::sync::Arc::new(std::sync::Mutex::new({
-            let mut core = mgba::core::Core::new_gba("tango").unwrap();
+            let mut core = mgba::core::Core::new_gba("tango")?;
             core.set_audio_buffer_size(1024);
 
-            let rom_vf =
-                mgba::vfile::VFile::open("bn6f.gba", mgba::vfile::flags::O_RDONLY).unwrap();
+            let rom_vf = mgba::vfile::VFile::open("bn6f.gba", mgba::vfile::flags::O_RDONLY)?;
             core.load_rom(rom_vf);
 
             let save_vf = mgba::vfile::VFile::open(
                 "bn6f.sav",
                 mgba::vfile::flags::O_CREAT | mgba::vfile::flags::O_RDWR,
-            )
-            .unwrap();
+            )?;
             core.load_save(save_vf);
 
             log::info!("loaded game: {}", core.get_game_title());

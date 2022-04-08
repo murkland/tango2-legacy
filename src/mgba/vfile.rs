@@ -28,16 +28,15 @@ pub mod flags {
 }
 
 impl VFile {
-    pub fn open(path: &str, flags: u32) -> Option<Self> {
+    pub fn open(path: &str, flags: u32) -> anyhow::Result<Self> {
         let ptr = unsafe {
             let path_cstr = CString::new(path).unwrap();
             c::VFileOpen(path_cstr.as_ptr(), flags as i32)
         };
         if ptr.is_null() {
-            None
-        } else {
-            Some(VFile(ptr))
+            anyhow::bail!("failed to open vfile")
         }
+        Ok(VFile(ptr))
     }
 
     pub(super) unsafe fn release(&mut self) -> *mut c::VFile {
