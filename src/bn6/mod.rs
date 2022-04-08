@@ -78,7 +78,7 @@ impl BN6 {
         core.raw_write_16(self.offsets.ewram.menu_control + 0x2a, -1, v)
     }
 
-    pub fn get_match_type(&self, core: &core::Core, i: u32) -> u16 {
+    pub fn get_match_type(&self, core: &core::Core) -> u16 {
         core.raw_read_16(self.offsets.ewram.menu_control + 0x12, -1)
     }
 
