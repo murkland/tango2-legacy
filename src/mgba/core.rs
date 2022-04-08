@@ -58,7 +58,10 @@ impl Core {
     }
 
     pub fn audio_channel(&mut self, ch: i32) -> blip::BlipMutRef {
-        blip::BlipMutRef(unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) })
+        blip::BlipMutRef {
+            ptr: unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) },
+            _marker: std::marker::PhantomData,
+        }
     }
 
     pub fn frequency(&mut self) -> i32 {
