@@ -73,7 +73,7 @@ impl Trapper {
     pub fn attach(&mut self) {
         let mut arm_core = {
             let mut core = self.0.r#impl.core.lock().unwrap();
-            *core.gba().cpu().0
+            *core.gba_mut().cpu_mut().0
         };
         self.0.real_bkpt16 = unsafe { *arm_core }.irqh.bkpt16;
         unsafe {

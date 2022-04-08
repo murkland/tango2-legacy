@@ -1,7 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
-pub struct ARMCoreRef<'a>(pub(super) &'a *mut c::ARMCore);
+pub struct ARMCoreRef<'a>(pub(super) &'a *const c::ARMCore);
 
 impl<'a> ARMCoreRef<'a> {
     pub fn gpr(&self, r: usize) -> i32 {
@@ -14,7 +14,7 @@ pub struct ARMCoreMutRef<'a>(pub(super) &'a mut *mut c::ARMCore);
 
 impl<'a> ARMCoreMutRef<'a> {
     pub fn as_ref(&self) -> ARMCoreRef {
-        ARMCoreRef(&*self.0)
+        ARMCoreRef(unsafe { std::mem::transmute(&*self.0) })
     }
 
     pub unsafe fn components_mut(&self) -> &mut [*mut c::mCPUComponent] {

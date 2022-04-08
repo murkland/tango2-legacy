@@ -1,7 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
-pub struct SyncRef<'a>(pub(super) &'a *mut c::mCoreSync);
+pub struct SyncRef<'a>(pub(super) &'a *const c::mCoreSync);
 
 impl<'a> SyncRef<'a> {
     pub fn fps_target(&self) -> f32 {
@@ -14,7 +14,7 @@ pub struct SyncMutRef<'a>(pub(super) &'a mut *mut c::mCoreSync);
 
 impl<'a> SyncMutRef<'a> {
     pub fn as_ref(&self) -> SyncRef {
-        SyncRef(&*self.0)
+        SyncRef(unsafe { std::mem::transmute(&*self.0) })
     }
 
     pub fn set_fps_target(&mut self, fps_target: f32) {

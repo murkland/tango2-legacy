@@ -2,7 +2,6 @@ use super::blip;
 use super::c;
 use super::gba;
 use super::state;
-use super::sync;
 use super::vfile;
 use std::ffi::CString;
 

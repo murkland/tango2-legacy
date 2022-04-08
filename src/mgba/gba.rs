@@ -3,18 +3,20 @@ use super::c;
 use super::sync;
 
 #[repr(transparent)]
-pub struct GBARef<'a>(pub(super) &'a *mut c::GBA);
+pub struct GBARef<'a>(pub(super) &'a *const c::GBA);
 
 impl<'a> GBARef<'a> {
     pub fn cpu(&self) -> arm_core::ARMCoreRef<'a> {
-        arm_core::ARMCoreRef::<'a>(unsafe { &mut (**self.0).cpu })
+        arm_core::ARMCoreRef::<'a>(unsafe { std::mem::transmute(&(**self.0).cpu) })
     }
 
     pub fn sync(&mut self) -> Option<sync::SyncRef> {
         if unsafe { (**self.0).sync.is_null() } {
             None
         } else {
-            Some(sync::SyncRef(unsafe { &mut (**self.0).sync }))
+            Some(sync::SyncRef(unsafe {
+                std::mem::transmute(&(**self.0).sync)
+            }))
         }
     }
 }
@@ -24,7 +26,7 @@ pub struct GBAMutRef<'a>(pub(super) &'a mut *mut c::GBA);
 
 impl<'a> GBAMutRef<'a> {
     pub fn as_ref(&self) -> GBARef {
-        GBARef(&*self.0)
+        GBARef(unsafe { std::mem::transmute(&*self.0) })
     }
 
     pub fn cpu_mut(&self) -> arm_core::ARMCoreMutRef<'a> {
