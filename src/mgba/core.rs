@@ -150,7 +150,7 @@ impl Core {
     }
 
     pub fn get_game_title(&self) -> String {
-        let mut title = vec![0u8; 16];
+        let mut title = [0u8; 16];
         unsafe { (*self.0).getGameTitle.unwrap()(self.0, title.as_mut_ptr() as *mut _ as *mut i8) }
         let cstr = match std::ffi::CString::new(title) {
             Ok(r) => r,
@@ -163,7 +163,7 @@ impl Core {
     }
 
     pub fn get_game_code(&self) -> String {
-        let mut code = vec![0u8; 12];
+        let mut code = [0u8; 12];
         unsafe { (*self.0).getGameCode.unwrap()(self.0, code.as_mut_ptr() as *mut _ as *mut i8) }
         let cstr = match std::ffi::CString::new(code) {
             Ok(r) => r,
