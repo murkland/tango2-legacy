@@ -9,6 +9,7 @@ mod game;
 mod gui;
 mod input;
 mod mgba;
+mod signor;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();

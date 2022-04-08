@@ -1,5 +1,6 @@
 use crate::input;
 use crate::mgba;
+use crate::signor;
 
 pub struct Init {
     input_delay: u32,
@@ -12,6 +13,8 @@ struct BattleHolder {
 }
 
 pub struct Match {
+    dc: Option<std::sync::Arc<webrtc::data_channel::RTCDataChannel>>,
+    negotiation_result: parking_lot::Mutex<anyhow::Result<bool>>,
     session_id: String,
     match_type: u16,
     game_title: String,
@@ -24,6 +27,8 @@ pub struct Match {
 impl Match {
     pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
         Match {
+            dc: None,
+            negotiation_result: parking_lot::Mutex::new(Ok(false)),
             session_id,
             match_type,
             game_title,
@@ -50,6 +55,44 @@ impl Match {
         parking_lot::MutexGuard::map(self.battle_holder.lock(), |battle_holder| {
             &mut battle_holder.battle
         })
+    }
+
+    #[tokio::main(flavor = "current_thread")]
+    pub async fn run(&mut self) -> anyhow::Result<()> {
+        let sc = signor::Client::new("").await?;
+
+        let api = webrtc::api::APIBuilder::new().build();
+        let mut peer_conn = api
+            .new_peer_connection(webrtc::peer_connection::configuration::RTCConfiguration {
+                ..Default::default()
+            })
+            .await?;
+        let dc = peer_conn
+            .create_data_channel(
+                "tango",
+                Some(
+                    webrtc::data_channel::data_channel_init::RTCDataChannelInit {
+                        id: Some(1),
+                        negotiated: Some(true),
+                        ordered: Some(true),
+                        ..Default::default()
+                    },
+                ),
+            )
+            .await?;
+        sc.connect(&mut peer_conn, &self.session_id).await?;
+        self.dc = Some(dc);
+
+        // TODO: Other negotiation stuff.
+
+        Ok(())
+    }
+
+    pub fn poll_for_ready(&self) -> anyhow::Result<bool> {
+        match &*self.negotiation_result.lock() {
+            Ok(ready) => Ok(*ready),
+            Err(e) => Err(anyhow::anyhow!("{}", e)),
+        }
     }
 }
 
