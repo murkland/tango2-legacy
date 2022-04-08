@@ -1,7 +1,8 @@
-use crate::{audio, gui, mgba};
+use crate::{audio, bn6, gui, mgba};
 
 pub struct Game {
     main_core: std::sync::Arc<std::sync::Mutex<mgba::core::Core>>,
+    trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
     vbuf: std::sync::Arc<Vec<u8>>,
@@ -34,13 +35,14 @@ impl Game {
 
         let event_loop = Some(winit::event_loop::EventLoop::new());
 
-        let (width, height, vbuf) = {
+        let (width, height, vbuf, bn6) = {
             let core = std::sync::Arc::clone(&main_core);
             let mut core = core.lock().unwrap();
             let (width, height) = core.desired_video_dimensions();
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
+            let bn6 = bn6::BN6::new(&core.game_title());
             core.set_video_buffer(&mut vbuf, width.into());
-            (width, height, std::sync::Arc::new(vbuf))
+            (width, height, std::sync::Arc::new(vbuf), bn6.unwrap())
         };
 
         let input = winit_input_helper::WinitInputHelper::new();
@@ -78,6 +80,43 @@ impl Game {
         };
         thread.start();
 
+        let trapper = {
+            let core = std::sync::Arc::clone(&main_core);
+            let bn6 = bn6.clone();
+            let mut core = core.lock().unwrap();
+            mgba::trapper::Trapper::new(
+                &mut core,
+                vec![
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
+                            Box::new(move || {
+                                let core = core.lock().unwrap();
+                                log::warn!("unhandled call to commMenu_handleLinkCableInput at 0x{:0x}: uh oh!", core.gba().cpu().gpr(15)-4);
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets
+                                .rom
+                                .comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
+                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 - 4);
+
+                                // TODO: The rest of this function.
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                ],
+            )
+        };
+
         let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
         let audio_source = {
             let core = std::sync::Arc::clone(&main_core);
@@ -99,6 +138,7 @@ impl Game {
 
         let mut game = Game {
             main_core,
+            trapper,
             event_loop,
             input,
             window,

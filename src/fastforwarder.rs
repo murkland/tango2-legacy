@@ -107,10 +107,9 @@ impl Fastforwarder {
                                     return;
                                 }
 
-                                let r15 = core.gba().cpu().gpr(15);
                                 core.gba_mut().cpu_mut().set_gpr(0, 0);
-                                core.gba_mut().cpu_mut().set_gpr(15, r15 + 4);
-                                core.gba_mut().cpu_mut().thumb_write_pc();
+                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
                                 if ip[0].local_tick != ip[1].local_tick {

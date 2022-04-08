@@ -30,11 +30,7 @@ impl BN6 {
         if typ != 0 {
             let cpu = core.gba_mut().cpu_mut();
             cpu.set_gpr(0, typ as i32);
-            cpu.set_gpr(
-                15,
-                self.offsets.rom.comm_menu_run_chatbox_script_entry as i32,
-            );
-            cpu.thumb_write_pc();
+            cpu.set_pc(self.offsets.rom.comm_menu_run_chatbox_script_entry);
         }
     }
 
