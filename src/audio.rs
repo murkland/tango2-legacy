@@ -1,7 +1,7 @@
 use crate::mgba::gba;
 
 pub struct MGBAAudioSource {
-    core: std::sync::Arc<std::sync::Mutex<crate::mgba::core::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<crate::mgba::core::Core>>,
     sample_rate: u32,
     buf: Vec<i16>,
     buf_offset: usize,
@@ -9,11 +9,11 @@ pub struct MGBAAudioSource {
 
 impl MGBAAudioSource {
     pub fn new(
-        core: std::sync::Arc<std::sync::Mutex<crate::mgba::core::Core>>,
+        core: std::sync::Arc<parking_lot::Mutex<crate::mgba::core::Core>>,
         sample_rate: u32,
     ) -> Self {
         let buf = {
-            let core = core.as_ref().lock().unwrap();
+            let core = core.as_ref().lock();
             vec![0; (core.audio_buffer_size() * 2) as usize]
         };
         Self {
@@ -25,7 +25,7 @@ impl MGBAAudioSource {
     }
 
     fn read_new_buf(&mut self) {
-        let mut core = self.core.as_ref().lock().unwrap();
+        let mut core = self.core.as_ref().lock();
 
         let clock_rate = core.frequency();
 

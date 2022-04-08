@@ -2718,6 +2718,7 @@ dependencies = [
  "imgui-winit-support",
  "lazy_static",
  "log",
+ "parking_lot 0.12.0",
  "pixels",
  "rodio",
  "send_wrapper",

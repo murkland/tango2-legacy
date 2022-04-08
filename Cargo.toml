@@ -22,6 +22,7 @@ imgui = "0.8"
 imgui-wgpu = "0.19"
 imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-26"] }
 tokio = { version = "1.15.0", features = ["full"] }
+parking_lot = "0.12.0"
 
 [build-dependencies]
 bindgen = "0.53.1"

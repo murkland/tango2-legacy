@@ -1,12 +1,12 @@
 use crate::{audio, bn6, gui, mgba};
 
 pub struct Game {
-    main_core: std::sync::Arc<std::sync::Mutex<mgba::core::Core>>,
+    main_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
     trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
     vbuf: std::sync::Arc<Vec<u8>>,
-    vbuf2: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    vbuf2: std::sync::Arc<parking_lot::Mutex<Vec<u8>>>,
     window: winit::window::Window,
     pixels: pixels::Pixels,
     thread: mgba::thread::Thread,
@@ -16,7 +16,7 @@ pub struct Game {
 
 impl Game {
     pub fn new() -> Result<Game, Box<dyn std::error::Error>> {
-        let main_core = std::sync::Arc::new(std::sync::Mutex::new({
+        let main_core = std::sync::Arc::new(parking_lot::Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             core.set_audio_buffer_size(1024);
 
@@ -37,7 +37,7 @@ impl Game {
 
         let (width, height, vbuf, bn6) = {
             let core = std::sync::Arc::clone(&main_core);
-            let mut core = core.lock().unwrap();
+            let mut core = core.lock();
             let (width, height) = core.desired_video_dimensions();
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
             let bn6 = bn6::BN6::new(&core.game_title());
@@ -56,7 +56,7 @@ impl Game {
                 .build(event_loop.as_ref().unwrap())?
         };
 
-        let vbuf2 = std::sync::Arc::new(std::sync::Mutex::new(vec![
+        let vbuf2 = std::sync::Arc::new(parking_lot::Mutex::new(vec![
             0u8;
             (width * height * 4) as usize
         ]));
@@ -83,7 +83,7 @@ impl Game {
         let trapper = {
             let core = std::sync::Arc::clone(&main_core);
             let bn6 = bn6.clone();
-            let mut core = core.lock().unwrap();
+            let mut core = core.lock();
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
@@ -92,7 +92,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_init_call_battle_copy_input_data");
                             }),
                         )
                     },
@@ -101,7 +101,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_init_marshal_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_init_marshal_ret");
                             }),
                         )
                     },
@@ -110,7 +110,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_turn_marshal_ret");
                             }),
                         )
                     },
@@ -119,7 +119,7 @@ impl Game {
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
-                                log::info!("TODO");
+                                // log::info!("TODO: main_read_joyflags");
                             }),
                         )
                     },
@@ -128,7 +128,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_update_call_battle_copy_input_data");
                             }),
                         )
                     },
@@ -137,7 +137,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_run_unpaused_step_cmp_retval");
                             }),
                         )
                     },
@@ -146,7 +146,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_start_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_start_ret");
                             }),
                         )
                     },
@@ -155,7 +155,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_ending_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_ending_ret");
                             }),
                         )
                     },
@@ -164,7 +164,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_is_p2_tst");
                             }),
                         )
                     },
@@ -173,7 +173,7 @@ impl Game {
                         (
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: link_is_p2_ret");
                             }),
                         )
                     },
@@ -182,7 +182,7 @@ impl Game {
                         (
                             bn6.offsets.rom.battle_start_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: battle_start_ret");
                             }),
                         )
                     },
@@ -191,7 +191,7 @@ impl Game {
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: get_copy_data_input_state_ret");
                             }),
                         )
                     },
@@ -200,7 +200,7 @@ impl Game {
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
-                                let core = core.lock().unwrap();
+                                let core = core.lock();
                                 log::warn!("unhandled call to commMenu_handleLinkCableInput at 0x{:0x}: uh oh!", core.gba().cpu().gpr(15)-4);
                             }),
                         )
@@ -212,12 +212,12 @@ impl Game {
                                 .rom
                                 .comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.lock();
                                 let r15 = core.gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 // TODO: The rest of this function.
-                                log::info!("TODO");
+                                log::info!("TODO: comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input");
                             }),
                         )
                     },
@@ -226,7 +226,7 @@ impl Game {
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: comm_menu_init_battle_entry");
                             }),
                         )
                     },
@@ -235,7 +235,7 @@ impl Game {
                         (
                             bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: comm_menu_wait_for_friend_ret_cancel");
                             }),
                         )
                     },
@@ -244,7 +244,7 @@ impl Game {
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
                             Box::new(move || {
-                                log::info!("TODO");
+                                log::info!("TODO: comm_menu_end_battle_entry");
                             }),
                         )
                     },
@@ -253,7 +253,7 @@ impl Game {
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.lock();
                                 let r15 = core.gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
                             }),
@@ -272,7 +272,7 @@ impl Game {
 
         {
             let core = std::sync::Arc::clone(&main_core);
-            let mut core = core.lock().unwrap();
+            let mut core = core.lock();
             core.gba_mut()
                 .sync_mut()
                 .as_mut()
@@ -300,7 +300,7 @@ impl Game {
             let vbuf = std::sync::Arc::clone(&game.vbuf);
             let vbuf2 = std::sync::Arc::clone(&game.vbuf2);
             game.thread.set_frame_callback(Some(Box::new(move || {
-                let mut vbuf2 = vbuf2.lock().unwrap();
+                let mut vbuf2 = vbuf2.lock();
                 vbuf2.copy_from_slice(&vbuf);
                 for i in (0..vbuf2.len()).step_by(4) {
                     vbuf2[i + 3] = 0xff;
@@ -320,7 +320,7 @@ impl Game {
 
                 if let winit::event::Event::RedrawRequested(_) = event {
                     {
-                        let vbuf2 = self.vbuf2.lock().unwrap().clone();
+                        let vbuf2 = self.vbuf2.lock().clone();
                         self.pixels.get_frame().copy_from_slice(&vbuf2);
                     }
 
@@ -348,7 +348,7 @@ impl Game {
                         self.pixels.resize_surface(size.width, size.height);
                     }
 
-                    let mut core = self.main_core.lock().unwrap();
+                    let mut core = self.main_core.lock();
 
                     let mut keys = 0u32;
                     if self.input.key_held(winit::event::VirtualKeyCode::Left) {

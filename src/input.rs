@@ -9,7 +9,7 @@ pub struct Input {
 
 pub struct Queue {
     notify: tokio::sync::Notify,
-    queues: std::sync::Mutex<[std::collections::VecDeque<Input>; 2]>,
+    queues: parking_lot::Mutex<[std::collections::VecDeque<Input>; 2]>,
     local_player_index: u8,
     local_delay: u32,
 }
@@ -20,7 +20,7 @@ impl Queue {
         notify.notify_waiters();
         Queue {
             notify,
-            queues: std::sync::Mutex::new([
+            queues: parking_lot::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
             ]),
@@ -33,7 +33,7 @@ impl Queue {
         loop {
             self.notify.notified().await;
 
-            let mut queues = self.queues.lock().unwrap();
+            let mut queues = self.queues.lock();
             let queue = &mut queues[player_index as usize];
             if queue.len() == queue.capacity() {
                 continue;
@@ -44,7 +44,7 @@ impl Queue {
     }
 
     pub async fn queue_length(&self, player_index: u8) -> usize {
-        let queues = self.queues.lock().unwrap();
+        let queues = self.queues.lock();
         queues[player_index as usize].len()
     }
 
@@ -53,7 +53,7 @@ impl Queue {
     }
 
     pub fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
-        let mut queues = self.queues.lock().unwrap();
+        let mut queues = self.queues.lock();
 
         let to_commit = {
             let mut n =

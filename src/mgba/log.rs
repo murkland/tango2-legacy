@@ -2,20 +2,20 @@ use super::c;
 use const_zero::const_zero;
 
 lazy_static! {
-    static ref MLOG_FILTER: send_wrapper::SendWrapper<std::sync::Mutex<c::mLogFilter>> = {
+    static ref MLOG_FILTER: send_wrapper::SendWrapper<parking_lot::Mutex<c::mLogFilter>> = {
         let mut ptr = unsafe { const_zero!(c::mLogFilter) };
         unsafe {
             c::mLogFilterInit(&mut ptr);
         }
-        send_wrapper::SendWrapper::new(std::sync::Mutex::new(ptr))
+        send_wrapper::SendWrapper::new(parking_lot::Mutex::new(ptr))
     };
-    static ref MLOGGER: send_wrapper::SendWrapper<std::sync::Mutex<c::mLogger>> =
-        send_wrapper::SendWrapper::new(std::sync::Mutex::new(c::mLogger {
+    static ref MLOGGER: send_wrapper::SendWrapper<parking_lot::Mutex<c::mLogger>> =
+        send_wrapper::SendWrapper::new(parking_lot::Mutex::new(c::mLogger {
             log: Some(c_log),
-            filter: &mut *MLOG_FILTER.lock().unwrap(),
+            filter: &mut *MLOG_FILTER.lock(),
         }));
-    static ref LOG_FUNC: send_wrapper::SendWrapper<std::sync::Mutex<Box<dyn Fn(i32, u32, String) -> ()>>> =
-        send_wrapper::SendWrapper::new(std::sync::Mutex::new(Box::new(
+    static ref LOG_FUNC: send_wrapper::SendWrapper<parking_lot::Mutex<Box<dyn Fn(i32, u32, String) -> ()>>> =
+        send_wrapper::SendWrapper::new(parking_lot::Mutex::new(Box::new(
             &|category, level, message| {
                 let category_name =
                     unsafe { std::ffi::CStr::from_ptr(c::mLogCategoryName(category)) }
@@ -33,11 +33,11 @@ unsafe extern "C" fn c_log(
     fmt: *const i8,
     args: *mut i8,
 ) {
-    LOG_FUNC.lock().unwrap().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
+    LOG_FUNC.lock().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
 }
 
 pub fn init() {
     unsafe {
-        c::mLogSetDefaultLogger(&mut *MLOGGER.lock().unwrap());
+        c::mLogSetDefaultLogger(&mut *MLOGGER.lock());
     }
 }
