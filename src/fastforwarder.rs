@@ -32,168 +32,179 @@ impl Fastforwarder {
             std::rc::Rc::<std::cell::RefCell<Option<State>>>::new(std::cell::RefCell::new(None));
 
         let trapper = {
-            let core = std::sync::Arc::clone(&core);
-            let mut trapper = mgba::trapper::Trapper::new(core);
-            {
-                let bn6 = bn6::BN6::clone(&bn6);
-                let state = std::rc::Rc::clone(&state);
-                trapper.add(
-                    bn6.offsets.rom.main_read_joyflags,
-                    Box::new(move |core| {
-                        let in_battle_time = bn6.in_battle_time(core);
-                        let mut state = state.borrow_mut();
+            let core2 = std::sync::Arc::clone(&core);
+            let mut core2 = core2.lock().unwrap();
+            mgba::trapper::Trapper::new(
+                &mut core2,
+                vec![
+                    {
+                        let core = std::sync::Arc::clone(&core);
+                        let bn6 = bn6::BN6::clone(&bn6);
+                        let state = std::rc::Rc::clone(&state);
+                        (
+                            bn6.offsets.rom.main_read_joyflags,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
 
-                        if in_battle_time == state.as_ref().unwrap().commit_time {
-                            state.as_mut().unwrap().committed_state = core.save_state();
-                        }
+                                let in_battle_time = bn6.in_battle_time(&core);
+                                let mut state = state.borrow_mut();
 
-                        if in_battle_time == state.as_ref().unwrap().dirty_time {
-                            state.as_mut().unwrap().dirty_state = core.save_state();
-                        }
+                                if in_battle_time == state.as_ref().unwrap().commit_time {
+                                    state.as_mut().unwrap().committed_state = core.save_state();
+                                }
 
-                        if state.as_ref().unwrap().input_pairs.is_empty() {
-                            return;
-                        }
+                                if in_battle_time == state.as_ref().unwrap().dirty_time {
+                                    state.as_mut().unwrap().dirty_state = core.save_state();
+                                }
 
-                        let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
-                        if ip[0].local_tick != ip[1].local_tick {
-                            state.as_mut().unwrap().result = Err(anyhow::anyhow!(
-                                "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                in_battle_time,
-                                ip[0].local_tick,
-                                ip[1].local_tick
-                            ));
-                            return;
-                        }
+                                if state.as_ref().unwrap().input_pairs.is_empty() {
+                                    return;
+                                }
 
-                        if ip[0].local_tick != in_battle_time {
-                            state.as_mut().unwrap().result = Err(anyhow::anyhow!(
-                                "input tick != in battle tick: {} != {}",
-                                ip[0].local_tick,
-                                in_battle_time,
-                            ));
-                            return;
-                        }
+                                let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
+                                if ip[0].local_tick != ip[1].local_tick {
+                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                        "p1 tick != p2 tick (in battle tick = {}): {} != {}",
+                                        in_battle_time,
+                                        ip[0].local_tick,
+                                        ip[1].local_tick
+                                    ));
+                                    return;
+                                }
 
-                        core.gba_mut().cpu_mut().set_gpr(
-                            4,
-                            ip[state.as_ref().unwrap().local_player_index as usize].joyflags as i32,
-                        );
-                    }),
-                );
-            }
+                                if ip[0].local_tick != in_battle_time {
+                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                        "input tick != in battle tick: {} != {}",
+                                        ip[0].local_tick,
+                                        in_battle_time,
+                                    ));
+                                    return;
+                                }
 
-            {
-                let bn6 = bn6::BN6::clone(&bn6);
-                let state = std::rc::Rc::clone(&state);
-                trapper.add(
-                    bn6.offsets.rom.main_read_joyflags,
-                    Box::new(move |core| {
-                        let in_battle_time = bn6.in_battle_time(core);
-                        let mut state = state.borrow_mut();
+                                core.gba_mut().cpu_mut().set_gpr(
+                                    4,
+                                    ip[state.as_ref().unwrap().local_player_index as usize].joyflags
+                                        as i32,
+                                );
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&core);
+                        let bn6 = bn6::BN6::clone(&bn6);
+                        let state = std::rc::Rc::clone(&state);
+                        (
+                            bn6.offsets.rom.main_read_joyflags,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
 
-                        let commit_time = state.as_ref().unwrap().commit_time;
+                                let in_battle_time = bn6.in_battle_time(&core);
+                                let mut state = state.borrow_mut();
 
-                        if state.as_ref().unwrap().input_pairs.is_empty() {
-                            return;
-                        }
+                                let commit_time = state.as_ref().unwrap().commit_time;
 
-                        let r15 = core.gba().cpu().gpr(15);
-                        core.gba_mut().cpu_mut().set_gpr(0, 0);
-                        core.gba_mut().cpu_mut().set_gpr(15, r15 + 4);
-                        core.gba_mut().cpu_mut().thumb_write_pc();
+                                if state.as_ref().unwrap().input_pairs.is_empty() {
+                                    return;
+                                }
 
-                        let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
-                        if ip[0].local_tick != ip[1].local_tick {
-                            state.as_mut().unwrap().result = Err(anyhow::anyhow!(
-                                "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                in_battle_time,
-                                ip[0].local_tick,
-                                ip[1].local_tick
-                            ));
-                            return;
-                        }
+                                let r15 = core.gba().cpu().gpr(15);
+                                core.gba_mut().cpu_mut().set_gpr(0, 0);
+                                core.gba_mut().cpu_mut().set_gpr(15, r15 + 4);
+                                core.gba_mut().cpu_mut().thumb_write_pc();
 
-                        if ip[0].local_tick != in_battle_time {
-                            state.as_mut().unwrap().result = Err(anyhow::anyhow!(
-                                "input tick != in battle tick: {} != {}",
-                                ip[0].local_tick,
-                                in_battle_time,
-                            ));
-                            return;
-                        }
+                                let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
+                                if ip[0].local_tick != ip[1].local_tick {
+                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                        "p1 tick != p2 tick (in battle tick = {}): {} != {}",
+                                        in_battle_time,
+                                        ip[0].local_tick,
+                                        ip[1].local_tick
+                                    ));
+                                    return;
+                                }
 
-                        bn6.set_player_input_state(
-                            core,
-                            0,
-                            ip[0].joyflags,
-                            ip[0].custom_screen_state,
-                        );
-                        if let Some(turn) = ip[0].turn {
-                            bn6.set_player_marshaled_battle_state(core, 0, &turn);
-                            if in_battle_time < commit_time {
-                                log::info!("p1 turn committed at tick {}", in_battle_time);
-                            }
-                        }
+                                if ip[0].local_tick != in_battle_time {
+                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                        "input tick != in battle tick: {} != {}",
+                                        ip[0].local_tick,
+                                        in_battle_time,
+                                    ));
+                                    return;
+                                }
 
-                        bn6.set_player_input_state(
-                            core,
-                            1,
-                            ip[1].joyflags,
-                            ip[1].custom_screen_state,
-                        );
-                        if let Some(turn) = ip[1].turn {
-                            bn6.set_player_marshaled_battle_state(core, 1, &turn);
-                            if in_battle_time < commit_time {
-                                log::info!("p2 turn committed at tick {}", in_battle_time);
-                            }
-                        }
+                                bn6.set_player_input_state(
+                                    &mut core,
+                                    0,
+                                    ip[0].joyflags,
+                                    ip[0].custom_screen_state,
+                                );
+                                if let Some(turn) = ip[0].turn {
+                                    bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
+                                    if in_battle_time < commit_time {
+                                        log::info!("p1 turn committed at tick {}", in_battle_time);
+                                    }
+                                }
 
-                        // TODO: replay writer
-                    }),
-                );
-            }
+                                bn6.set_player_input_state(
+                                    &mut core,
+                                    1,
+                                    ip[1].joyflags,
+                                    ip[1].custom_screen_state,
+                                );
+                                if let Some(turn) = ip[1].turn {
+                                    bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
+                                    if in_battle_time < commit_time {
+                                        log::info!("p2 turn committed at tick {}", in_battle_time);
+                                    }
+                                }
 
-            {
-                let bn6 = bn6::BN6::clone(&bn6);
-                let state = std::rc::Rc::clone(&state);
-                trapper.add(
-                    bn6.offsets.rom.battle_is_p2_tst,
-                    Box::new(move |core| {
-                        let state = state.borrow();
-                        core.gba_mut()
-                            .cpu_mut()
-                            .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
-                    }),
-                );
-            }
-
-            {
-                let bn6 = bn6::BN6::clone(&bn6);
-                let state = std::rc::Rc::clone(&state);
-                trapper.add(
-                    bn6.offsets.rom.link_is_p2_ret,
-                    Box::new(move |core| {
-                        let state = state.borrow();
-                        core.gba_mut()
-                            .cpu_mut()
-                            .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
-                    }),
-                );
-            }
-
-            {
-                let bn6 = bn6::BN6::clone(&bn6);
-                trapper.add(
-                    bn6.offsets.rom.get_copy_data_input_state_ret,
-                    Box::new(move |core| {
-                        core.gba_mut().cpu_mut().set_gpr(0, 2);
-                    }),
-                );
-            }
-
-            trapper.attach();
-            trapper
+                                // TODO: replay writer
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&core);
+                        let bn6 = bn6::BN6::clone(&bn6);
+                        let state = std::rc::Rc::clone(&state);
+                        (
+                            bn6.offsets.rom.battle_is_p2_tst,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
+                                let state = state.borrow();
+                                core.gba_mut()
+                                    .cpu_mut()
+                                    .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&core);
+                        let bn6 = bn6::BN6::clone(&bn6);
+                        let state = std::rc::Rc::clone(&state);
+                        (
+                            bn6.offsets.rom.link_is_p2_ret,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
+                                let state = state.borrow();
+                                core.gba_mut()
+                                    .cpu_mut()
+                                    .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&core);
+                        let bn6 = bn6::BN6::clone(&bn6);
+                        (
+                            bn6.offsets.rom.get_copy_data_input_state_ret,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
+                                core.gba_mut().cpu_mut().set_gpr(0, 2);
+                            }),
+                        )
+                    },
+                ],
+            )
         };
 
         Ok(Fastforwarder {
