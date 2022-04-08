@@ -13,7 +13,7 @@ struct State {
 }
 
 pub struct Fastforwarder {
-    core: std::sync::Arc<std::sync::Mutex<mgba::core::Core>>,
+    core: std::rc::Rc<std::cell::RefCell<mgba::core::Core>>,
     trapper: mgba::trapper::Trapper,
     bn6: bn6::BN6,
     state: std::rc::Rc<std::cell::RefCell<Option<State>>>,
@@ -21,7 +21,7 @@ pub struct Fastforwarder {
 
 impl Fastforwarder {
     pub fn new(rom_path: &str, bn6: bn6::BN6) -> anyhow::Result<Self> {
-        let core = std::sync::Arc::new(std::sync::Mutex::new({
+        let core = std::rc::Rc::new(std::cell::RefCell::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.load_rom(rom_vf)?;
@@ -32,19 +32,19 @@ impl Fastforwarder {
             std::rc::Rc::<std::cell::RefCell<Option<State>>>::new(std::cell::RefCell::new(None));
 
         let trapper = {
-            let core2 = std::sync::Arc::clone(&core);
-            let mut core2 = core2.lock().unwrap();
+            let core2 = std::rc::Rc::clone(&core);
+            let mut core2 = core2.borrow_mut();
             mgba::trapper::Trapper::new(
                 &mut core2,
                 vec![
                     {
-                        let core = std::sync::Arc::clone(&core);
+                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.borrow_mut();
 
                                 let in_battle_time = bn6.in_battle_time(&core);
                                 let mut state = state.borrow_mut();
@@ -90,13 +90,13 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&core);
+                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.borrow_mut();
 
                                 let in_battle_time = bn6.in_battle_time(&core);
                                 let mut state = state.borrow_mut();
@@ -163,13 +163,13 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&core);
+                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.borrow_mut();
                                 let state = state.borrow();
                                 core.gba_mut()
                                     .cpu_mut()
@@ -178,13 +178,13 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&core);
+                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.borrow_mut();
                                 let state = state.borrow();
                                 core.gba_mut()
                                     .cpu_mut()
@@ -193,12 +193,12 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&core);
+                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
                             Box::new(move || {
-                                let mut core = core.lock().unwrap();
+                                let mut core = core.borrow_mut();
                                 core.gba_mut().cpu_mut().set_gpr(0, 2);
                             }),
                         )
@@ -223,10 +223,8 @@ impl Fastforwarder {
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
     ) -> anyhow::Result<(mgba::state::State, mgba::state::State, [input::Input; 2])> {
-        // TODO: I'm pretty sure this deadlocks...
-        let mut core = self.core.lock().unwrap();
-        core.load_state(&state)?;
-        let start_in_battle_time = self.bn6.in_battle_time(&core);
+        self.core.borrow_mut().load_state(&state)?;
+        let start_in_battle_time = self.bn6.in_battle_time(&self.core.borrow());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
         let mut input_pairs = commit_pairs
             .iter()
@@ -270,7 +268,7 @@ impl Fastforwarder {
             && self.state.borrow().as_ref().unwrap().dirty_state.is_none()
         {
             self.state.borrow_mut().as_mut().unwrap().result = Ok(());
-            core.run_frame();
+            self.core.borrow_mut().run_frame();
             if let Err(_) = self.state.borrow().as_ref().unwrap().result {
                 let state = self.state.take().unwrap();
                 return Err(state.result.unwrap_err());
