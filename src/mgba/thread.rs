@@ -17,7 +17,7 @@ unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
 
 impl Thread {
     pub fn new(core: std::sync::Arc<std::sync::Mutex<core::Core>>) -> Self {
-        let core_ptr = core.lock().unwrap().ptr;
+        let core_ptr = core.lock().unwrap().0;
         let mut t = Box::new(ThreadImpl {
             raw: unsafe { std::mem::zeroed::<c::mCoreThread>() },
             frame_callback: None,

@@ -1,8 +1,9 @@
 use super::c;
 
-pub struct Blip(pub(super) *mut c::blip_t);
+#[repr(transparent)]
+pub struct BlipMutRef(pub(super) *mut c::blip_t);
 
-impl Blip {
+impl BlipMutRef {
     pub fn set_rates(&mut self, clock_rate: f64, sample_rate: f64) {
         unsafe { c::blip_set_rates(self.0, clock_rate, sample_rate) }
     }

@@ -1,6 +1,7 @@
 use super::c;
 use std::ffi::CString;
 
+#[repr(transparent)]
 pub struct VFile(*mut c::VFile);
 
 pub mod flags {

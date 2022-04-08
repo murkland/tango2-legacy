@@ -34,7 +34,7 @@ impl MGBAAudioSource {
         let mut faux_clock = 1.0;
         if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
-            faux_clock = gba::audio_calculate_ratio(1.0, sync.fps_target(), 1.0);
+            faux_clock = gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
 
         {

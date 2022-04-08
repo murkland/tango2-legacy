@@ -2,36 +2,41 @@ use super::arm_core;
 use super::c;
 use super::sync;
 
-pub struct GBA {
-    pub(super) ptr: *mut c::GBA,
-    arm_core: arm_core::ARMCore,
-    sync: Option<sync::Sync>,
-}
+#[repr(transparent)]
+pub struct GBARef<'a>(pub(super) &'a *mut c::GBA);
 
-impl GBA {
-    pub(super) fn wrap(ptr: *mut c::GBA) -> GBA {
-        let sync_ptr = unsafe { *ptr }.sync;
-        GBA {
-            ptr,
-            arm_core: arm_core::ARMCore::wrap(unsafe { *ptr }.cpu),
-            sync: if sync_ptr.is_null() {
-                None
-            } else {
-                Some(sync::Sync::wrap(sync_ptr))
-            },
+impl<'a> GBARef<'a> {
+    pub fn cpu(&self) -> arm_core::ARMCoreRef<'a> {
+        arm_core::ARMCoreRef::<'a>(unsafe { &mut (**self.0).cpu })
+    }
+
+    pub fn sync(&mut self) -> Option<sync::SyncRef> {
+        if unsafe { (**self.0).sync.is_null() } {
+            None
+        } else {
+            Some(sync::SyncRef(unsafe { &mut (**self.0).sync }))
         }
     }
+}
 
-    pub fn sync_mut(&mut self) -> &mut Option<sync::Sync> {
-        &mut self.sync
+#[repr(transparent)]
+pub struct GBAMutRef<'a>(pub(super) &'a mut *mut c::GBA);
+
+impl<'a> GBAMutRef<'a> {
+    pub fn as_ref(&self) -> GBARef {
+        GBARef(&*self.0)
     }
 
-    pub fn cpu_mut(&mut self) -> &mut arm_core::ARMCore {
-        &mut self.arm_core
+    pub fn cpu_mut(&self) -> arm_core::ARMCoreMutRef<'a> {
+        arm_core::ARMCoreMutRef::<'a>(unsafe { &mut (**self.0).cpu })
     }
 
-    pub fn cpu(&self) -> &arm_core::ARMCore {
-        &self.arm_core
+    pub fn sync_mut(&mut self) -> Option<sync::SyncMutRef> {
+        if unsafe { (**self.0).sync.is_null() } {
+            None
+        } else {
+            Some(sync::SyncMutRef(unsafe { &mut (**self.0).sync }))
+        }
     }
 }
 

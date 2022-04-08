@@ -1,48 +1,53 @@
 use super::c;
 
-pub struct ARMCore {
-    pub(super) ptr: *mut c::ARMCore,
+#[repr(transparent)]
+pub struct ARMCoreRef<'a>(pub(super) &'a *mut c::ARMCore);
+
+impl<'a> ARMCoreRef<'a> {
+    pub fn gpr(&self, r: usize) -> i32 {
+        unsafe { (**self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r]
+    }
 }
 
-impl ARMCore {
-    pub(super) fn wrap(ptr: *mut c::ARMCore) -> ARMCore {
-        ARMCore { ptr }
+#[repr(transparent)]
+pub struct ARMCoreMutRef<'a>(pub(super) &'a mut *mut c::ARMCore);
+
+impl<'a> ARMCoreMutRef<'a> {
+    pub fn as_ref(&self) -> ARMCoreRef {
+        ARMCoreRef(&*self.0)
     }
 
-    pub unsafe fn components_mut(&mut self) -> &mut [*mut c::mCPUComponent] {
+    pub unsafe fn components_mut(&self) -> &mut [*mut c::mCPUComponent] {
         std::slice::from_raw_parts_mut(
-            (*self.ptr).components,
+            (**self.0).components,
             c::mCPUComponentType_CPU_COMPONENT_MAX as usize,
         )
     }
 
-    pub fn gpr(&self, r: usize) -> i32 {
-        unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r]
+    pub fn set_gpr(&self, r: usize, v: i32) {
+        return unsafe { (**self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r] = v;
     }
 
-    pub fn set_gpr(&mut self, r: usize, v: i32) {
-        return unsafe { (*self.ptr).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r] = v;
-    }
-
-    pub fn thumb_write_pc(&mut self) {
+    pub fn thumb_write_pc(&self) {
         // uint32_t pc = cpu->gprs[ARM_PC] & -WORD_SIZE_THUMB;
-        let mut pc = (self.gpr(c::ARM_PC as usize) & -(c::WordSize_WORD_SIZE_THUMB as i32)) as u32;
+        let mut pc =
+            (self.as_ref().gpr(c::ARM_PC as usize) & -(c::WordSize_WORD_SIZE_THUMB as i32)) as u32;
         // cpu->memory.setActiveRegion(cpu, pc);
         unsafe {
-            (*self.ptr).memory.setActiveRegion.unwrap()(self.ptr, pc as u32);
+            (**self.0).memory.setActiveRegion.unwrap()(*self.0, pc as u32);
         }
         // LOAD_16(cpu->prefetch[0], pc & cpu->memory.activeMask, cpu->memory.activeRegion);
         unsafe {
-            (*self.ptr).prefetch[0] = *(((*self.ptr).memory.activeRegion as *const u8)
-                .offset((pc & (*self.ptr).memory.activeMask) as isize)
+            (**self.0).prefetch[0] = *(((**self.0).memory.activeRegion as *const u8)
+                .offset((pc & (**self.0).memory.activeMask) as isize)
                 as *const u16) as u32;
         }
         // pc += WORD_SIZE_THUMB;
         pc += c::WordSize_WORD_SIZE_THUMB;
         // LOAD_16(cpu->prefetch[1], pc & cpu->memory.activeMask, cpu->memory.activeRegion);
         unsafe {
-            (*self.ptr).prefetch[1] = *(((*self.ptr).memory.activeRegion as *const u8)
-                .offset((pc & (*self.ptr).memory.activeMask) as isize)
+            (**self.0).prefetch[1] = *(((**self.0).memory.activeRegion as *const u8)
+                .offset((pc & (**self.0).memory.activeMask) as isize)
                 as *const u16) as u32;
         }
         // cpu->gprs[ARM_PC] = pc;
