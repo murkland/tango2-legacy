@@ -106,7 +106,7 @@ impl Game {
                             Box::new(move || {
                                 let mut core = core.lock().unwrap();
                                 let r15 = core.gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 - 4);
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 // TODO: The rest of this function.
                                 log::info!("TODO");
