@@ -132,19 +132,19 @@ impl Core {
         buf
     }
 
-    pub fn raw_write_8(&self, address: u32, segment: i32, v: u8) {
+    pub fn raw_write_8(&mut self, address: u32, segment: i32, v: u8) {
         unsafe { (*self.0).rawWrite8.unwrap()(self.0, address, segment, v) }
     }
 
-    pub fn raw_write_16(&self, address: u32, segment: i32, v: u16) {
+    pub fn raw_write_16(&mut self, address: u32, segment: i32, v: u16) {
         unsafe { (*self.0).rawWrite16.unwrap()(self.0, address, segment, v) }
     }
 
-    pub fn raw_write_32(&self, address: u32, segment: i32, v: u32) {
+    pub fn raw_write_32(&mut self, address: u32, segment: i32, v: u32) {
         unsafe { (*self.0).rawWrite32.unwrap()(self.0, address, segment, v) }
     }
 
-    pub fn raw_write_range(&self, address: u32, segment: i32, buf: &Vec<u8>) {
+    pub fn raw_write_range(&mut self, address: u32, segment: i32, buf: &Vec<u8>) {
         for (i, v) in buf.iter().enumerate() {
             self.raw_write_8(address + i as u32, segment, *v);
         }

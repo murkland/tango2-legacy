@@ -64,7 +64,7 @@ impl Trapper {
     }
 
     pub fn add(&mut self, addr: u32, handler: Box<dyn Fn(&mut core::Core)>) {
-        let core = self.0.r#impl.core.lock().unwrap();
+        let mut core = self.0.r#impl.core.lock().unwrap();
         let original = core.raw_read_16(addr, -1);
         core.raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
         self.0.r#impl.traps.insert(addr, Trap { original, handler });
