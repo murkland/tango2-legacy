@@ -6,13 +6,18 @@ pub struct Init {
     marshaled: [u8; 0x100],
 }
 
+struct BattleHolder {
+    number: u32,
+    battle: Option<Battle>,
+}
+
 pub struct Match {
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
     won_last_battle: bool,
-    battle: parking_lot::Mutex<(u32, Option<Battle>)>,
+    battle_holder: parking_lot::Mutex<BattleHolder>,
     aborted: std::sync::atomic::AtomicBool,
 }
 
@@ -24,7 +29,10 @@ impl Match {
             game_title,
             game_crc32,
             won_last_battle: false,
-            battle: parking_lot::Mutex::new((0, None)),
+            battle_holder: parking_lot::Mutex::new(BattleHolder {
+                number: 0,
+                battle: None,
+            }),
             aborted: false.into(),
         }
     }
@@ -39,7 +47,9 @@ impl Match {
     }
 
     pub fn lock_battle(&self) -> parking_lot::MappedMutexGuard<Option<Battle>> {
-        parking_lot::MutexGuard::map(self.battle.lock(), |(_, b)| b)
+        parking_lot::MutexGuard::map(self.battle_holder.lock(), |battle_holder| {
+            &mut battle_holder.battle
+        })
     }
 }
 
