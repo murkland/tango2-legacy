@@ -23,6 +23,13 @@ impl Game {
                 mgba::vfile::VFile::open("bn6f.gba", mgba::vfile::flags::O_RDONLY).unwrap();
             core.load_rom(rom_vf);
 
+            let save_vf = mgba::vfile::VFile::open(
+                "bn6f.sav",
+                mgba::vfile::flags::O_CREAT | mgba::vfile::flags::O_RDWR,
+            )
+            .unwrap();
+            core.load_save(save_vf);
+
             log::info!("loaded game: {}", core.get_game_title());
             core
         }));
@@ -104,13 +111,13 @@ impl Game {
         {
             let vbuf = std::sync::Arc::clone(&game.vbuf);
             let vbuf2 = std::sync::Arc::clone(&game.vbuf2);
-            game.thread.frame_callback = Some(Box::new(move || {
+            game.thread.set_frame_callback(Some(Box::new(move || {
                 let mut vbuf2 = vbuf2.lock().unwrap();
                 vbuf2.copy_from_slice(&vbuf);
                 for i in (0..vbuf2.len()).step_by(4) {
                     vbuf2[i + 3] = 0xff;
                 }
-            }));
+            })));
         }
 
         Ok(game)

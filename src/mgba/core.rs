@@ -37,6 +37,10 @@ impl Core {
         unsafe { (*self.0).loadROM.unwrap()(self.0, vf.release()) }
     }
 
+    pub fn load_save(&mut self, mut vf: vfile::VFile) -> bool {
+        unsafe { (*self.0).loadSave.unwrap()(self.0, vf.release()) }
+    }
+
     pub fn run_frame(&mut self) {
         unsafe { (*self.0).runFrame.unwrap()(self.0) }
     }
