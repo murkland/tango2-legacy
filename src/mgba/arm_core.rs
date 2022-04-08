@@ -5,7 +5,7 @@ pub struct ARMCoreRef<'a>(pub(super) &'a *mut c::ARMCore);
 
 impl<'a> ARMCoreRef<'a> {
     pub fn gpr(&self, r: usize) -> i32 {
-        unsafe { (**self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r]
+        unsafe { (**self.0).__bindgen_anon_1.__bindgen_anon_1.gprs[r] }
     }
 }
 
@@ -25,7 +25,9 @@ impl<'a> ARMCoreMutRef<'a> {
     }
 
     pub fn set_gpr(&self, r: usize, v: i32) {
-        return unsafe { (**self.0).__bindgen_anon_1.__bindgen_anon_1 }.gprs[r] = v;
+        unsafe {
+            (**self.0).__bindgen_anon_1.__bindgen_anon_1.gprs[r] = v;
+        }
     }
 
     pub fn thumb_write_pc(&self) {
