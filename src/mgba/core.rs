@@ -33,12 +33,18 @@ impl Core {
         Ok(Core(ptr))
     }
 
-    pub fn load_rom(&mut self, mut vf: vfile::VFile) -> bool {
-        unsafe { (*self.0).loadROM.unwrap()(self.0, vf.release()) }
+    pub fn load_rom(&mut self, mut vf: vfile::VFile) -> anyhow::Result<()> {
+        if !unsafe { (*self.0).loadROM.unwrap()(self.0, vf.release()) } {
+            anyhow::bail!("failed to load rom")
+        }
+        Ok(())
     }
 
-    pub fn load_save(&mut self, mut vf: vfile::VFile) -> bool {
-        unsafe { (*self.0).loadSave.unwrap()(self.0, vf.release()) }
+    pub fn load_save(&mut self, mut vf: vfile::VFile) -> anyhow::Result<()> {
+        if !unsafe { (*self.0).loadSave.unwrap()(self.0, vf.release()) } {
+            anyhow::bail!("failed to load save")
+        }
+        Ok(())
     }
 
     pub fn run_frame(&mut self) {
@@ -109,13 +115,16 @@ impl Core {
         }
     }
 
-    pub fn load_state(&mut self, state: &state::State) {
-        unsafe {
+    pub fn load_state(&mut self, state: &state::State) -> anyhow::Result<()> {
+        if !unsafe {
             (*self.0).loadState.unwrap()(
                 self.0,
                 &state.0 as *const _ as *const std::os::raw::c_void,
             )
-        };
+        } {
+            anyhow::bail!("failed to load state");
+        }
+        Ok(())
     }
 
     pub fn set_keys(&mut self, keys: u32) {

@@ -20,13 +20,13 @@ impl Game {
             core.set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open("bn6f.gba", mgba::vfile::flags::O_RDONLY)?;
-            core.load_rom(rom_vf);
+            core.load_rom(rom_vf)?;
 
             let save_vf = mgba::vfile::VFile::open(
                 "bn6f.sav",
                 mgba::vfile::flags::O_CREAT | mgba::vfile::flags::O_RDWR,
             )?;
-            core.load_save(save_vf);
+            core.load_save(save_vf)?;
 
             log::info!("loaded game: {}", core.game_title());
             core

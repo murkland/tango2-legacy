@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 mod audio;
 mod bn6;
+mod fastforwarder;
 mod game;
 mod gui;
 mod input;

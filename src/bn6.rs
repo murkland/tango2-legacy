@@ -1,6 +1,7 @@
 pub mod offsets;
 use crate::mgba::core;
 
+#[derive(Clone)]
 pub struct BN6 {
     pub offsets: offsets::Offsets,
 }
