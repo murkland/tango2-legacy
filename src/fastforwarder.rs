@@ -242,6 +242,7 @@ impl Fastforwarder {
             if last_committed_remote_input.joyflags & mgba::input::keys::B as u16 != 0 {
                 predicted.joyflags |= mgba::input::keys::B as u16;
             }
+            predicted.custom_screen_state = last_committed_remote_input.custom_screen_state;
             predicted.turn = None;
             input_pairs.push_back(ip);
         }
