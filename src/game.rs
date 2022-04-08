@@ -90,6 +90,114 @@ impl Game {
                     {
                         let core = std::sync::Arc::clone(&main_core);
                         (
+                            bn6.offsets.rom.battle_init_call_battle_copy_input_data,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_init_marshal_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_turn_marshal_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.main_read_joyflags,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_update_call_battle_copy_input_data,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_start_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_ending_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_is_p2_tst,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.link_is_p2_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.battle_start_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.get_copy_data_input_state_ret,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
                                 let core = core.lock().unwrap();
@@ -110,6 +218,44 @@ impl Game {
 
                                 // TODO: The rest of this function.
                                 log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.comm_menu_init_battle_entry,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.comm_menu_end_battle_entry,
+                            Box::new(move || {
+                                log::info!("TODO");
+                            }),
+                        )
+                    },
+                    {
+                        let core = std::sync::Arc::clone(&main_core);
+                        (
+                            bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
+                            Box::new(move || {
+                                let mut core = core.lock().unwrap();
+                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
                             }),
                         )
                     },
