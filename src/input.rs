@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 #[derive(Clone)]
 pub struct Input {
     pub local_tick: u32,
@@ -8,7 +10,7 @@ pub struct Input {
 }
 
 pub struct Queue {
-    notify: tokio::sync::Notify,
+    condvar: parking_lot::Condvar,
     queues: parking_lot::Mutex<[std::collections::VecDeque<Input>; 2]>,
     local_player_index: u8,
     local_delay: u32,
@@ -16,10 +18,8 @@ pub struct Queue {
 
 impl Queue {
     pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
-        let notify = tokio::sync::Notify::new();
-        notify.notify_waiters();
         Queue {
-            notify,
+            condvar: parking_lot::Condvar::new(),
             queues: parking_lot::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
@@ -29,18 +29,21 @@ impl Queue {
         }
     }
 
-    pub async fn add_input(&mut self, player_index: u8, input: Input) {
-        loop {
-            self.notify.notified().await;
-
-            let mut queues = self.queues.lock();
-            let queue = &mut queues[player_index as usize];
-            if queue.len() == queue.capacity() {
-                continue;
+    pub async fn add_input(
+        &mut self,
+        player_index: u8,
+        input: Input,
+        timeout: std::time::Duration,
+    ) -> Result<(), anyhow::Error> {
+        let deadline = Instant::now() + timeout;
+        let mut queues = self.queues.lock();
+        while queues[player_index as usize].len() == queues[player_index as usize].capacity() {
+            if self.condvar.wait_until(&mut queues, deadline).timed_out() {
+                anyhow::bail!("add input exceeded deadline")
             }
-            queue.push_back(input);
-            return;
         }
+        queues[player_index as usize].push_back(input);
+        Ok(())
     }
 
     pub async fn queue_length(&self, player_index: u8) -> usize {
@@ -85,7 +88,7 @@ impl Queue {
             }
         };
 
-        self.notify.notify_waiters();
+        self.condvar.notify_all();
 
         (to_commit, peeked)
     }

@@ -1,14 +1,17 @@
 use crate::input;
 use crate::mgba;
 
+pub struct Init {
+    input_delay: u32,
+    marshaled: [u8; 0x100],
+}
+
 pub struct Match {
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
-
     won_last_battle: bool,
-
     battle: parking_lot::Mutex<(u32, Option<Battle>)>,
     aborted: std::sync::atomic::AtomicBool,
 }
