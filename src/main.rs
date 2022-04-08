@@ -5,6 +5,7 @@ mod audio;
 mod bn6;
 mod game;
 mod gui;
+mod input;
 mod mgba;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
