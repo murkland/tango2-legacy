@@ -2,20 +2,36 @@ use super::arm_core;
 use super::c;
 use super::sync;
 
-pub struct GBA(pub(super) *mut c::GBA);
+pub struct GBA {
+    pub(super) ptr: *mut c::GBA,
+    arm_core: arm_core::ARMCore,
+    sync: Option<sync::Sync>,
+}
 
 impl GBA {
-    pub fn get_sync(&mut self) -> Option<sync::Sync> {
-        let ptr = unsafe { *self.0 }.sync;
-        if ptr.is_null() {
-            None
-        } else {
-            Some(sync::Sync(ptr))
+    pub(super) fn wrap(ptr: *mut c::GBA) -> GBA {
+        let sync_ptr = unsafe { *ptr }.sync;
+        GBA {
+            ptr,
+            arm_core: arm_core::ARMCore::wrap(unsafe { *ptr }.cpu),
+            sync: if ptr.is_null() {
+                None
+            } else {
+                Some(sync::Sync::wrap(sync_ptr))
+            },
         }
     }
 
-    pub fn get_cpu(&mut self) -> arm_core::ARMCore {
-        arm_core::ARMCore(unsafe { *self.0 }.cpu)
+    pub fn get_sync_mut(&mut self) -> &mut Option<sync::Sync> {
+        &mut self.sync
+    }
+
+    pub fn get_cpu_mut(&mut self) -> &mut arm_core::ARMCore {
+        &mut self.arm_core
+    }
+
+    pub fn get_cpu(&self) -> &arm_core::ARMCore {
+        &self.arm_core
     }
 }
 

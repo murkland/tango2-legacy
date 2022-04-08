@@ -5,7 +5,10 @@ use super::state;
 use super::vfile;
 use std::ffi::CString;
 
-pub struct Core(pub(super) *mut c::mCore);
+pub struct Core {
+    pub(super) ptr: *mut c::mCore,
+    gba: gba::GBA,
+}
 
 unsafe impl Send for Core {}
 
@@ -29,63 +32,70 @@ impl Core {
             c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
             c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
         }
-        Ok(Core(ptr))
+        Ok(Core {
+            ptr,
+            gba: gba::GBA::wrap(unsafe { (*ptr).board as *mut c::GBA }),
+        })
     }
 
     pub fn load_rom(&mut self, mut vf: vfile::VFile) -> bool {
-        unsafe { (*self.0).loadROM.unwrap()(self.0, vf.release()) }
+        unsafe { (*self.ptr).loadROM.unwrap()(self.ptr, vf.release()) }
     }
 
     pub fn load_save(&mut self, mut vf: vfile::VFile) -> bool {
-        unsafe { (*self.0).loadSave.unwrap()(self.0, vf.release()) }
+        unsafe { (*self.ptr).loadSave.unwrap()(self.ptr, vf.release()) }
     }
 
     pub fn run_frame(&mut self) {
-        unsafe { (*self.0).runFrame.unwrap()(self.0) }
+        unsafe { (*self.ptr).runFrame.unwrap()(self.ptr) }
     }
 
     pub fn reset(&mut self) {
-        unsafe { (*self.0).reset.unwrap()(self.0) }
+        unsafe { (*self.ptr).reset.unwrap()(self.ptr) }
     }
 
     pub fn get_audio_buffer_size(&self) -> u64 {
-        unsafe { (*self.0).getAudioBufferSize.unwrap()(self.0) }
+        unsafe { (*self.ptr).getAudioBufferSize.unwrap()(self.ptr) }
     }
 
     pub fn set_audio_buffer_size(&mut self, size: u64) {
-        unsafe { (*self.0).setAudioBufferSize.unwrap()(self.0, size) }
+        unsafe { (*self.ptr).setAudioBufferSize.unwrap()(self.ptr, size) }
     }
 
     pub fn get_audio_channel(&mut self, ch: i32) -> blip::Blip {
-        blip::Blip(unsafe { (*self.0).getAudioChannel.unwrap()(self.0, ch) })
+        blip::Blip(unsafe { (*self.ptr).getAudioChannel.unwrap()(self.ptr, ch) })
     }
 
     pub fn frequency(&mut self) -> i32 {
-        unsafe { (*self.0).frequency.unwrap()(self.0) }
+        unsafe { (*self.ptr).frequency.unwrap()(self.ptr) }
     }
 
     pub fn set_video_buffer(&mut self, buffer: &mut Vec<u8>, stride: u64) {
         unsafe {
-            (*self.0).setVideoBuffer.unwrap()(self.0, buffer.as_mut_ptr() as *mut u32, stride)
+            (*self.ptr).setVideoBuffer.unwrap()(self.ptr, buffer.as_mut_ptr() as *mut u32, stride)
         }
     }
 
     pub fn desired_video_dimensions(&self) -> (u32, u32) {
         let mut width: u32 = 0;
         let mut height: u32 = 0;
-        unsafe { (*self.0).desiredVideoDimensions.unwrap()(self.0, &mut width, &mut height) };
+        unsafe { (*self.ptr).desiredVideoDimensions.unwrap()(self.ptr, &mut width, &mut height) };
         (width, height)
     }
 
-    pub fn get_gba(&mut self) -> gba::GBA {
-        gba::GBA(unsafe { (*self.0).board as *mut c::GBA })
+    pub fn get_gba_mut(&mut self) -> &mut gba::GBA {
+        &mut self.gba
+    }
+
+    pub fn get_gba(&self) -> &gba::GBA {
+        &self.gba
     }
 
     pub fn save_state(&self) -> Option<state::State> {
         unsafe {
             let mut state = std::mem::zeroed::<state::State>();
-            if (*self.0).saveState.unwrap()(
-                self.0,
+            if (*self.ptr).saveState.unwrap()(
+                self.ptr,
                 &mut state.0 as *mut _ as *mut std::os::raw::c_void,
             ) {
                 Some(state)
@@ -97,27 +107,27 @@ impl Core {
 
     pub fn load_state(&mut self, state: &state::State) {
         unsafe {
-            (*self.0).loadState.unwrap()(
-                self.0,
+            (*self.ptr).loadState.unwrap()(
+                self.ptr,
                 &state.0 as *const _ as *const std::os::raw::c_void,
             )
         };
     }
 
     pub fn set_keys(&mut self, keys: u32) {
-        unsafe { (*self.0).setKeys.unwrap()(self.0, keys) }
+        unsafe { (*self.ptr).setKeys.unwrap()(self.ptr, keys) }
     }
 
     pub fn raw_read_8(&self, address: u32, segment: i32) -> u8 {
-        unsafe { (*self.0).rawRead8.unwrap()(self.0, address, segment) as u8 }
+        unsafe { (*self.ptr).rawRead8.unwrap()(self.ptr, address, segment) as u8 }
     }
 
     pub fn raw_read_16(&self, address: u32, segment: i32) -> u16 {
-        unsafe { (*self.0).rawRead16.unwrap()(self.0, address, segment) as u16 }
+        unsafe { (*self.ptr).rawRead16.unwrap()(self.ptr, address, segment) as u16 }
     }
 
     pub fn raw_read_32(&self, address: u32, segment: i32) -> u32 {
-        unsafe { (*self.0).rawRead32.unwrap()(self.0, address, segment) as u32 }
+        unsafe { (*self.ptr).rawRead32.unwrap()(self.ptr, address, segment) as u32 }
     }
 
     pub fn raw_read_range<const N: usize>(&self, address: u32, segment: i32) -> [u8; N] {
@@ -132,15 +142,15 @@ impl Core {
     }
 
     pub fn raw_write_8(&mut self, address: u32, segment: i32, v: u8) {
-        unsafe { (*self.0).rawWrite8.unwrap()(self.0, address, segment, v) }
+        unsafe { (*self.ptr).rawWrite8.unwrap()(self.ptr, address, segment, v) }
     }
 
     pub fn raw_write_16(&mut self, address: u32, segment: i32, v: u16) {
-        unsafe { (*self.0).rawWrite16.unwrap()(self.0, address, segment, v) }
+        unsafe { (*self.ptr).rawWrite16.unwrap()(self.ptr, address, segment, v) }
     }
 
     pub fn raw_write_32(&mut self, address: u32, segment: i32, v: u32) {
-        unsafe { (*self.0).rawWrite32.unwrap()(self.0, address, segment, v) }
+        unsafe { (*self.ptr).rawWrite32.unwrap()(self.ptr, address, segment, v) }
     }
 
     pub fn raw_write_range(&mut self, address: u32, segment: i32, buf: &[u8]) {
@@ -151,7 +161,9 @@ impl Core {
 
     pub fn get_game_title(&self) -> String {
         let mut title = [0u8; 16];
-        unsafe { (*self.0).getGameTitle.unwrap()(self.0, title.as_mut_ptr() as *mut _ as *mut i8) }
+        unsafe {
+            (*self.ptr).getGameTitle.unwrap()(self.ptr, title.as_mut_ptr() as *mut _ as *mut i8)
+        }
         let cstr = match std::ffi::CString::new(title) {
             Ok(r) => r,
             Err(err) => {
@@ -164,7 +176,9 @@ impl Core {
 
     pub fn get_game_code(&self) -> String {
         let mut code = [0u8; 12];
-        unsafe { (*self.0).getGameCode.unwrap()(self.0, code.as_mut_ptr() as *mut _ as *mut i8) }
+        unsafe {
+            (*self.ptr).getGameCode.unwrap()(self.ptr, code.as_mut_ptr() as *mut _ as *mut i8)
+        }
         let cstr = match std::ffi::CString::new(code) {
             Ok(r) => r,
             Err(err) => {
@@ -179,8 +193,8 @@ impl Core {
 impl Drop for Core {
     fn drop(&mut self) {
         unsafe {
-            c::mCoreConfigDeinit(&mut self.0.as_mut().unwrap().config);
-            (*self.0).deinit.unwrap()(self.0)
+            c::mCoreConfigDeinit(&mut self.ptr.as_mut().unwrap().config);
+            (*self.ptr).deinit.unwrap()(self.ptr)
         }
     }
 }

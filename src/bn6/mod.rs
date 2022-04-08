@@ -27,7 +27,7 @@ impl BN6 {
         core.raw_write_8(self.offsets.ewram.menu_control + 0x2, -1, 0x04);
         core.raw_write_8(self.offsets.ewram.menu_control + 0x3, -1, 0x04);
         if typ != 0 {
-            let mut cpu = core.get_gba().get_cpu();
+            let cpu = core.get_gba_mut().get_cpu_mut();
             cpu.set_gpr(0, typ as i32);
             cpu.set_gpr(
                 15,

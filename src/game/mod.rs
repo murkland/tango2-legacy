@@ -88,7 +88,11 @@ impl Game {
         {
             let core = std::sync::Arc::clone(&main_core);
             let mut core = core.lock().unwrap();
-            core.get_gba().get_sync().unwrap().set_fps_target(60.0);
+            core.get_gba_mut()
+                .get_sync_mut()
+                .as_mut()
+                .unwrap()
+                .set_fps_target(60.0);
         }
 
         let gui = gui::Gui::new(&window, &pixels);
