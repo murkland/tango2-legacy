@@ -121,6 +121,17 @@ impl Core {
         unsafe { (*self.0).rawRead32.unwrap()(self.0, address, segment) as u32 }
     }
 
+    pub fn raw_read_range(&self, address: u32, segment: i32, size: usize) -> Vec<u8> {
+        let mut buf = vec![0; size];
+        let ptr = buf.as_mut_ptr();
+        for i in 0..size {
+            unsafe {
+                *ptr.add(i) = self.raw_read_8(address + i as u32, segment);
+            }
+        }
+        buf
+    }
+
     pub fn raw_write_8(&self, address: u32, segment: i32, v: u8) {
         unsafe { (*self.0).rawWrite8.unwrap()(self.0, address, segment, v) }
     }
@@ -131,6 +142,12 @@ impl Core {
 
     pub fn raw_write_32(&self, address: u32, segment: i32, v: u32) {
         unsafe { (*self.0).rawWrite32.unwrap()(self.0, address, segment, v) }
+    }
+
+    pub fn raw_write_range(&self, address: u32, segment: i32, buf: &Vec<u8>) {
+        for (i, v) in buf.iter().enumerate() {
+            self.raw_write_8(address + i as u32, segment, *v);
+        }
     }
 
     pub fn get_game_title(&self) -> String {

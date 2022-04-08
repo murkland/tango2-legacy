@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 mod audio;
+mod bn6;
 mod game;
 mod gui;
 mod mgba;
