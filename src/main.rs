@@ -9,6 +9,7 @@ mod game;
 mod gui;
 mod input;
 mod mgba;
+mod protocol;
 mod signor;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
