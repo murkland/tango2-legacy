@@ -154,11 +154,19 @@ impl Game {
                                     let mut core = core.lock();
                                     let local_init = bn6.local_marshaled_battle_state(&core);
                                     r#match.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
-
-                                    // TODO: receive remote init
-
                                     bn6.set_player_marshaled_battle_state(&mut core, battle.local_player_index() as u32, &local_init);
-                                    battle.set_remote_delay(0 /* remote_init.delay */);
+
+                                    let remote_init = match r#match.receive_remote_init().await {
+                                        Some(remote_init) => remote_init,
+                                        None => {
+                                            core.gba_mut().sync_mut().unwrap().set_fps_target(EXPECTED_FPS as f32);
+                                            r#match.abort();
+                                            return;
+                                        }
+                                    };
+                                    bn6.set_player_marshaled_battle_state(&mut core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().unwrap());
+
+                                    battle.set_remote_delay(remote_init.input_delay);
                                 });
                             }),
                         )

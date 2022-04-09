@@ -40,6 +40,8 @@ pub struct Match {
     game_crc32: u32,
     battle_state: tokio::sync::Mutex<BattleState>,
     aborted: std::sync::atomic::AtomicBool,
+    remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
+    remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
 }
 
 fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
@@ -57,6 +59,7 @@ fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
 
 impl Match {
     pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
+        let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
         Match {
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
             cancellation_token: tokio_util::sync::CancellationToken::new(),
@@ -69,6 +72,8 @@ impl Match {
                 battle: None,
                 won_last_battle: false,
             }),
+            remote_init_sender,
+            remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
             aborted: false.into(),
         }
     }
@@ -242,6 +247,10 @@ impl Match {
         Ok(())
     }
 
+    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
+        self.remote_init_receiver.lock().await.recv().await
+    }
+
     pub async fn run(&self) -> anyhow::Result<()> {
         let cancellation_token = self.cancellation_token.clone();
         tokio::select! {
@@ -271,7 +280,7 @@ impl Match {
                         Some(b) => b,
                     } {
                         protocol::packet::Which::Init(init) => {
-
+                            self.remote_init_sender.send(init).await.unwrap();
                         },
                         protocol::packet::Which::Input(input) => {
                             let mut battle_state = self.battle_state.lock().await;
@@ -419,7 +428,6 @@ pub struct Battle {
     iq: input::Queue,
     remote_delay: u32,
     is_accepting_input: bool,
-    is_over: bool,
     last_committed_remote_input: input::Input,
     last_input: Option<[input::Input; 2]>,
     state_committed: tokio::sync::Notify,
@@ -475,14 +483,6 @@ impl Battle {
 
     pub fn is_accepting_input(&self) -> bool {
         self.is_accepting_input
-    }
-
-    pub fn mark_over(&mut self) {
-        self.is_over = true;
-    }
-
-    pub fn is_over(&self) -> bool {
-        self.is_over
     }
 
     pub fn last_committed_remote_input(&self) -> input::Input {
