@@ -61,11 +61,6 @@ impl Game {
             (width, height, Arc::new(vbuf), bn6.unwrap())
         };
 
-        let fastforwarder = Arc::new(Mutex::new(fastforwarder::Fastforwarder::new(
-            rom_path,
-            bn6.clone(),
-        )?));
-
         let input = winit_input_helper::WinitInputHelper::new();
 
         let window = {
@@ -202,7 +197,9 @@ impl Game {
                         let r#match = r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
-                        let fastforwarder = fastforwarder.clone();
+                        let fastforwarder = parking_lot::Mutex::new(
+                            fastforwarder::Fastforwarder::new(rom_path, bn6.clone())?,
+                        );
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
