@@ -50,11 +50,13 @@ impl Fastforwarder {
                                 let mut state = state.borrow_mut();
 
                                 if in_battle_time == state.as_ref().unwrap().commit_time {
-                                    state.as_mut().unwrap().committed_state = core.save_state();
+                                    state.as_mut().unwrap().committed_state =
+                                        Some(core.save_state().unwrap());
                                 }
 
                                 if in_battle_time == state.as_ref().unwrap().dirty_time {
-                                    state.as_mut().unwrap().dirty_state = core.save_state();
+                                    state.as_mut().unwrap().dirty_state =
+                                        Some(core.save_state().unwrap());
                                 }
 
                                 if state.as_ref().unwrap().input_pairs.is_empty() {
@@ -216,13 +218,13 @@ impl Fastforwarder {
 
     pub fn fastforward(
         &mut self,
-        state: mgba::state::State,
+        state: &mgba::state::State,
         local_player_index: u8,
         commit_pairs: &[[input::Input; 2]],
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
     ) -> anyhow::Result<(mgba::state::State, mgba::state::State, [input::Input; 2])> {
-        self.core.borrow_mut().load_state(&state)?;
+        self.core.borrow_mut().load_state(state)?;
         let start_in_battle_time = self.bn6.in_battle_time(&self.core.borrow());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
         let mut input_pairs = commit_pairs

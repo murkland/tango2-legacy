@@ -101,17 +101,16 @@ impl Core {
         }
     }
 
-    pub fn save_state(&self) -> Option<state::State> {
+    pub fn save_state(&self) -> anyhow::Result<state::State> {
         unsafe {
             let mut state = state::State(Box::<c::GBASerializedState>::new(std::mem::zeroed()));
-            if (*self.0).saveState.unwrap()(
+            if !(*self.0).saveState.unwrap()(
                 self.0,
                 &mut *state.0 as *mut _ as *mut std::os::raw::c_void,
             ) {
-                Some(state)
-            } else {
-                None
+                anyhow::bail!("failed to save state");
             }
+            Ok(state)
         }
     }
 

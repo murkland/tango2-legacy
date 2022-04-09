@@ -16,9 +16,9 @@ pub struct Init {
     marshaled: [u8; 0x100],
 }
 
-struct BattleState {
-    number: u32,
-    battle: Option<Battle>,
+pub struct BattleState {
+    pub number: u32,
+    pub battle: Option<Battle>,
     won_last_battle: bool,
 }
 
@@ -82,10 +82,8 @@ impl Match {
         self.aborted.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn lock_battle(&self) -> parking_lot::MappedMutexGuard<Option<Battle>> {
-        parking_lot::MutexGuard::map(self.battle_state.lock(), |battle_state| {
-            &mut battle_state.battle
-        })
+    pub fn lock_battle_state(&self) -> parking_lot::MutexGuard<BattleState> {
+        self.battle_state.lock()
     }
 
     pub async fn negotiate(&self) -> anyhow::Result<()> {
@@ -320,8 +318,12 @@ impl Match {
         }
     }
 
-    pub async fn send_init(&self, input_delay: u32, marshaled: &[u8]) -> anyhow::Result<()> {
-        let battle_state = self.battle_state.lock();
+    pub async fn send_init(
+        &self,
+        battle_number: u32,
+        input_delay: u32,
+        marshaled: &[u8],
+    ) -> anyhow::Result<()> {
         let dc = match &*self.negotiation.lock() {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
@@ -330,7 +332,7 @@ impl Match {
         dc.send(
             protocol::Packet {
                 which: Some(protocol::packet::Which::Init(protocol::Init {
-                    battle_number: battle_state.number,
+                    battle_number,
                     input_delay,
                     marshaled: marshaled.to_vec(),
                 })),
@@ -344,13 +346,13 @@ impl Match {
 
     pub async fn send_input(
         &self,
+        battle_number: u32,
         local_tick: u32,
         remote_tick: u32,
         joyflags: u16,
         custom_screen_state: u8,
-        turn: &[u8],
+        turn: &Option<[u8; 0x100]>,
     ) -> anyhow::Result<()> {
-        let battle_state = self.battle_state.lock();
         let dc = match &*self.negotiation.lock() {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
@@ -359,12 +361,16 @@ impl Match {
         dc.send(
             protocol::Packet {
                 which: Some(protocol::packet::Which::Input(protocol::Input {
-                    battle_number: battle_state.number,
+                    battle_number,
                     local_tick,
                     remote_tick,
                     joyflags: joyflags as u32,
                     custom_screen_state: custom_screen_state as u32,
-                    turn: turn.to_vec(),
+                    turn: if let Some(turn) = turn {
+                        turn.to_vec()
+                    } else {
+                        vec![]
+                    },
                 })),
             }
             .encode_to_vec()
@@ -401,18 +407,22 @@ impl Match {
     // TODO: end battle
 }
 
+struct LocalPendingTurn {
+    marshaled: [u8; 0x100],
+    ticks_left: u8,
+}
+
 pub struct Battle {
     is_p2: bool,
     iq: input::Queue,
-    local_pending_turn_wait_ticks_left: i32,
-    local_pending_turn: Option<[u8; 0x100]>,
     remote_delay: u32,
     is_accepting_input: bool,
     is_over: bool,
     last_committed_remote_input: input::Input,
     last_input: Option<[input::Input; 2]>,
-    state_committed: tokio::sync::Notify, // TODO: what type should this be?
+    state_committed: tokio::sync::Notify,
     committed_state: Option<mgba::state::State>,
+    local_pending_turn: Option<LocalPendingTurn>,
 }
 
 impl Battle {
@@ -489,6 +499,30 @@ impl Battle {
         self.iq.add_input(player_index, input).await;
     }
 
-    // TODO: AddLocalPendingTurn
-    // TODO: ConsumeLocalPendingTurn
+    pub fn add_local_pending_turn(&mut self, marshaled: [u8; 0x100]) {
+        self.local_pending_turn = Some(LocalPendingTurn {
+            ticks_left: 64,
+            marshaled,
+        })
+    }
+
+    pub fn take_local_pending_turn(&mut self) -> Option<[u8; 0x100]> {
+        match &mut self.local_pending_turn {
+            Some(lpt) => {
+                if lpt.ticks_left > 0 {
+                    lpt.ticks_left -= 1;
+                    if lpt.ticks_left == 0 {
+                        let t = lpt.marshaled;
+                        self.local_pending_turn = None;
+                        Some(t)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
 }

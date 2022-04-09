@@ -47,7 +47,6 @@ impl DataChannel {
         let notify = Arc::new(tokio::sync::Notify::new());
         {
             let dc2 = dc2.clone();
-            let dc3 = dc2.clone();
             let notify = notify.clone();
             dc2.dc
                 .on_open(Box::new(move || {
