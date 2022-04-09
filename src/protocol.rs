@@ -1,7 +1,9 @@
+pub const VERSION: u32 = 0x1;
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Packet {
     #[prost(oneof = "packet::Which", tags = "1, 2, 3, 4")]
-    pub foo: Option<packet::Which>,
+    pub which: Option<packet::Which>,
 }
 
 pub mod packet {
@@ -10,7 +12,7 @@ pub mod packet {
         #[prost(message, tag = "1")]
         Hello(super::Hello),
         #[prost(message, tag = "2")]
-        Hello2(super::Hello2),
+        Hola(super::Hola),
         #[prost(message, tag = "3")]
         Init(super::Init),
         #[prost(message, tag = "4")]
@@ -37,7 +39,7 @@ pub struct Hello {
 }
 
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Hello2 {
+pub struct Hola {
     #[prost(bytes, tag = "1")]
     pub rng_nonce: Vec<u8>,
 }

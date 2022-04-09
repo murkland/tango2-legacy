@@ -4,6 +4,7 @@ extern crate lazy_static;
 mod audio;
 mod battle;
 mod bn6;
+mod datachannel;
 mod fastforwarder;
 mod game;
 mod gui;
