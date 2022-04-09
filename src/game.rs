@@ -7,9 +7,9 @@ use crate::{audio, battle::Match, bn6, fastforwarder, gui, input, mgba};
 const EXPECTED_FPS: u32 = 60;
 
 pub struct Game {
-    rt: tokio::runtime::Runtime,
+    _rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
-    _trapper: mgba::trapper::Trapper,
+    trapper: Option<mgba::trapper::Trapper>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
     vbuf: Arc<Vec<u8>>,
@@ -95,8 +95,43 @@ impl Game {
 
         let r#match = Arc::new(Mutex::new(None as Option<Arc<Match>>));
 
-        let trapper = {
+        let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+        let audio_source = {
             let core = main_core.clone();
+            audio::MGBAAudioSource::new(core, 48000)
+        };
+        stream_handle.play_raw(audio_source)?;
+
+        {
+            let core = main_core.clone();
+            let mut core = core.lock();
+            core.gba_mut()
+                .sync_mut()
+                .as_mut()
+                .unwrap()
+                .set_fps_target(60.0);
+        }
+
+        let gui = gui::Gui::new(&window, &pixels);
+
+        let mut game = Game {
+            _rt: rt,
+            main_core,
+            trapper: None,
+            event_loop,
+            input,
+            window,
+            pixels,
+            vbuf,
+            vbuf2,
+            thread,
+            _stream: stream,
+            gui,
+            r#match,
+        };
+
+        game.trapper = Some({
+            let core = game.main_core.clone();
             let bn6 = bn6.clone();
             let handle = handle.clone();
             let mut core = core.lock();
@@ -104,8 +139,8 @@ impl Game {
                 &mut core,
                 vec![
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
@@ -127,8 +162,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -167,8 +202,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -193,8 +228,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         let fastforwarder = parking_lot::Mutex::new(
@@ -320,8 +355,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -368,8 +403,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -397,7 +432,7 @@ impl Game {
                         )
                     },
                     {
-                        let r#match = r#match.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -417,8 +452,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -438,8 +473,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
@@ -463,8 +498,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.link_is_p2_ret,
@@ -488,8 +523,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -519,7 +554,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
+                        let core = game.main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
@@ -529,8 +564,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -579,9 +614,9 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let bn6 = bn6.clone();
-                        let r#match = r#match.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
@@ -595,8 +630,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         (
                             bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
                             Box::new(move || {
@@ -611,8 +646,8 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
-                        let r#match = r#match.clone();
+                        let core = game.main_core.clone();
+                        let r#match = game.r#match.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
@@ -628,7 +663,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
+                        let core = game.main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
@@ -639,7 +674,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
+                        let core = game.main_core.clone();
                         (
                             bn6.offsets
                                 .rom
@@ -653,42 +688,7 @@ impl Game {
                     },
                 ],
             )
-        };
-
-        let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-        let audio_source = {
-            let core = main_core.clone();
-            audio::MGBAAudioSource::new(core, 48000)
-        };
-        stream_handle.play_raw(audio_source)?;
-
-        {
-            let core = main_core.clone();
-            let mut core = core.lock();
-            core.gba_mut()
-                .sync_mut()
-                .as_mut()
-                .unwrap()
-                .set_fps_target(60.0);
-        }
-
-        let gui = gui::Gui::new(&window, &pixels);
-
-        let mut game = Game {
-            rt,
-            main_core,
-            _trapper: trapper,
-            event_loop,
-            input,
-            window,
-            pixels,
-            vbuf,
-            vbuf2,
-            thread,
-            _stream: stream,
-            gui,
-            r#match,
-        };
+        });
 
         {
             let vbuf = Arc::clone(&game.vbuf);
