@@ -32,13 +32,13 @@ enum Negotiation {
 }
 
 pub struct Match {
-    negotiation: parking_lot::Mutex<Negotiation>,
+    negotiation: tokio::sync::Mutex<Negotiation>,
     cancellation_token: tokio_util::sync::CancellationToken,
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
-    battle_state: parking_lot::Mutex<BattleState>,
+    battle_state: tokio::sync::Mutex<BattleState>,
     aborted: std::sync::atomic::AtomicBool,
 }
 
@@ -58,13 +58,13 @@ fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
 impl Match {
     pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
         Match {
-            negotiation: parking_lot::Mutex::new(Negotiation::NotReady),
+            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
             cancellation_token: tokio_util::sync::CancellationToken::new(),
             session_id,
             match_type,
             game_title,
             game_crc32,
-            battle_state: parking_lot::Mutex::new(BattleState {
+            battle_state: tokio::sync::Mutex::new(BattleState {
                 number: 0,
                 battle: None,
                 won_last_battle: false,
@@ -82,8 +82,8 @@ impl Match {
         self.aborted.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn lock_battle_state(&self) -> parking_lot::MutexGuard<BattleState> {
-        self.battle_state.lock()
+    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
+        self.battle_state.lock().await
     }
 
     pub async fn negotiate(&self) -> anyhow::Result<()> {
@@ -236,18 +236,18 @@ impl Match {
 
         let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().unwrap());
 
-        self.battle_state.lock().won_last_battle =
+        self.battle_state.lock().await.won_last_battle =
             rng.gen::<bool>() == (side == signor::ConnectionSide::Polite);
-        *self.negotiation.lock() = Negotiation::Negotiated { dc, rng };
+        *self.negotiation.lock().await = Negotiation::Negotiated { dc, rng };
         Ok(())
     }
 
-    #[tokio::main(flavor = "current_thread")]
     pub async fn run(&self) -> anyhow::Result<()> {
         let cancellation_token = self.cancellation_token.clone();
         tokio::select! {
             _ = cancellation_token.cancelled() => {
-                match &*self.negotiation.lock() {
+                let negotiation = self.negotiation.lock().await;
+                match &*negotiation {
                     Negotiation::Negotiated { dc, .. } => {
                         let _ = dc.close().await;
                     },
@@ -257,7 +257,7 @@ impl Match {
             },
             r = async {
                 self.negotiate().await?;
-                let dc = match &*self.negotiation.lock() {
+                let dc = match &*self.negotiation.lock().await {
                     Negotiation::Negotiated { dc, .. } => dc.clone(),
                     _ => unreachable!(),
                 };
@@ -274,13 +274,13 @@ impl Match {
 
                         },
                         protocol::packet::Which::Input(input) => {
-                            let mut battle_state = self.battle_state.lock();
+                            let mut battle_state = self.battle_state.lock().await;
                             if input.battle_number != battle_state.number {
                                 log::info!("battle number mismatch, dropping input");
                                 continue;
                             }
 
-                            let mut battle = match &mut battle_state.battle {
+                            let battle = match &mut battle_state.battle {
                                 None => {
                                     log::info!("no battle in progress, dropping input");
                                     continue;
@@ -310,8 +310,8 @@ impl Match {
         self.cancellation_token.cancel();
     }
 
-    pub fn poll_for_ready(&self) -> anyhow::Result<bool> {
-        match &*self.negotiation.lock() {
+    pub async fn poll_for_ready(&self) -> anyhow::Result<bool> {
+        match &*self.negotiation.lock().await {
             Negotiation::Negotiated { .. } => Ok(true),
             Negotiation::NotReady => Ok(false),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -324,7 +324,7 @@ impl Match {
         input_delay: u32,
         marshaled: &[u8],
     ) -> anyhow::Result<()> {
-        let dc = match &*self.negotiation.lock() {
+        let dc = match &*self.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -353,7 +353,7 @@ impl Match {
         custom_screen_state: u8,
         turn: &Option<[u8; 0x100]>,
     ) -> anyhow::Result<()> {
-        let dc = match &*self.negotiation.lock() {
+        let dc = match &*self.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -380,15 +380,17 @@ impl Match {
         Ok(())
     }
 
-    pub fn set_won_last_battle(&self, won: bool) {
-        self.battle_state.lock().won_last_battle = won;
+    pub async fn set_won_last_battle(&self, won: bool) {
+        self.battle_state.lock().await.won_last_battle = won;
     }
 
-    pub fn rng(&self) -> anyhow::Result<parking_lot::MappedMutexGuard<rand_pcg::Mcg128Xsl64>> {
-        let negotiation = self.negotiation.lock();
+    pub async fn rng(
+        &self,
+    ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
+        let negotiation = self.negotiation.lock().await;
         match &*negotiation {
             Negotiation::Negotiated { .. } => {
-                Ok(parking_lot::MutexGuard::map(negotiation, |n| match n {
+                Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
                     Negotiation::Negotiated { rng, .. } => rng,
                     _ => unreachable!(),
                 }))

@@ -103,6 +103,7 @@ impl Game {
         let trapper = {
             let core = main_core.clone();
             let bn6 = bn6.clone();
+            let handle = handle.clone();
             let mut core = core.lock();
             mgba::trapper::Trapper::new(
                 &mut core,
@@ -110,18 +111,23 @@ impl Game {
                     {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
+                        let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
-                            Box::new(move || match &*r#match.lock() {
-                                None => {
-                                    return;
-                                }
-                                Some(m) => {
-                                    let _ = m.lock_battle_state().battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
-                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
-                                }
+                            Box::new(move || {
+                                handle.block_on(async {
+                                    match &*r#match.lock() {
+                                        None => {
+                                            return;
+                                        }
+                                        Some(m) => {
+                                            let _ = m.lock_battle_state().await.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
+                                            let mut core = core.lock();
+                                            let r15 = core.gba().cpu().gpr(15) as u32;
+                                            core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                        }
+                                    };
+                                });
                             }),
                         )
                     },
@@ -147,6 +153,7 @@ impl Game {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
                         let bn6 = bn6.clone();
+                        let handle = handle.clone();
                         let fastforwarder = fastforwarder.clone();
                         (
                             bn6.offsets.rom.main_read_joyflags,
@@ -165,7 +172,7 @@ impl Game {
                                         return;
                                     }
 
-                                    let battle_state = &mut m.lock_battle_state();
+                                    let battle_state = &mut m.lock_battle_state().await;
                                     let battle_number = battle_state.number;
                                     let battle = if let Some(battle) = &mut battle_state.battle {
                                         battle
@@ -271,44 +278,47 @@ impl Game {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
                         let bn6 = bn6.clone();
+                        let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move || {
-                                let r#match = r#match.lock();
-                                let m = if let Some(m) = &*r#match {
-                                    m
-                                } else {
-                                    return;
-                                };
+                                handle.block_on(async {
+                                    let r#match = r#match.lock();
+                                    let m = if let Some(m) = &*r#match {
+                                        m
+                                    } else {
+                                        return;
+                                    };
 
-                                let battle_state = &mut m.lock_battle_state();
-                                let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
-                                let mut core = core.lock();
-                                let r15 = core.gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                    let battle_state = &mut m.lock_battle_state().await;
+                                    let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
+                                    let mut core = core.lock();
+                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                battle.start_accepting_input();
+                                    battle.start_accepting_input();
 
-                                let ip = battle.take_last_input().unwrap();
+                                    let ip = battle.take_last_input().unwrap();
 
-                                bn6.set_player_input_state(
-                                    &mut core,
-                                    0,
-                                    ip[0].joyflags as u16,
-                                    ip[0].custom_screen_state as u8,
-                                );
-                                if let Some(turn) = ip[0].turn {
-                                    bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
-                                }
-                                bn6.set_player_input_state(
-                                    &mut core,
-                                    1,
-                                    ip[1].joyflags as u16,
-                                    ip[1].custom_screen_state as u8,
-                                );
-                                if let Some(turn) = ip[1].turn {
-                                    bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
-                                }
+                                    bn6.set_player_input_state(
+                                        &mut core,
+                                        0,
+                                        ip[0].joyflags as u16,
+                                        ip[0].custom_screen_state as u8,
+                                    );
+                                    if let Some(turn) = ip[0].turn {
+                                        bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
+                                    }
+                                    bn6.set_player_input_state(
+                                        &mut core,
+                                        1,
+                                        ip[1].joyflags as u16,
+                                        ip[1].custom_screen_state as u8,
+                                    );
+                                    if let Some(turn) = ip[1].turn {
+                                        bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
+                                    }
+                                });
                             }),
                         )
                     },
@@ -342,44 +352,50 @@ impl Game {
                     {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
+                        let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move || {
-                                let r#match = r#match.lock();
-                                let m = if let Some(m) = &*r#match {
-                                    m
-                                } else {
-                                    return;
-                                };
+                                handle.block_on(async {
+                                    let r#match = r#match.lock();
+                                    let m = if let Some(m) = &*r#match {
+                                        m
+                                    } else {
+                                        return;
+                                    };
 
-                                let battle_state = m.lock_battle_state();
-                                let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
-                                core.lock()
-                                    .gba_mut()
-                                    .cpu_mut()
-                                    .set_gpr(0, battle.local_player_index() as i32);
+                                    let battle_state = m.lock_battle_state().await;
+                                    let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
+                                    core.lock()
+                                        .gba_mut()
+                                        .cpu_mut()
+                                        .set_gpr(0, battle.local_player_index() as i32);
+                                });
                             }),
                         )
                     },
                     {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
+                        let handle = handle.clone();
                         (
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move || {
-                                let r#match = r#match.lock();
-                                let m = if let Some(m) = &*r#match {
-                                    m
-                                } else {
-                                    return;
-                                };
+                                handle.block_on(async {
+                                    let r#match = r#match.lock();
+                                    let m = if let Some(m) = &*r#match {
+                                        m
+                                    } else {
+                                        return;
+                                    };
 
-                                let battle_state = m.lock_battle_state();
-                                let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
-                                core.lock()
-                                    .gba_mut()
-                                    .cpu_mut()
-                                    .set_gpr(0, battle.local_player_index() as i32);
+                                    let battle_state = m.lock_battle_state().await;
+                                    let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
+                                    core.lock()
+                                        .gba_mut()
+                                        .cpu_mut()
+                                        .set_gpr(0, battle.local_player_index() as i32);
+                                });
                             }),
                         )
                     },
@@ -415,46 +431,49 @@ impl Game {
                         let core = main_core.clone();
                         let r#match = r#match.clone();
                         let bn6 = bn6.clone();
+                        let handle = handle.clone();
                         (
                             bn6.offsets
                                 .rom
                                 .comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input,
                             Box::new(move || {
-                                let mut core = core.lock();
-                                let r15 = core.gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                handle.block_on(async {
+                                    let mut core = core.lock();
+                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                let r#match = r#match.clone();
-                                let mut r#match = r#match.lock();
-                                match &*r#match {
-                                    None => {
-                                        let m = Arc::new(Match::new(
-                                            "test".to_string(),
-                                            bn6.match_type(&core),
-                                            core.game_title(),
-                                            core.crc32(),
-                                        ));
-                                        *r#match = Some(m.clone());
-                                        std::thread::spawn(move || {
-                                            if let Err(e) = m.run() {
-                                                log::info!("match ended with {}", e);
-                                            } else {
-                                                log::info!("match ended with ok");
+                                    let r#match = r#match.clone();
+                                    let mut r#match = r#match.lock();
+                                    match &*r#match {
+                                        None => {
+                                            let m = Arc::new(Match::new(
+                                                "test".to_string(),
+                                                bn6.match_type(&core),
+                                                core.game_title(),
+                                                core.crc32(),
+                                            ));
+                                            *r#match = Some(m.clone());
+                                            handle.spawn(async move {
+                                                if let Err(e) = m.run().await {
+                                                    log::info!("match ended with {}", e);
+                                                } else {
+                                                    log::info!("match ended with ok");
+                                                }
+                                            });
+                                        }
+                                        Some(r#match) => match r#match.poll_for_ready().await {
+                                            Ok(true) => {
+                                                bn6.start_battle_from_comm_menu(&mut core);
+                                                log::info!("match started");
                                             }
-                                        });
-                                    }
-                                    Some(r#match) => match r#match.poll_for_ready() {
-                                        Ok(true) => {
-                                            bn6.start_battle_from_comm_menu(&mut core);
-                                            log::info!("match started");
-                                        }
-                                        Ok(false) => {}
-                                        Err(err) => {
-                                            // TODO: return the correct error.
-                                            bn6.drop_matchmaking_from_comm_menu(&mut core, 0);
-                                        }
-                                    },
-                                };
+                                            Ok(false) => {}
+                                            Err(err) => {
+                                                // TODO: return the correct error.
+                                                bn6.drop_matchmaking_from_comm_menu(&mut core, 0);
+                                            }
+                                        },
+                                    };
+                                });
                             }),
                         )
                     },

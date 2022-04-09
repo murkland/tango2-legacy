@@ -3,6 +3,8 @@ use super::c;
 #[repr(transparent)]
 pub struct State(pub(super) Box<c::GBASerializedState>);
 
+unsafe impl Send for State {}
+
 impl State {
     pub fn rom_title(&self) -> String {
         let title = unsafe { &*(&self.0.title as *const [i8] as *const [u8]) };

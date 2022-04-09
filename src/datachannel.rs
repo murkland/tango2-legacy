@@ -7,7 +7,7 @@ enum ReceiveState {
 
 pub struct DataChannel {
     dc: std::sync::Arc<webrtc::data_channel::RTCDataChannel>,
-    receive_state: parking_lot::Mutex<ReceiveState>,
+    receive_state: tokio::sync::Mutex<ReceiveState>,
 }
 
 impl DataChannel {
@@ -18,7 +18,7 @@ impl DataChannel {
         let sender = std::sync::Arc::new(sender);
         let dc2 = std::sync::Arc::new(DataChannel {
             dc,
-            receive_state: parking_lot::Mutex::new(ReceiveState::Receiver(receiver)),
+            receive_state: tokio::sync::Mutex::new(ReceiveState::Receiver(receiver)),
         });
         {
             let dc2 = dc2.clone();
@@ -39,7 +39,7 @@ impl DataChannel {
                 .on_close(Box::new(move || {
                     let dc3 = dc3.clone();
                     Box::pin(async move {
-                        *dc3.receive_state.lock() = ReceiveState::Closed;
+                        *dc3.receive_state.lock().await = ReceiveState::Closed;
                     })
                 }))
                 .await;
@@ -68,7 +68,7 @@ impl DataChannel {
     }
 
     pub async fn receive(&self) -> Option<Vec<u8>> {
-        match &mut *self.receive_state.lock() {
+        match &mut *self.receive_state.lock().await {
             ReceiveState::Closed => None,
             ReceiveState::Receiver(receiver) => receiver.recv().await,
         }
