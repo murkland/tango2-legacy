@@ -18,10 +18,8 @@ pub struct Queue {
 
 impl Queue {
     pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
-        let notify = tokio::sync::Notify::new();
-        notify.notify_waiters();
         Queue {
-            notify,
+            notify: tokio::sync::Notify::new(),
             queues: tokio::sync::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
@@ -33,11 +31,12 @@ impl Queue {
 
     pub async fn add_input(&mut self, player_index: u8, input: Input) {
         loop {
-            self.notify.notified().await;
-
             let mut queues = self.queues.lock().await;
             let queue = &mut queues[player_index as usize];
             if queue.len() == queue.capacity() {
+                // TODO: Is this safe? Unclear...
+                drop(queues);
+                self.notify.notified().await;
                 continue;
             }
             queue.push_back(input);
