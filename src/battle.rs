@@ -6,10 +6,9 @@ use crate::signor;
 use prost::Message;
 use rand::Rng;
 use rand::SeedableRng;
-use sha3::{digest::ExtendableOutput, Shake128};
+use sha3::digest::ExtendableOutput;
 use std::io::Read;
 use std::io::Write;
-use std::ops::Neg;
 use subtle::ConstantTimeEq;
 
 pub struct Init {
@@ -17,9 +16,10 @@ pub struct Init {
     marshaled: [u8; 0x100],
 }
 
-struct BattleHolder {
+struct BattleState {
     number: u32,
     battle: Option<Battle>,
+    won_last_battle: bool,
 }
 
 enum Negotiation {
@@ -33,12 +33,12 @@ enum Negotiation {
 
 pub struct Match {
     negotiation: parking_lot::Mutex<Negotiation>,
+    cancellation_token: tokio_util::sync::CancellationToken,
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
-    won_last_battle: bool,
-    battle_holder: parking_lot::Mutex<BattleHolder>,
+    battle_state: parking_lot::Mutex<BattleState>,
     aborted: std::sync::atomic::AtomicBool,
 }
 
@@ -59,36 +59,37 @@ impl Match {
     pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
         Match {
             negotiation: parking_lot::Mutex::new(Negotiation::NotReady),
+            cancellation_token: tokio_util::sync::CancellationToken::new(),
             session_id,
             match_type,
             game_title,
             game_crc32,
-            won_last_battle: false,
-            battle_holder: parking_lot::Mutex::new(BattleHolder {
+            battle_state: parking_lot::Mutex::new(BattleState {
                 number: 0,
                 battle: None,
+                won_last_battle: false,
             }),
             aborted: false.into(),
         }
     }
 
-    pub fn abort(&mut self) {
+    pub fn abort(&self) {
         self.aborted
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub fn aborted(&mut self) -> bool {
+    pub fn aborted(&self) -> bool {
         self.aborted.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn lock_battle(&self) -> parking_lot::MappedMutexGuard<Option<Battle>> {
-        parking_lot::MutexGuard::map(self.battle_holder.lock(), |battle_holder| {
-            &mut battle_holder.battle
+        parking_lot::MutexGuard::map(self.battle_state.lock(), |battle_state| {
+            &mut battle_state.battle
         })
     }
 
-    pub async fn negotiate(&mut self) -> anyhow::Result<()> {
-        let mut sc = signor::Client::new("localhost:12345").await?;
+    pub async fn negotiate(&self) -> anyhow::Result<()> {
+        let mut sc = signor::Client::new("http://localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
         let (peer_conn, dc, side) = sc
@@ -135,6 +136,8 @@ impl Match {
         rand::rngs::OsRng {}.fill(&mut nonce);
         let commitment = make_rng_commitment(&nonce)?;
 
+        log::info!("our nonce={:?}, commitment={:?}", nonce, commitment);
+
         dc.send(
             protocol::Packet {
                 which: Some(protocol::packet::Which::Hello(protocol::Hello {
@@ -164,6 +167,8 @@ impl Match {
                 anyhow::bail!("expected hello, got {:?}", p)
             }
         };
+
+        log::info!("their hello={:?}", hello);
 
         if commitment.ct_eq(hello.rng_commitment.as_slice()).into() {
             anyhow::bail!("peer replayed our commitment")
@@ -215,12 +220,14 @@ impl Match {
             }
         };
 
-        if make_rng_commitment(&hola.rng_nonce)?
-            .ct_eq(hello.rng_commitment.as_slice())
-            .into()
+        log::info!("their hola={:?}", hola);
+
+        if !bool::from(make_rng_commitment(&hola.rng_nonce)?.ct_eq(hello.rng_commitment.as_slice()))
         {
             anyhow::bail!("failed to verify rng commitment")
         }
+
+        log::info!("connection ok!");
 
         let seed = hola
             .rng_nonce
@@ -229,24 +236,39 @@ impl Match {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect::<Vec<u8>>();
 
-        let rng = rand_pcg::Mcg128Xsl64::from_seed(
-            seed[..128]
-                .iter()
-                .zip(seed[128..].iter())
-                .map(|(&x1, &x2)| x1 ^ x2)
-                .collect::<Vec<u8>>()
-                .try_into()
-                .unwrap(),
-        );
+        let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().unwrap());
 
+        self.battle_state.lock().won_last_battle =
+            rng.gen::<bool>() == (side == signor::ConnectionSide::Polite);
         *self.negotiation.lock() = Negotiation::Negotiated { dc, rng };
         Ok(())
     }
 
     #[tokio::main(flavor = "current_thread")]
-    pub async fn run(&mut self) -> anyhow::Result<()> {
-        self.negotiate().await?;
-        Ok(())
+    pub async fn run(&self) -> anyhow::Result<()> {
+        let cancellation_token = self.cancellation_token.clone();
+        tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                match &*self.negotiation.lock() {
+                    Negotiation::Negotiated { dc, .. } => {
+                        let _ = dc.close().await;
+                    },
+                    _ => {},
+                };
+                anyhow::bail!("match cancelled");
+            },
+            r = async {
+                self.negotiate().await?;
+                while true { }
+                Ok(())
+            } => {
+                r
+            }
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancellation_token.cancel();
     }
 
     pub fn poll_for_ready(&self) -> anyhow::Result<bool> {
@@ -258,7 +280,7 @@ impl Match {
     }
 
     pub async fn send_init(&self, input_delay: u32, marshaled: &[u8]) -> anyhow::Result<()> {
-        let battle_holder = self.battle_holder.lock();
+        let battle_state = self.battle_state.lock();
         let dc = match &*self.negotiation.lock() {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
@@ -267,7 +289,7 @@ impl Match {
         dc.send(
             protocol::Packet {
                 which: Some(protocol::packet::Which::Init(protocol::Init {
-                    battle_number: battle_holder.number,
+                    battle_number: battle_state.number,
                     input_delay,
                     marshaled: marshaled.to_vec(),
                 })),
@@ -287,7 +309,7 @@ impl Match {
         custom_screen_state: u8,
         turn: &[u8],
     ) -> anyhow::Result<()> {
-        let battle_holder = self.battle_holder.lock();
+        let battle_state = self.battle_state.lock();
         let dc = match &*self.negotiation.lock() {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
@@ -296,7 +318,7 @@ impl Match {
         dc.send(
             protocol::Packet {
                 which: Some(protocol::packet::Which::Input(protocol::Input {
-                    battle_number: battle_holder.number,
+                    battle_number: battle_state.number,
                     local_tick,
                     remote_tick,
                     joyflags: joyflags as u32,
@@ -311,8 +333,8 @@ impl Match {
         Ok(())
     }
 
-    pub fn set_won_last_battle(&mut self, won: bool) {
-        self.won_last_battle = won;
+    pub fn set_won_last_battle(&self, won: bool) {
+        self.battle_state.lock().won_last_battle = won;
     }
 
     pub fn rng(&self) -> anyhow::Result<parking_lot::MappedMutexGuard<rand_pcg::Mcg128Xsl64>> {
@@ -349,7 +371,7 @@ pub struct Battle {
     last_committed_remote_input: input::Input,
     last_input: Option<[input::Input; 2]>,
     state_committed: (), // TODO: what type should this be?
-    committed_state: Option<mgba::state::State>,
+                         //committed_state: Option<mgba::state::State>,
 }
 
 impl Battle {
@@ -365,9 +387,9 @@ impl Battle {
         1 - self.local_player_index()
     }
 
-    pub fn set_committed_state(&mut self, state: mgba::state::State) {
-        self.committed_state = Some(state);
-    }
+    // pub fn set_committed_state(&mut self, state: mgba::state::State) {
+    //     self.committed_state = Some(state);
+    // }
 
     pub fn set_last_input(&mut self, inp: [input::Input; 2]) {
         self.last_input = Some(inp);
@@ -409,9 +431,9 @@ impl Battle {
         self.last_committed_remote_input.clone()
     }
 
-    pub fn committed_state(&self) -> &Option<mgba::state::State> {
-        &self.committed_state
-    }
+    // pub fn committed_state(&self) -> &Option<mgba::state::State> {
+    //     &self.committed_state
+    // }
 
     pub fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
         let (input_pairs, left) = self.iq.consume_and_peek_local();

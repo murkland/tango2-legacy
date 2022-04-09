@@ -3137,6 +3137,7 @@ dependencies = [
  "subtle",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tonic",
  "tonic-build",
  "vsprintf",

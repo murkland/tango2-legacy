@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 enum ReceiveState {
     Receiver(tokio::sync::mpsc::Receiver<Vec<u8>>),
     Closed,
@@ -29,6 +31,7 @@ impl DataChannel {
                 }))
                 .await;
         }
+
         {
             let dc2 = dc2.clone();
             let dc3 = dc2.clone();
@@ -41,6 +44,21 @@ impl DataChannel {
                 }))
                 .await;
         }
+        let notify = Arc::new(tokio::sync::Notify::new());
+        {
+            let dc2 = dc2.clone();
+            let dc3 = dc2.clone();
+            let notify = notify.clone();
+            dc2.dc
+                .on_open(Box::new(move || {
+                    let notify = notify.clone();
+                    Box::pin(async move {
+                        notify.notify_one();
+                    })
+                }))
+                .await;
+        }
+        notify.notified().await;
         dc2
     }
 
@@ -52,8 +70,12 @@ impl DataChannel {
 
     pub async fn receive(&self) -> Option<Vec<u8>> {
         match &mut *self.receive_state.lock() {
-            _Closed => None,
+            ReceiveState::Closed => None,
             ReceiveState::Receiver(receiver) => receiver.recv().await,
         }
+    }
+
+    pub async fn close(&self) -> Result<(), webrtc::Error> {
+        self.dc.close().await
     }
 }

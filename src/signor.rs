@@ -2,6 +2,7 @@ mod pb {
     tonic::include_proto!("signor");
 }
 
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub enum ConnectionSide {
     Polite,
     Impolite,

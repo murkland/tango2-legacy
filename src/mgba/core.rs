@@ -197,6 +197,18 @@ impl Core {
         };
         cstr.to_str().unwrap().to_string()
     }
+
+    pub fn crc32(&self) -> u32 {
+        let mut c: u32 = 0;
+        unsafe {
+            (*self.0).checksum.unwrap()(
+                self.0,
+                &mut c as *mut _ as *mut std::ffi::c_void,
+                c::mCoreChecksumType_mCHECKSUM_CRC32,
+            )
+        };
+        c
+    }
 }
 
 impl Drop for Core {

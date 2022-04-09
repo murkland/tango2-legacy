@@ -1,22 +1,27 @@
-use crate::{audio, bn6, gui, mgba};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
+
+use crate::{audio, battle::Match, bn6, gui, mgba};
 
 pub struct Game {
-    main_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    main_core: Arc<Mutex<mgba::core::Core>>,
     _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
-    vbuf: std::sync::Arc<Vec<u8>>,
-    vbuf2: std::sync::Arc<parking_lot::Mutex<Vec<u8>>>,
+    vbuf: Arc<Vec<u8>>,
+    vbuf2: Arc<Mutex<Vec<u8>>>,
     window: winit::window::Window,
     pixels: pixels::Pixels,
     thread: mgba::thread::Thread,
     _stream: rodio::OutputStream,
     gui: gui::Gui,
+    r#match: Arc<Mutex<Option<Arc<Match>>>>,
 }
 
 impl Game {
     pub fn new() -> Result<Game, Box<dyn std::error::Error>> {
-        let main_core = std::sync::Arc::new(parking_lot::Mutex::new({
+        let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             core.set_audio_buffer_size(1024);
 
@@ -36,13 +41,13 @@ impl Game {
         let event_loop = Some(winit::event_loop::EventLoop::new());
 
         let (width, height, vbuf, bn6) = {
-            let core = std::sync::Arc::clone(&main_core);
+            let core = main_core.clone();
             let mut core = core.lock();
             let (width, height) = core.desired_video_dimensions();
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
             let bn6 = bn6::BN6::new(&core.game_title());
             core.set_video_buffer(&mut vbuf, width.into());
-            (width, height, std::sync::Arc::new(vbuf), bn6.unwrap())
+            (width, height, Arc::new(vbuf), bn6.unwrap())
         };
 
         let input = winit_input_helper::WinitInputHelper::new();
@@ -56,10 +61,7 @@ impl Game {
                 .build(event_loop.as_ref().unwrap())?
         };
 
-        let vbuf2 = std::sync::Arc::new(parking_lot::Mutex::new(vec![
-            0u8;
-            (width * height * 4) as usize
-        ]));
+        let vbuf2 = Arc::new(Mutex::new(vec![0u8; (width * height * 4) as usize]));
 
         let pixels = {
             let window_size = window.inner_size();
@@ -75,29 +77,40 @@ impl Game {
         };
 
         let mut thread = {
-            let core = std::sync::Arc::clone(&main_core);
+            let core = main_core.clone();
             mgba::thread::Thread::new(core)
         };
         thread.start();
 
+        let r#match = Arc::new(Mutex::new(None as Option<Arc<Match>>));
+
         let trapper = {
-            let core = std::sync::Arc::clone(&main_core);
+            let core = main_core.clone();
             let bn6 = bn6.clone();
             let mut core = core.lock();
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
-                            Box::new(move || {
-                                log::info!("TODO: battle_init_call_battle_copy_input_data");
+                            Box::new(move || match &*r#match.lock() {
+                                None => {
+                                    return;
+                                }
+                                Some(m) => {
+                                    let _ = m.lock_battle().as_ref().expect("attempted to get battle p2 information while no battle was active!");
+                                    let mut core = core.lock();
+                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                }
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_init_marshal_ret,
                             Box::new(move || {
@@ -106,7 +119,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
                             Box::new(move || {
@@ -115,7 +128,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
@@ -124,16 +137,50 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
+                        let bn6 = bn6.clone();
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
-                            Box::new(move || {
-                                log::info!("TODO: battle_update_call_battle_copy_input_data");
+                            Box::new(move || match &*r#match.lock() {
+                                None => {
+                                    return;
+                                }
+                                Some(m) => {
+                                    let battle = &mut m.lock_battle();
+                                    let battle = battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
+                                    let mut core = core.lock();
+                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
+
+                                    battle.start_accepting_input();
+
+                                    let ip = battle.take_last_input().unwrap();
+
+                                    bn6.set_player_input_state(
+                                        &mut core,
+                                        0,
+                                        ip[0].joyflags as u16,
+                                        ip[0].custom_screen_state as u8,
+                                    );
+                                    if let Some(turn) = ip[0].turn {
+                                        bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
+                                    }
+                                    bn6.set_player_input_state(
+                                        &mut core,
+                                        1,
+                                        ip[1].joyflags as u16,
+                                        ip[1].custom_screen_state as u8,
+                                    );
+                                    if let Some(turn) = ip[1].turn {
+                                        bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
+                                    }
+                                }
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
                             Box::new(move || {
@@ -142,7 +189,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
                             Box::new(move || {
@@ -151,7 +198,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_ending_ret,
                             Box::new(move || {
@@ -160,25 +207,49 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move || {
-                                log::info!("TODO: battle_is_p2_tst");
+                                match &*r#match.lock() {
+                                    None => {
+                                        return;
+                                    }
+                                    Some(m) => {
+                                        let battle = m.lock_battle();
+                                        core.lock()
+                                        .gba_mut()
+                                        .cpu_mut()
+                                        .set_gpr(0, battle.as_ref().expect("attempted to get battle p2 information while no battle was active!").local_player_index() as i32);
+                                    }
+                                };
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
                         (
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move || {
-                                log::info!("TODO: link_is_p2_ret");
+                                match &*r#match.lock() {
+                                    None => {
+                                        return;
+                                    }
+                                    Some(m) => {
+                                        let battle = m.lock_battle();
+                                        core.lock()
+                                        .gba_mut()
+                                        .cpu_mut()
+                                        .set_gpr(0, battle.as_ref().expect("attempted to get battle p2 information while no battle was active!").local_player_index() as i32);
+                                    }
+                                };
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
                             Box::new(move || {
@@ -187,7 +258,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
                             Box::new(move || {
@@ -196,7 +267,7 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
                             Box::new(move || {
@@ -206,7 +277,9 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
+                        let bn6 = bn6.clone();
                         (
                             bn6.offsets
                                 .rom
@@ -216,13 +289,42 @@ impl Game {
                                 let r15 = core.gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                // TODO: The rest of this function.
-                                log::info!("TODO: comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input");
+                                let r#match = r#match.clone();
+                                let mut r#match = r#match.lock();
+                                match &*r#match {
+                                    None => {
+                                        let m = Arc::new(Match::new(
+                                            "test".to_string(),
+                                            bn6.match_type(&core),
+                                            core.game_title(),
+                                            core.crc32(),
+                                        ));
+                                        *r#match = Some(m.clone());
+                                        std::thread::spawn(move || {
+                                            if let Err(e) = m.run() {
+                                                log::info!("match ended with {}", e);
+                                            } else {
+                                                log::info!("match ended with ok");
+                                            }
+                                        });
+                                    }
+                                    Some(r#match) => match r#match.poll_for_ready() {
+                                        Ok(true) => {
+                                            bn6.start_battle_from_comm_menu(&mut core);
+                                            log::info!("match started");
+                                        }
+                                        Ok(false) => {}
+                                        Err(err) => {
+                                            // TODO: return the correct error.
+                                            bn6.drop_matchmaking_from_comm_menu(&mut core, 0);
+                                        }
+                                    },
+                                };
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
                             Box::new(move || {
@@ -231,16 +333,23 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
+                        let r#match = r#match.clone();
                         (
                             bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
                             Box::new(move || {
-                                log::info!("TODO: comm_menu_wait_for_friend_ret_cancel");
+                                log::info!("match canceled by user");
+                                let mut r#match = r#match.lock();
+                                r#match.as_ref().unwrap().cancel();
+                                *r#match = None;
+                                let mut core = core.lock();
+                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
                             }),
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
                             Box::new(move || {
@@ -249,9 +358,22 @@ impl Game {
                         )
                     },
                     {
-                        let core = std::sync::Arc::clone(&main_core);
+                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
+                            Box::new(move || {
+                                let mut core = core.lock();
+                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                            }),
+                        )
+                    },
+                    {
+                        let core = main_core.clone();
+                        (
+                            bn6.offsets
+                                .rom
+                                .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
                             Box::new(move || {
                                 let mut core = core.lock();
                                 let r15 = core.gba().cpu().gpr(15) as u32;
@@ -265,13 +387,13 @@ impl Game {
 
         let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
         let audio_source = {
-            let core = std::sync::Arc::clone(&main_core);
+            let core = main_core.clone();
             audio::MGBAAudioSource::new(core, 48000)
         };
         stream_handle.play_raw(audio_source)?;
 
         {
-            let core = std::sync::Arc::clone(&main_core);
+            let core = main_core.clone();
             let mut core = core.lock();
             core.gba_mut()
                 .sync_mut()
@@ -294,11 +416,12 @@ impl Game {
             thread,
             _stream: stream,
             gui,
+            r#match,
         };
 
         {
-            let vbuf = std::sync::Arc::clone(&game.vbuf);
-            let vbuf2 = std::sync::Arc::clone(&game.vbuf2);
+            let vbuf = Arc::clone(&game.vbuf);
+            let vbuf2 = Arc::clone(&game.vbuf2);
             game.thread.set_frame_callback(Some(Box::new(move || {
                 let mut vbuf2 = vbuf2.lock();
                 vbuf2.copy_from_slice(&vbuf);
