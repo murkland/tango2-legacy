@@ -87,8 +87,7 @@ impl Match {
         })
     }
 
-    #[tokio::main(flavor = "current_thread")]
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn negotiate(&mut self) -> anyhow::Result<()> {
         let mut sc = signor::Client::new("localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
@@ -241,7 +240,12 @@ impl Match {
         );
 
         *self.negotiation.lock() = Negotiation::Negotiated { dc, rng };
+        Ok(())
+    }
 
+    #[tokio::main(flavor = "current_thread")]
+    pub async fn run(&mut self) -> anyhow::Result<()> {
+        self.negotiate().await?;
         Ok(())
     }
 
@@ -249,9 +253,89 @@ impl Match {
         match &*self.negotiation.lock() {
             Negotiation::Negotiated { .. } => Ok(true),
             Negotiation::NotReady => Ok(false),
-            Negotiation::Err(e) => Err(anyhow::anyhow!("{}", e)),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
         }
     }
+
+    pub async fn send_init(&self, input_delay: u32, marshaled: &[u8]) -> anyhow::Result<()> {
+        let battle_holder = self.battle_holder.lock();
+        let dc = match &*self.negotiation.lock() {
+            Negotiation::Negotiated { dc, .. } => dc.clone(),
+            Negotiation::NotReady => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        };
+        dc.send(
+            protocol::Packet {
+                which: Some(protocol::packet::Which::Init(protocol::Init {
+                    battle_number: battle_holder.number,
+                    input_delay,
+                    marshaled: marshaled.to_vec(),
+                })),
+            }
+            .encode_to_vec()
+            .as_slice(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn send_input(
+        &self,
+        local_tick: u32,
+        remote_tick: u32,
+        joyflags: u16,
+        custom_screen_state: u8,
+        turn: &[u8],
+    ) -> anyhow::Result<()> {
+        let battle_holder = self.battle_holder.lock();
+        let dc = match &*self.negotiation.lock() {
+            Negotiation::Negotiated { dc, .. } => dc.clone(),
+            Negotiation::NotReady => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        };
+        dc.send(
+            protocol::Packet {
+                which: Some(protocol::packet::Which::Input(protocol::Input {
+                    battle_number: battle_holder.number,
+                    local_tick,
+                    remote_tick,
+                    joyflags: joyflags as u32,
+                    custom_screen_state: custom_screen_state as u32,
+                    turn: turn.to_vec(),
+                })),
+            }
+            .encode_to_vec()
+            .as_slice(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub fn set_won_last_battle(&mut self, won: bool) {
+        self.won_last_battle = won;
+    }
+
+    pub fn rng(&self) -> anyhow::Result<parking_lot::MappedMutexGuard<rand_pcg::Mcg128Xsl64>> {
+        let negotiation = self.negotiation.lock();
+        match &*negotiation {
+            Negotiation::Negotiated { .. } => {
+                Ok(parking_lot::MutexGuard::map(negotiation, |n| match n {
+                    Negotiation::Negotiated { rng, .. } => rng,
+                    _ => unreachable!(),
+                }))
+            }
+            Negotiation::NotReady => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        }
+    }
+
+    pub fn match_type(&self) -> u16 {
+        self.match_type
+    }
+
+    // TODO: read remote init
+    // TODO: handle conn
+    // TODO: end battle
 }
 
 pub struct Battle {
