@@ -227,26 +227,25 @@ impl Fastforwarder {
         self.core.borrow_mut().load_state(state)?;
         let start_in_battle_time = self.bn6.in_battle_time(&self.core.borrow());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
-        let mut input_pairs = commit_pairs
+
+        let input_pairs = commit_pairs
             .iter()
             .cloned()
+            .chain(local_player_inputs_left.iter().cloned().map(|inp| {
+                let mut ip = [inp.clone(), inp.clone()];
+                let predicted = &mut ip[1 - local_player_index as usize];
+                predicted.joyflags = 0;
+                if last_committed_remote_input.joyflags & mgba::input::keys::A as u16 != 0 {
+                    predicted.joyflags |= mgba::input::keys::A as u16;
+                }
+                if last_committed_remote_input.joyflags & mgba::input::keys::B as u16 != 0 {
+                    predicted.joyflags |= mgba::input::keys::B as u16;
+                }
+                predicted.custom_screen_state = last_committed_remote_input.custom_screen_state;
+                predicted.turn = None;
+                ip
+            }))
             .collect::<std::collections::VecDeque<[input::Input; 2]>>();
-
-        // TODO: Can we optimize this push to be in a batch?
-        for inp in local_player_inputs_left {
-            let mut ip = [inp.clone(), inp.clone()];
-            let predicted = &mut ip[1 - local_player_index as usize];
-            predicted.joyflags = 0;
-            if last_committed_remote_input.joyflags & mgba::input::keys::A as u16 != 0 {
-                predicted.joyflags |= mgba::input::keys::A as u16;
-            }
-            if last_committed_remote_input.joyflags & mgba::input::keys::B as u16 != 0 {
-                predicted.joyflags |= mgba::input::keys::B as u16;
-            }
-            predicted.custom_screen_state = last_committed_remote_input.custom_screen_state;
-            predicted.turn = None;
-            input_pairs.push_back(ip);
-        }
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
