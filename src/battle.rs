@@ -364,4 +364,64 @@ impl Battle {
     pub fn remote_player_index(&self) -> u8 {
         1 - self.local_player_index()
     }
+
+    pub fn set_committed_state(&mut self, state: mgba::state::State) {
+        self.committed_state = Some(state);
+    }
+
+    pub fn set_last_input(&mut self, inp: [input::Input; 2]) {
+        self.last_input = Some(inp);
+    }
+
+    pub fn take_last_input(&mut self) -> Option<[input::Input; 2]> {
+        self.last_input.take()
+    }
+
+    pub fn is_p2(&self) -> bool {
+        self.is_p2
+    }
+
+    pub fn local_delay(&self) -> u32 {
+        self.iq.local_delay()
+    }
+
+    pub fn remote_delay(&self) -> u32 {
+        self.remote_delay
+    }
+
+    pub fn start_accepting_input(&mut self) {
+        self.is_accepting_input = true;
+    }
+
+    pub fn is_accepting_input(&self) -> bool {
+        self.is_accepting_input
+    }
+
+    pub fn mark_over(&mut self) {
+        self.is_over = true;
+    }
+
+    pub fn is_over(&self) -> bool {
+        self.is_over
+    }
+
+    pub fn last_committed_remote_input(&self) -> input::Input {
+        self.last_committed_remote_input.clone()
+    }
+
+    pub fn committed_state(&self) -> &Option<mgba::state::State> {
+        &self.committed_state
+    }
+
+    pub fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
+        let (input_pairs, left) = self.iq.consume_and_peek_local();
+        if let Some(last) = input_pairs.last() {
+            self.last_committed_remote_input = last[1 - self.local_player_index() as usize].clone();
+        }
+        (input_pairs, left)
+    }
+
+    // TODO: AddLocalPendingTurn
+    // TODO: AddInput
+    // TODO: ConsumeLocalPendingTurn
 }
