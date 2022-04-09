@@ -37,7 +37,7 @@ impl MGBAAudioSource {
             faux_clock = gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
 
-        {
+        let available = {
             let mut left = core.audio_channel(0);
             left.set_rates(
                 clock_rate as f64,
@@ -48,7 +48,8 @@ impl MGBAAudioSource {
                 available = n;
             }
             left.read_samples(&mut self.buf, available, true);
-        }
+            available
+        };
 
         {
             let mut right = core.audio_channel(1);
@@ -56,15 +57,15 @@ impl MGBAAudioSource {
                 clock_rate as f64,
                 self.sample_rate as f64 * faux_clock as f64,
             );
-            let mut available = right.samples_avail();
-            if available > n {
-                available = n;
-            }
             right.read_samples(&mut self.buf[1..], available, true);
         }
 
         if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.consume_audio();
+        }
+
+        for i in &mut self.buf[available as usize * 2..] {
+            *i = 0
         }
     }
 }
