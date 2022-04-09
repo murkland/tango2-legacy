@@ -1,3 +1,6 @@
 [submodule "external/mgba"]
 	path = external/mgba
 	url = https://github.com/mgba-emu/mgba
+[submodule "external/signor"]
+	path = external/signor
+	url = https://github.com/murkland/signor

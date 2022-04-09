@@ -23,4 +23,9 @@ fn main() {
     bindings
         .write_to_file(out_path.join("mgba_bindings.rs"))
         .expect("Couldn't write bindings!");
+
+    tonic_build::configure()
+        .build_server(false)
+        .compile(&["external/signor/pb/api.proto"], &["external/signor/pb"])
+        .unwrap();
 }

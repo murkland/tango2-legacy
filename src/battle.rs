@@ -59,10 +59,10 @@ impl Match {
 
     #[tokio::main(flavor = "current_thread")]
     pub async fn run(&mut self) -> anyhow::Result<()> {
-        let sc = signor::Client::new("").await?;
+        let mut sc = signor::Client::new("localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
-        let mut peer_conn = api
+        let peer_conn = api
             .new_peer_connection(webrtc::peer_connection::configuration::RTCConfiguration {
                 ..Default::default()
             })
@@ -80,7 +80,7 @@ impl Match {
                 ),
             )
             .await?;
-        sc.connect(&mut peer_conn, &self.session_id).await?;
+        sc.connect(&peer_conn, &self.session_id).await?;
         self.dc = Some(dc);
 
         // TODO: Other negotiation stuff.
