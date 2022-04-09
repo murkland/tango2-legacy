@@ -125,7 +125,6 @@ impl Match {
             .await?;
         let dc = datachannel::DataChannel::new(dc).await;
 
-        // TODO: Other negotiation stuff.
         log::info!(
             "local sdp: {}",
             peer_conn.local_description().await.unwrap().sdp
@@ -413,8 +412,6 @@ impl Match {
         self.match_type
     }
 
-    // TODO: read remote init
-    // TODO: handle conn
     // TODO: end battle
 }
 

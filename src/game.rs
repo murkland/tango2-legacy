@@ -590,8 +590,6 @@ impl Game {
                             bn6.offsets.rom.comm_menu_init_battle_entry,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    log::info!("TODO: comm_menu_end_battle_entry");
-
                                     let mut core = core.lock();
                                     // TODO: get appropriate link settings and background
                                     bn6.set_link_battle_settings_and_background(&mut core, 0);
