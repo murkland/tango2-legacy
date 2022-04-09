@@ -62,25 +62,34 @@ impl Match {
         let mut sc = signor::Client::new("localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
-        let peer_conn = api
-            .new_peer_connection(webrtc::peer_connection::configuration::RTCConfiguration {
-                ..Default::default()
-            })
-            .await?;
-        let dc = peer_conn
-            .create_data_channel(
-                "tango",
-                Some(
-                    webrtc::data_channel::data_channel_init::RTCDataChannelInit {
-                        id: Some(1),
-                        negotiated: Some(true),
-                        ordered: Some(true),
-                        ..Default::default()
-                    },
-                ),
+        let (peer_conn, dc, side) = sc
+            .connect(
+                || async {
+                    let peer_conn = api
+                        .new_peer_connection(
+                            webrtc::peer_connection::configuration::RTCConfiguration {
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                    let dc = peer_conn
+                        .create_data_channel(
+                            "tango",
+                            Some(
+                                webrtc::data_channel::data_channel_init::RTCDataChannelInit {
+                                    id: Some(1),
+                                    negotiated: Some(true),
+                                    ordered: Some(true),
+                                    ..Default::default()
+                                },
+                            ),
+                        )
+                        .await?;
+                    Ok((peer_conn, dc))
+                },
+                &self.session_id,
             )
             .await?;
-        sc.connect(&peer_conn, &self.session_id).await?;
         self.dc = Some(dc);
 
         // TODO: Other negotiation stuff.

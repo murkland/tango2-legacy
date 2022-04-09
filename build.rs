@@ -24,6 +24,7 @@ fn main() {
         .write_to_file(out_path.join("mgba_bindings.rs"))
         .expect("Couldn't write bindings!");
 
+    println!("cargo:rerun-if-changed=external/signor/pb/api.proto");
     tonic_build::configure()
         .build_server(false)
         .compile(&["external/signor/pb/api.proto"], &["external/signor/pb"])
