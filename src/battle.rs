@@ -322,7 +322,7 @@ impl Match {
         &self,
         battle_number: u32,
         input_delay: u32,
-        marshaled: &[u8],
+        marshaled: &[u8; 0x100],
     ) -> anyhow::Result<()> {
         let dc = match &*self.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
@@ -459,6 +459,10 @@ impl Battle {
 
     pub fn local_delay(&self) -> u32 {
         self.iq.local_delay()
+    }
+
+    pub fn set_remote_delay(&mut self, delay: u32) {
+        self.remote_delay = delay;
     }
 
     pub fn remote_delay(&self) -> u32 {
