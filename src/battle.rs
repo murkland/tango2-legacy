@@ -39,7 +39,6 @@ pub struct Match {
     game_title: String,
     game_crc32: u32,
     battle_state: tokio::sync::Mutex<BattleState>,
-    aborted: std::sync::atomic::AtomicBool,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
 }
@@ -74,17 +73,7 @@ impl Match {
             }),
             remote_init_sender,
             remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
-            aborted: false.into(),
         }
-    }
-
-    pub fn abort(&self) {
-        self.aborted
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn aborted(&self) -> bool {
-        self.aborted.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
