@@ -370,8 +370,8 @@ pub struct Battle {
     is_over: bool,
     last_committed_remote_input: input::Input,
     last_input: Option<[input::Input; 2]>,
-    state_committed: (), // TODO: what type should this be?
-                         //committed_state: Option<mgba::state::State>,
+    state_committed: tokio::sync::Notify, // TODO: what type should this be?
+    committed_state: Option<mgba::state::State>,
 }
 
 impl Battle {
@@ -387,9 +387,10 @@ impl Battle {
         1 - self.local_player_index()
     }
 
-    // pub fn set_committed_state(&mut self, state: mgba::state::State) {
-    //     self.committed_state = Some(state);
-    // }
+    pub fn set_committed_state(&mut self, state: mgba::state::State) {
+        self.committed_state = Some(state);
+        self.state_committed.notify_one();
+    }
 
     pub fn set_last_input(&mut self, inp: [input::Input; 2]) {
         self.last_input = Some(inp);
@@ -431,9 +432,9 @@ impl Battle {
         self.last_committed_remote_input.clone()
     }
 
-    // pub fn committed_state(&self) -> &Option<mgba::state::State> {
-    //     &self.committed_state
-    // }
+    pub fn committed_state(&self) -> &Option<mgba::state::State> {
+        &self.committed_state
+    }
 
     pub fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
         let (input_pairs, left) = self.iq.consume_and_peek_local();

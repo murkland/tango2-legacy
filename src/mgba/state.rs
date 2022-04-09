@@ -1,7 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
-pub struct State(pub(super) c::GBASerializedState);
+pub struct State(pub(super) Box<c::GBASerializedState>);
 
 impl State {
     pub fn rom_title(&self) -> String {

@@ -103,10 +103,10 @@ impl Core {
 
     pub fn save_state(&self) -> Option<state::State> {
         unsafe {
-            let mut state = std::mem::zeroed::<state::State>();
+            let mut state = state::State(Box::<c::GBASerializedState>::new(std::mem::zeroed()));
             if (*self.0).saveState.unwrap()(
                 self.0,
-                &mut state.0 as *mut _ as *mut std::os::raw::c_void,
+                &mut *state.0 as *mut _ as *mut std::os::raw::c_void,
             ) {
                 Some(state)
             } else {
@@ -119,7 +119,7 @@ impl Core {
         if !unsafe {
             (*self.0).loadState.unwrap()(
                 self.0,
-                &state.0 as *const _ as *const std::os::raw::c_void,
+                &*state.0 as *const _ as *const std::os::raw::c_void,
             )
         } {
             anyhow::bail!("failed to load state");
