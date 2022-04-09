@@ -56,6 +56,12 @@ fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
     Ok(commitment)
 }
 
+impl Drop for Match {
+    fn drop(&mut self) {
+        self.cancellation_token.cancel();
+    }
+}
+
 impl Match {
     pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
@@ -241,70 +247,67 @@ impl Match {
 
     pub async fn run(&self) -> anyhow::Result<()> {
         let cancellation_token = self.cancellation_token.clone();
-        tokio::select! {
-            _ = cancellation_token.cancelled() => {
-                let negotiation = self.negotiation.lock().await;
-                match &*negotiation {
-                    Negotiation::Negotiated { dc, .. } => {
-                        let _ = dc.close().await;
-                    },
-                    _ => {},
-                };
-                anyhow::bail!("match cancelled");
-            },
-            r = async {
-                self.negotiate().await?;
-                let dc = match &*self.negotiation.lock().await {
-                    Negotiation::Negotiated { dc, .. } => dc.clone(),
-                    _ => unreachable!(),
-                };
+        let r = (move || async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {
+                    anyhow::bail!("match cancelled");
+                },
+                r = async {
+                    self.negotiate().await?;
+                    let dc = match &*self.negotiation.lock().await {
+                        Negotiation::Negotiated { dc, .. } => dc.clone(),
+                        _ => unreachable!(),
+                    };
 
-                loop {
-                    match match protocol::Packet::decode(match dc.receive().await {
-                        None => break,
-                        Some(buf) => buf,
-                    }.as_slice())?.which {
-                        None => break,
-                        Some(b) => b,
-                    } {
-                        protocol::packet::Which::Init(init) => {
-                            self.remote_init_sender.send(init).await.unwrap();
-                        },
-                        protocol::packet::Which::Input(input) => {
-                            let mut battle_state = self.battle_state.lock().await;
-                            if input.battle_number != battle_state.number {
-                                log::info!("battle number mismatch, dropping input");
-                                continue;
-                            }
-
-                            let battle = match &mut battle_state.battle {
-                                None => {
-                                    log::info!("no battle in progress, dropping input");
+                    loop {
+                        match match protocol::Packet::decode(match dc.receive().await {
+                            None => break,
+                            Some(buf) => buf,
+                        }.as_slice())?.which {
+                            None => break,
+                            Some(b) => b,
+                        } {
+                            protocol::packet::Which::Init(init) => {
+                                self.remote_init_sender.send(init).await.unwrap();
+                            },
+                            protocol::packet::Which::Input(input) => {
+                                let mut battle_state = self.battle_state.lock().await;
+                                if input.battle_number != battle_state.number {
+                                    log::info!("battle number mismatch, dropping input");
                                     continue;
-                                },
-                                Some(b) => b,
-                            };
+                                }
 
-                            battle.add_input(battle.remote_player_index(), input::Input{
-                                local_tick: input.local_tick,
-                                remote_tick: input.remote_tick,
-                                joyflags: input.joyflags as u16,
-                                custom_screen_state: input.custom_screen_state as u8,
-                                turn: if input.turn.is_empty() { None } else { Some(input.turn.as_slice().try_into().unwrap()) },
-                            }).await;
-                        },
-                        p => anyhow::bail!("unknown packet: {:?}", p)
+                                let battle = match &mut battle_state.battle {
+                                    None => {
+                                        log::info!("no battle in progress, dropping input");
+                                        continue;
+                                    },
+                                    Some(b) => b,
+                                };
+
+                                battle.add_input(battle.remote_player_index(), input::Input{
+                                    local_tick: input.local_tick,
+                                    remote_tick: input.remote_tick,
+                                    joyflags: input.joyflags as u16,
+                                    custom_screen_state: input.custom_screen_state as u8,
+                                    turn: if input.turn.is_empty() { None } else { Some(input.turn.as_slice().try_into().unwrap()) },
+                                }).await;
+                            },
+                            p => anyhow::bail!("unknown packet: {:?}", p)
+                        }
                     }
+                    Ok(())
+                } => {
+                    r
                 }
-                Ok(())
-            } => {
-                r
             }
-        }
-    }
-
-    pub fn cancel(&self) {
-        self.cancellation_token.cancel();
+        })().await;
+        let dc = match &*self.negotiation.lock().await {
+            Negotiation::Negotiated { dc, .. } => dc.clone(),
+            _ => unreachable!(),
+        };
+        let _ = dc.close().await;
+        r
     }
 
     pub async fn poll_for_ready(&self) -> anyhow::Result<bool> {
