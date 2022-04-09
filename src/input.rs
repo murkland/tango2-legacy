@@ -10,17 +10,19 @@ pub struct Input {
 }
 
 pub struct Queue {
-    condvar: parking_lot::Condvar,
-    queues: parking_lot::Mutex<[std::collections::VecDeque<Input>; 2]>,
+    notify: tokio::sync::Notify,
+    queues: tokio::sync::Mutex<[std::collections::VecDeque<Input>; 2]>,
     local_player_index: u8,
     local_delay: u32,
 }
 
 impl Queue {
     pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
+        let notify = tokio::sync::Notify::new();
+        notify.notify_waiters();
         Queue {
-            condvar: parking_lot::Condvar::new(),
-            queues: parking_lot::Mutex::new([
+            notify,
+            queues: tokio::sync::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
             ]),
@@ -29,25 +31,22 @@ impl Queue {
         }
     }
 
-    pub async fn add_input(
-        &mut self,
-        player_index: u8,
-        input: Input,
-        timeout: std::time::Duration,
-    ) -> Result<(), anyhow::Error> {
-        let deadline = Instant::now() + timeout;
-        let mut queues = self.queues.lock();
-        while queues[player_index as usize].len() == queues[player_index as usize].capacity() {
-            if self.condvar.wait_until(&mut queues, deadline).timed_out() {
-                anyhow::bail!("add input exceeded deadline")
+    pub async fn add_input(&mut self, player_index: u8, input: Input) {
+        loop {
+            self.notify.notified().await;
+
+            let mut queues = self.queues.lock().await;
+            let queue = &mut queues[player_index as usize];
+            if queue.len() == queue.capacity() {
+                continue;
             }
+            queue.push_back(input);
+            return;
         }
-        queues[player_index as usize].push_back(input);
-        Ok(())
     }
 
     pub async fn queue_length(&self, player_index: u8) -> usize {
-        let queues = self.queues.lock();
+        let queues = self.queues.lock().await;
         queues[player_index as usize].len()
     }
 
@@ -55,8 +54,8 @@ impl Queue {
         self.local_delay
     }
 
-    pub fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
-        let mut queues = self.queues.lock();
+    pub async fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
+        let mut queues = self.queues.lock().await;
 
         let to_commit = {
             let mut n =
@@ -88,7 +87,7 @@ impl Queue {
             }
         };
 
-        self.condvar.notify_all();
+        self.notify.notify_waiters();
 
         (to_commit, peeked)
     }

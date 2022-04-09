@@ -16,7 +16,6 @@ mod signor;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     mgba::log::init();
-
     let g = game::Game::new()?;
     g.run();
     Ok(())

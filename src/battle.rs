@@ -259,7 +259,48 @@ impl Match {
             },
             r = async {
                 self.negotiate().await?;
-                while true { }
+                let dc = match &*self.negotiation.lock() {
+                    Negotiation::Negotiated { dc, .. } => dc.clone(),
+                    _ => unreachable!(),
+                };
+
+                loop {
+                    match match protocol::Packet::decode(match dc.receive().await {
+                        None => break,
+                        Some(buf) => buf,
+                    }.as_slice())?.which {
+                        None => break,
+                        Some(b) => b,
+                    } {
+                        protocol::packet::Which::Init(init) => {
+
+                        },
+                        protocol::packet::Which::Input(input) => {
+                            let mut battle_state = self.battle_state.lock();
+                            if input.battle_number != battle_state.number {
+                                log::info!("battle number mismatch, dropping input");
+                                continue;
+                            }
+
+                            let mut battle = match &mut battle_state.battle {
+                                None => {
+                                    log::info!("no battle in progress, dropping input");
+                                    continue;
+                                },
+                                Some(b) => b,
+                            };
+
+                            battle.add_input(battle.remote_player_index(), input::Input{
+                                local_tick: input.local_tick,
+                                remote_tick: input.remote_tick,
+                                joyflags: input.joyflags as u16,
+                                custom_screen_state: input.custom_screen_state as u8,
+                                turn: if input.turn.is_empty() { None } else { Some(input.turn.as_slice().try_into().unwrap()) },
+                            }).await;
+                        },
+                        p => anyhow::bail!("unknown packet: {:?}", p)
+                    }
+                }
                 Ok(())
             } => {
                 r
@@ -436,15 +477,18 @@ impl Battle {
         &self.committed_state
     }
 
-    pub fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
-        let (input_pairs, left) = self.iq.consume_and_peek_local();
+    pub async fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
+        let (input_pairs, left) = self.iq.consume_and_peek_local().await;
         if let Some(last) = input_pairs.last() {
             self.last_committed_remote_input = last[1 - self.local_player_index() as usize].clone();
         }
         (input_pairs, left)
     }
 
+    pub async fn add_input(&mut self, player_index: u8, input: input::Input) {
+        self.iq.add_input(player_index, input).await;
+    }
+
     // TODO: AddLocalPendingTurn
-    // TODO: AddInput
     // TODO: ConsumeLocalPendingTurn
 }

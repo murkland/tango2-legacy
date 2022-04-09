@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use crate::{audio, battle::Match, bn6, gui, mgba};
 
 pub struct Game {
+    rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
     _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
@@ -21,6 +22,12 @@ pub struct Game {
 
 impl Game {
     pub fn new() -> Result<Game, Box<dyn std::error::Error>> {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+
+        let handle = rt.handle().clone();
+
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             core.set_audio_buffer_size(1024);
@@ -129,12 +136,7 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        (
-                            bn6.offsets.rom.main_read_joyflags,
-                            Box::new(move || {
-                                // log::info!("TODO: main_read_joyflags");
-                            }),
-                        )
+                        (bn6.offsets.rom.main_read_joyflags, Box::new(move || {}))
                     },
                     {
                         let core = main_core.clone();
@@ -405,6 +407,7 @@ impl Game {
         let gui = gui::Gui::new(&window, &pixels);
 
         let mut game = Game {
+            rt,
             main_core,
             _trapper: trapper,
             event_loop,
