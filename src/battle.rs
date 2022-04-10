@@ -38,6 +38,7 @@ pub struct Match {
     match_type: u16,
     game_title: String,
     game_crc32: u32,
+    local_joyflags: std::sync::atomic::AtomicU16,
     battle_state: tokio::sync::Mutex<BattleState>,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
@@ -77,6 +78,7 @@ impl Match {
                 battle: None,
                 won_last_battle: false,
             }),
+            local_joyflags: 0.into(),
             remote_init_sender,
             remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
         }
@@ -428,6 +430,16 @@ impl Match {
 
     pub async fn end_battle(&self) {
         self.battle_state.lock().await.battle = None;
+    }
+
+    pub fn set_local_joyflags(&self, joyflags: u16) {
+        self.local_joyflags
+            .store(joyflags, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn local_joyflags(&self) -> u16 {
+        self.local_joyflags
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

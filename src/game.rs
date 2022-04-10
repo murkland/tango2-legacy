@@ -5,11 +5,6 @@ use parking_lot::Mutex;
 use crate::{audio, battle::Match, bn6, fastforwarder, gui, input, mgba};
 
 const EXPECTED_FPS: u32 = 60;
-
-struct GameState {
-    match_state: MatchState,
-}
-
 enum MatchState {
     NoMatch,
     Aborted,
@@ -19,6 +14,7 @@ enum MatchState {
 pub struct Game {
     _rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
+    match_state: Arc<tokio::sync::Mutex<MatchState>>,
     _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
@@ -102,9 +98,7 @@ impl Game {
         };
         thread.start();
 
-        let game_state = Arc::new(tokio::sync::Mutex::new(GameState {
-            match_state: MatchState::NoMatch,
-        }));
+        let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
         let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
         let audio_source = {
@@ -133,14 +127,14 @@ impl Game {
                 vec![
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    match &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    match &*match_state {
                                         MatchState::Match(m) => {
                                             let _ = m.lock_battle_state().await.battle.as_ref().expect("attempted to get p2 battle information while no battle was active!");
                                             return;
@@ -157,16 +151,16 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_marshal_ret,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let mut game_state = game_state.lock().await;
+                                    let mut match_state = match_state.lock().await;
                                     'abort: loop {
-                                        let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        let m = if let MatchState::Match(m) = &*match_state {
                                             m
                                         } else {
                                             return;
@@ -193,22 +187,22 @@ impl Game {
                                         battle.set_remote_delay(remote_init.input_delay);
                                         return;
                                     }
-                                    game_state.match_state = MatchState::Aborted;
+                                    *match_state = MatchState::Aborted;
                                 });
                             }),
                         )
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -226,7 +220,7 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         let fastforwarder = parking_lot::Mutex::new(
@@ -236,9 +230,9 @@ impl Game {
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let mut game_state = game_state.lock().await;
+                                    let mut match_state = match_state.lock().await;
                                     'abort: loop {
-                                        let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        let m = if let MatchState::Match(m) = &*match_state {
                                             m
                                         } else {
                                             return;
@@ -294,7 +288,7 @@ impl Game {
                                             log::info!("battle state committed");
                                         }
 
-                                        let joyflags: u16 = 0x0000; // TODO: get joyflags
+                                        let joyflags: u16 = m.local_joyflags();
                                         let local_tick = in_battle_time + battle.local_delay();
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
@@ -345,22 +339,22 @@ impl Game {
                                         core.gba_mut().cpu_mut().set_gpr(4, last_joyflags as i32);
                                         return;
                                     }
-                                    game_state.match_state = MatchState::Aborted;
+                                    *match_state = MatchState::Aborted;
                                 });
                             }),
                         )
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -400,15 +394,15 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -428,15 +422,15 @@ impl Game {
                         )
                     },
                     {
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -448,15 +442,15 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_ending_ret,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -468,14 +462,14 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -493,14 +487,14 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let game_state = game_state.lock().await;
-                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
                                         m
                                     } else {
                                         return;
@@ -518,7 +512,7 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -532,8 +526,8 @@ impl Game {
                                         r0 = 2;
                                     }
 
-                                    let game_state = game_state.lock().await;
-                                    if let MatchState::Aborted = game_state.match_state {
+                                    let match_state = match_state.lock().await;
+                                    if let MatchState::Aborted = *match_state {
                                         r0 = 4;
                                     }
 
@@ -554,7 +548,7 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -567,9 +561,9 @@ impl Game {
                                     let r15 = core.gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                    let game_state2 = game_state.clone();
-                                    let mut game_state = game_state.lock().await;
-                                    match &game_state.match_state {
+                                    let match_state2 = match_state.clone();
+                                    let mut match_state = match_state.lock().await;
+                                    match &*match_state {
                                         MatchState::Aborted => {
                                             todo!()
                                         }
@@ -580,16 +574,15 @@ impl Game {
                                                 core.game_title(),
                                                 core.crc32(),
                                             );
-                                            game_state.match_state = MatchState::Match(m);
+                                            *match_state = MatchState::Match(m);
 
                                             handle.spawn(async move {
-                                                if let Err(e) =
-                                                    match &game_state2.lock().await.match_state {
-                                                        MatchState::Match(m) => m,
-                                                        _ => todo!(),
-                                                    }
-                                                    .run()
-                                                    .await
+                                                if let Err(e) = match &*match_state2.lock().await {
+                                                    MatchState::Match(m) => m,
+                                                    _ => todo!(),
+                                                }
+                                                .run()
+                                                .await
                                                 {
                                                     log::info!("match ended with {}", e);
                                                 } else {
@@ -615,7 +608,7 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
@@ -631,15 +624,15 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
                             Box::new(move || {
                                 handle.block_on(async {
                                     log::info!("match canceled by user");
-                                    let mut game_state = game_state.lock().await;
-                                    game_state.match_state = MatchState::NoMatch;
+                                    let mut match_state = match_state.lock().await;
+                                    *match_state = MatchState::NoMatch;
                                     let mut core = core.lock();
                                     let r15 = core.gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
@@ -649,14 +642,14 @@ impl Game {
                     },
                     {
                         let core = main_core.clone();
-                        let game_state = game_state.clone();
+                        let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
                             Box::new(move || {
                                 handle.block_on(async {
-                                    let mut game_state = game_state.lock().await;
-                                    game_state.match_state = MatchState::NoMatch;
+                                    let mut match_state = match_state.lock().await;
+                                    *match_state = MatchState::NoMatch;
                                     let mut core = core.lock();
                                     let r15 = core.gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
@@ -697,6 +690,7 @@ impl Game {
         let mut game = Game {
             _rt: rt,
             main_core,
+            match_state,
             _trapper: trapper,
             event_loop,
             input,
@@ -725,6 +719,8 @@ impl Game {
     }
 
     pub fn run(mut self: Self) {
+        let match_state = self.match_state.clone();
+
         self.event_loop
             .take()
             .unwrap()
@@ -795,7 +791,14 @@ impl Game {
                         keys |= mgba::input::keys::SELECT;
                     }
 
-                    core.set_keys(keys);
+                    match &*self.match_state.blocking_lock() {
+                        MatchState::Match(m) => {
+                            m.set_local_joyflags(keys as u16 | 0xfc00);
+                        }
+                        _ => {
+                            core.set_keys(keys);
+                        }
+                    }
 
                     self.window.request_redraw();
                 }
