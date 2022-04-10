@@ -100,6 +100,8 @@ impl Game {
             (pixels, gui)
         };
 
+        let gui_state = gui.state();
+
         let mut thread = {
             let core = main_core.clone();
             mgba::thread::Thread::new(core)
@@ -544,6 +546,7 @@ impl Game {
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
+                        let gui_state = gui_state.clone();
                         (
                             bn6.offsets
                                 .rom
@@ -557,20 +560,32 @@ impl Game {
                                     let mut match_state = match_state.lock().await;
                                     match &*match_state {
                                         MatchState::Aborted => {
-                                            todo!()
+                                            panic!("match was aborted without being started?")
                                         }
                                         MatchState::NoMatch => {
-                                            let m = battle::Match::new(
-                                                "test".to_string(),
-                                                bn6.match_type(core),
-                                                core.as_ref().game_title(),
-                                                core.as_ref().crc32(),
-                                            );
-                                            *match_state = MatchState::Match(m);
-                                            match &*match_state {
-                                                MatchState::Match(m) => m.start(handle2),
-                                                _ => unreachable!(),
+                                            gui_state.open_link_code_dialog();
+                                            match &*gui_state.link_code_status().as_ref().unwrap() {
+                                                gui::DialogStatus::Pending(_) => {
+                                                    return;
+                                                }
+                                                gui::DialogStatus::Ok(code) => {
+                                                    let m = battle::Match::new(
+                                                        code.to_string(),
+                                                        bn6.match_type(core),
+                                                        core.as_ref().game_title(),
+                                                        core.as_ref().crc32(),
+                                                    );
+                                                    *match_state = MatchState::Match(m);
+                                                    match &*match_state {
+                                                        MatchState::Match(m) => m.start(handle2),
+                                                        _ => unreachable!(),
+                                                    }
+                                                }
+                                                gui::DialogStatus::Cancelled => {
+                                                    bn6.drop_matchmaking_from_comm_menu(core, 0);
+                                                }
                                             }
+                                            gui_state.close_link_code_dialog();
                                         }
                                         MatchState::Match(m) => match m.poll_for_ready().await {
                                             battle::NegotiationStatus::NotReady => {}

@@ -1,24 +1,19 @@
-use egui::{ClippedMesh, Context, TexturesDelta};
+use egui::{ClippedMesh, Context, InnerResponse, TexturesDelta};
 use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
 use winit::window::Window;
 
-/// Manages all state required for rendering egui over `Pixels`.
 pub struct Gui {
-    // State for egui.
     ctx: Context,
     winit_state: egui_winit::State,
     screen_descriptor: ScreenDescriptor,
     rpass: RenderPass,
     paint_jobs: Vec<ClippedMesh>,
     textures: TexturesDelta,
-
-    // State for the GUI
-    state: State,
+    state: std::sync::Arc<State>,
 }
 
 impl Gui {
-    /// Create egui.
     pub fn new(width: u32, height: u32, scale_factor: f32, pixels: &pixels::Pixels) -> Self {
         let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
@@ -56,7 +51,7 @@ impl Gui {
         };
         let rpass = RenderPass::new(pixels.device(), pixels.render_texture_format(), 1);
         let textures = TexturesDelta::default();
-        let state = State::new();
+        let state = std::sync::Arc::new(State::new());
 
         Self {
             ctx,
@@ -69,12 +64,10 @@ impl Gui {
         }
     }
 
-    /// Handle input events from the window manager.
     pub fn handle_event(&mut self, event: &winit::event::WindowEvent) -> bool {
         self.winit_state.on_event(&self.ctx, event)
     }
 
-    /// Resize egui.
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             self.screen_descriptor.physical_width = width;
@@ -82,17 +75,13 @@ impl Gui {
         }
     }
 
-    /// Update scaling factor.
     pub fn scale_factor(&mut self, scale_factor: f64) {
         self.screen_descriptor.scale_factor = scale_factor as f32;
     }
 
-    /// Prepare egui.
     pub fn prepare(&mut self, window: &Window) {
-        // Run the egui frame and create all paint jobs to prepare for rendering.
         let raw_input = self.winit_state.take_egui_input(window);
         let output = self.ctx.run(raw_input, |ctx| {
-            // Draw the demo application.
             self.state.layout(ctx);
         });
 
@@ -102,14 +91,12 @@ impl Gui {
         self.paint_jobs = self.ctx.tessellate(output.shapes);
     }
 
-    /// Render egui.
     pub fn render(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         render_target: &wgpu::TextureView,
         context: &PixelsContext,
     ) -> Result<(), BackendError> {
-        // Upload all resources to the GPU.
         self.rpass
             .add_textures(&context.device, &context.queue, &self.textures)?;
         self.rpass.update_buffers(
@@ -119,7 +106,6 @@ impl Gui {
             &self.screen_descriptor,
         );
 
-        // Record all render passes.
         self.rpass.execute(
             encoder,
             render_target,
@@ -128,39 +114,79 @@ impl Gui {
             None,
         )?;
 
-        // Cleanup
         let textures = std::mem::take(&mut self.textures);
         self.rpass.remove_textures(textures)
     }
+
+    pub fn state(&self) -> std::sync::Arc<State> {
+        self.state.clone()
+    }
 }
 
-struct State {}
+pub enum DialogStatus<T> {
+    Pending(T),
+    Ok(T),
+    Cancelled,
+}
+
+pub struct State {
+    link_code_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
+}
 
 impl State {
     fn new() -> Self {
-        Self {}
+        Self {
+            link_code_state: parking_lot::Mutex::new(None),
+        }
     }
 
-    fn layout(&mut self, ctx: &Context) {
-        egui::Window::new("")
-            .open(&mut true)
-            .collapsible(false)
-            .title_bar(false)
-            .fixed_size(egui::vec2(300.0, 0.0))
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .fixed_pos(egui::pos2(0.0, 0.0))
-            .show(ctx, |ui| {
-                ui.label(egui::RichText::new("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。"));
-                ui.separator();
-                let mut code = String::new();
-                ui.add(egui::TextEdit::singleline(&mut code).hint_text("リンクコード"));
-                let mut delay = 3u32;
-                ui.add(egui::Slider::new(&mut delay, 3..=10).text("入力遅延").clamp_to_range(true).suffix("f"));
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.add(egui::Button::new("接続"));
-                    ui.add(egui::Button::new("キャンセル"));
-                })
-            });
+    pub fn open_link_code_dialog(&self) {
+        let mut maybe_link_code_state = self.link_code_state.lock();
+        if maybe_link_code_state.is_some() {
+            return;
+        }
+        *maybe_link_code_state = Some(DialogStatus::Pending(String::new()));
+    }
+
+    pub fn close_link_code_dialog(&self) {
+        let mut maybe_link_code_state = self.link_code_state.lock();
+        *maybe_link_code_state = None;
+    }
+
+    pub fn link_code_status(&self) -> parking_lot::MutexGuard<Option<DialogStatus<String>>> {
+        self.link_code_state.lock()
+    }
+
+    fn layout(&self, ctx: &Context) {
+        let mut maybe_link_code_state = self.link_code_state.lock();
+
+        if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state {
+            if let Some(egui::InnerResponse { inner: Some((ok, cancel)), .. }) = egui::Window::new("")
+                .open(&mut true)
+                .collapsible(false)
+                .title_bar(false)
+                .fixed_size(egui::vec2(300.0, 0.0))
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .fixed_pos(egui::pos2(0.0, 0.0))
+                .show(ctx, |ui| {
+                    ui.label(egui::RichText::new("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。"));
+                    ui.separator();
+                    ui.add(egui::TextEdit::singleline( code).hint_text("リンクコード"));
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        let ok = ui.add(egui::Button::new("接続"));
+                        let cancel = ui.add(egui::Button::new("キャンセル"));
+                        (ok, cancel)
+                    }).inner
+                }) {
+                    if ok.clicked() {
+                        *maybe_link_code_state = Some(DialogStatus::Ok(code.to_string()));
+                    }
+
+                    if cancel.clicked() {
+                        *maybe_link_code_state = Some(DialogStatus::Cancelled);
+                    }
+                }
+        }
     }
 }

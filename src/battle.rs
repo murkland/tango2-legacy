@@ -104,6 +104,8 @@ impl From<signor::Error> for NegotiationError {
 
 impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
+        log::info!("negotiating match, session_id = {}", self.session_id);
+
         let mut sc = signor::Client::new("http://localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
