@@ -29,7 +29,7 @@ fn main() {
     println!("cargo:rerun-if-changed=mgba_wrapper.h");
     let bindings = bindgen::Builder::default()
         .header("mgba_wrapper.h")
-        .clang_args(&["-Iexternal/mgba/include"])
+        .clang_args(&["-Iexternal/mgba/include", "-D__STDC_NO_THREADS__=1"])
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
