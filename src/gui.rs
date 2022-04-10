@@ -128,7 +128,7 @@ pub enum DialogStatus<T> {
 pub struct State {
     link_code_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
     show_debug: std::sync::atomic::AtomicBool,
-    debug_stats_getter: parking_lot::Mutex<Option<Box<dyn Fn() -> DebugStats>>>,
+    debug_stats_getter: parking_lot::Mutex<Option<Box<dyn Fn() -> Option<DebugStats>>>>,
 }
 
 pub struct BattleDebugStats {
@@ -150,7 +150,7 @@ impl State {
     pub fn new() -> Self {
         Self {
             link_code_state: parking_lot::Mutex::new(None),
-            show_debug: true.into(),
+            show_debug: false.into(),
             debug_stats_getter: parking_lot::Mutex::new(None),
         }
     }
@@ -172,8 +172,13 @@ impl State {
         self.link_code_state.lock()
     }
 
-    pub fn set_debug_stats_getter(&self, getter: Option<Box<dyn Fn() -> DebugStats>>) {
+    pub fn set_debug_stats_getter(&self, getter: Option<Box<dyn Fn() -> Option<DebugStats>>>) {
         *self.debug_stats_getter.lock() = getter;
+    }
+
+    pub fn toggle_debug(&self) {
+        self.show_debug
+            .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn layout(&self, ctx: &Context) {
@@ -213,45 +218,46 @@ impl State {
             }
         }
 
-        let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::SeqCst);
+        let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::Relaxed);
         egui::Window::new("debug")
             .open(&mut show_debug)
             .title_bar(false)
             .auto_sized()
             .show(ctx, |ui| {
                 if let Some(debug_stats_getter) = &*self.debug_stats_getter.lock() {
-                    let debug_stats = debug_stats_getter();
-                    egui::Grid::new("debug_grid").show(ui, |ui| {
-                        ui.label("draw fps");
-                        ui.label(format!("{:.0}", debug_stats.fps));
-                        ui.end_row();
-
-                        ui.label("tps");
-                        ui.label(format!(
-                            "{:.0} (target = {:.0})",
-                            debug_stats.emu_tps, debug_stats.target_tps
-                        ));
-                        ui.end_row();
-
-                        if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
-                            ui.label("local player index");
-                            ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
+                    if let Some(debug_stats) = debug_stats_getter() {
+                        egui::Grid::new("debug_grid").show(ui, |ui| {
+                            ui.label("draw fps");
+                            ui.label(format!("{:.0}", debug_stats.fps));
                             ui.end_row();
 
-                            ui.label("qlen");
+                            ui.label("tps");
                             ui.label(format!(
-                                "{} (-{}) vs {} (-{})",
-                                battle_debug_stats.local_qlen,
-                                battle_debug_stats.local_delay,
-                                battle_debug_stats.remote_qlen,
-                                battle_debug_stats.remote_delay,
+                                "{:.0} (target = {:.0})",
+                                debug_stats.emu_tps, debug_stats.target_tps
                             ));
                             ui.end_row();
-                        }
-                    });
+
+                            if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
+                                ui.label("local player index");
+                                ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
+                                ui.end_row();
+
+                                ui.label("qlen");
+                                ui.label(format!(
+                                    "{} (-{}) vs {} (-{})",
+                                    battle_debug_stats.local_qlen,
+                                    battle_debug_stats.local_delay,
+                                    battle_debug_stats.remote_qlen,
+                                    battle_debug_stats.remote_delay,
+                                ));
+                                ui.end_row();
+                            }
+                        });
+                    }
                 }
             });
         self.show_debug
-            .store(show_debug, std::sync::atomic::Ordering::SeqCst)
+            .store(show_debug, std::sync::atomic::Ordering::Relaxed)
     }
 }
