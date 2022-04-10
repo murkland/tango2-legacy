@@ -19,7 +19,7 @@ pub struct Init {
 pub struct BattleState {
     pub number: u32,
     pub battle: Option<Battle>,
-    won_last_battle: bool,
+    pub won_last_battle: bool,
 }
 
 enum Negotiation {
@@ -384,10 +384,6 @@ impl Match {
         )
         .await?;
         Ok(())
-    }
-
-    pub async fn set_won_last_battle(&self, won: bool) {
-        self.r#impl.battle_state.lock().await.won_last_battle = won;
     }
 
     pub async fn rng(

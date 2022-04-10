@@ -410,10 +410,10 @@ impl Game {
 
 
                                     let battle_state = &mut m.lock_battle_state().await;
-                                    let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
+                                    battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
                                     match core.as_ref().gba().cpu().gpr(0) {
-                                        0 => m.set_won_last_battle(true).await,
-                                        1 => m.set_won_last_battle(false).await,
+                                        1 => { battle_state.won_last_battle = true; },
+                                        2 => { battle_state.won_last_battle = false; },
                                         _ => {}
                                     }
                                 });
