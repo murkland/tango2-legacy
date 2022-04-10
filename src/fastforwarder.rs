@@ -261,7 +261,7 @@ impl Fastforwarder {
             .unwrap()
             .committed_state
             .is_none()
-            && self.state.borrow().as_ref().unwrap().dirty_state.is_none()
+            || self.state.borrow().as_ref().unwrap().dirty_state.is_none()
         {
             self.state.borrow_mut().as_mut().unwrap().result = Ok(());
             self.core.as_mut().run_frame();
