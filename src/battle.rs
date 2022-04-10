@@ -404,6 +404,28 @@ impl Match {
         self.match_type
     }
 
+    pub async fn start_battle(&self) {
+        let mut battle_state = self.battle_state.lock().await;
+        let is_p2 = !battle_state.won_last_battle;
+        battle_state.battle = Some(Battle {
+            is_p2,
+            iq: input::Queue::new(60, 0, if is_p2 { 1 } else { 0 }),
+            remote_delay: 0,
+            is_accepting_input: false,
+            last_committed_remote_input: input::Input {
+                local_tick: 0,
+                remote_tick: 0,
+                joyflags: 0xfc00,
+                custom_screen_state: 0,
+                turn: None,
+            },
+            last_input: None,
+            state_committed_notify: tokio::sync::Notify::new(),
+            committed_state: None,
+            local_pending_turn: None,
+        });
+    }
+
     pub async fn end_battle(&self) {
         self.battle_state.lock().await.battle = None;
     }
@@ -421,7 +443,7 @@ pub struct Battle {
     is_accepting_input: bool,
     last_committed_remote_input: input::Input,
     last_input: Option<[input::Input; 2]>,
-    state_committed: tokio::sync::Notify,
+    state_committed_notify: tokio::sync::Notify,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
 }
@@ -441,7 +463,7 @@ impl Battle {
 
     pub fn set_committed_state(&mut self, state: mgba::state::State) {
         self.committed_state = Some(state);
-        self.state_committed.notify_one();
+        self.state_committed_notify.notify_one();
     }
 
     pub fn set_last_input(&mut self, inp: [input::Input; 2]) {

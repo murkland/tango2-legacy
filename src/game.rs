@@ -19,7 +19,7 @@ enum MatchState {
 pub struct Game {
     _rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
-    trapper: mgba::trapper::Trapper,
+    _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     input: winit_input_helper::WinitInputHelper,
     vbuf: Arc<Vec<u8>>,
@@ -441,8 +441,7 @@ impl Game {
                                     } else {
                                         return;
                                     };
-
-                                    // TODO: call start_battle
+                                    m.start_battle();
                                 });
                             }),
                         )
@@ -698,7 +697,7 @@ impl Game {
         let mut game = Game {
             _rt: rt,
             main_core,
-            trapper,
+            _trapper: trapper,
             event_loop,
             input,
             window,
