@@ -90,7 +90,7 @@ impl Fastforwarder {
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
-                            bn6.offsets.rom.main_read_joyflags,
+                            bn6.offsets.rom.battle_init_call_battle_copy_input_data,
                             Box::new(move |mut core| {
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
@@ -194,6 +194,8 @@ impl Fastforwarder {
             )
         };
 
+        core.as_mut().reset();
+
         Ok(Fastforwarder {
             core,
             _trapper: trapper,
@@ -235,13 +237,11 @@ impl Fastforwarder {
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
-        log::info!("r15: 0x{:08x}", self.core.as_ref().gba().cpu().gpr(15));
         self.core
             .as_mut()
             .gba_mut()
             .cpu_mut()
             .set_pc(self.bn6.offsets.rom.main_read_joyflags);
-        log::info!("r15: 0x{:08x}", self.core.as_ref().gba().cpu().gpr(15));
 
         *self.state.borrow_mut() = Some(State {
             local_player_index,
