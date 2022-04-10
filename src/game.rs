@@ -35,6 +35,7 @@ impl GameState {
         handle: tokio::runtime::Handle,
         gui_state: std::sync::Weak<gui::State>,
         vbuf: std::sync::Weak<Mutex<Vec<u8>>>,
+        emu_tps_counter: std::sync::Weak<Mutex<tps::Counter>>,
     ) -> Result<Self, anyhow::Error> {
         let rom_path = std::path::Path::new("bn6f.gba");
         let save_path = rom_path.with_extension("sav");
@@ -653,7 +654,7 @@ impl GameState {
         {
             let core = main_core.clone();
             let vbuf = vbuf.clone();
-            // let emu_tps_counter = emu_tps_counter.clone();
+            let emu_tps_counter = emu_tps_counter.clone();
             thread.set_frame_callback(Some(Box::new(move || {
                 let core = core.lock();
                 let vbuf = match vbuf.upgrade() {
@@ -663,12 +664,14 @@ impl GameState {
                     }
                 };
                 let mut vbuf = vbuf.lock();
-                // let mut emu_tps_counter = emu_tps_counter.lock();
                 vbuf.copy_from_slice(core.video_buffer().unwrap());
                 for i in (0..vbuf.len()).step_by(4) {
                     vbuf[i + 3] = 0xff;
                 }
-                // emu_tps_counter.mark();
+                if let Some(emu_tps_counter) = emu_tps_counter.upgrade() {
+                    let mut emu_tps_counter = emu_tps_counter.lock();
+                    emu_tps_counter.mark();
+                }
             })));
         }
 
@@ -744,6 +747,7 @@ impl Game {
                 handle,
                 Arc::downgrade(&gui_state),
                 Arc::downgrade(&vbuf),
+                Arc::downgrade(&emu_tps_counter),
             )?)
         };
 
