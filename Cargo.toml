@@ -18,9 +18,9 @@ lazy_static = "1.4.0"
 vsprintf = "2.0.0"
 winit_input_helper = "0.11.1"
 log = "0.4"
-imgui = "0.8"
-imgui-wgpu = "0.19"
-imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-26"] }
+egui = "0.17"
+egui_wgpu_backend = "0.17"
+egui-winit = { version = "0.17", default-features = false, features = ["links"] }
 tokio = { version = "1.15.0", features = ["full"] }
 parking_lot = "0.12.0"
 rand = "0.8.5"

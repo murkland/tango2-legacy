@@ -80,17 +80,24 @@ impl Game {
 
         let vbuf2 = Arc::new(Mutex::new(vec![0u8; (width * height * 4) as usize]));
 
-        let pixels = {
+        let (pixels, gui) = {
             let window_size = window.inner_size();
             let surface_texture =
                 pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
-            pixels::PixelsBuilder::new(width, height, surface_texture)
+            let pixels = pixels::PixelsBuilder::new(width, height, surface_texture)
                 .request_adapter_options(pixels::wgpu::RequestAdapterOptions {
                     power_preference: pixels::wgpu::PowerPreference::HighPerformance,
                     force_fallback_adapter: false,
                     compatible_surface: None,
                 })
-                .build()?
+                .build()?;
+            let gui = gui::Gui::new(
+                window_size.width,
+                window_size.height,
+                window.scale_factor() as f32,
+                &pixels,
+            );
+            (pixels, gui)
         };
 
         let mut thread = {
@@ -663,8 +670,6 @@ impl Game {
             )
         };
 
-        let gui = gui::Gui::new(&window, &pixels);
-
         let mut game = Game {
             rt,
             main_core,
@@ -705,32 +710,19 @@ impl Game {
             .run(move |event, _, control_flow| {
                 *control_flow = winit::event_loop::ControlFlow::Poll;
 
-                if let winit::event::Event::RedrawRequested(_) = event {
-                    {
-                        let vbuf2 = self.vbuf2.lock().clone();
-                        self.pixels.get_frame().copy_from_slice(&vbuf2);
-                    }
-
-                    self.gui.prepare(&self.window).expect("prepare gui");
-                    self.pixels
-                        .render_with(|encoder, render_target, context| {
-                            context.scaling_renderer.render(encoder, render_target);
-                            self.gui
-                                .render(&self.window, encoder, render_target, context)?;
-                            Ok(())
-                        })
-                        .expect("render pixels");
-                }
-
-                self.gui.handle_event(&self.window, &event);
                 if self.input.update(&event) {
                     if self.input.quit() {
                         *control_flow = winit::event_loop::ControlFlow::Exit;
                         return;
                     }
 
+                    if let Some(scale_factor) = self.input.scale_factor() {
+                        self.gui.scale_factor(scale_factor);
+                    }
+
                     if let Some(size) = self.input.window_resized() {
                         self.pixels.resize_surface(size.width, size.height);
+                        self.gui.resize(size.width, size.height);
                     }
 
                     let core = self.main_core.lock();
@@ -785,6 +777,28 @@ impl Game {
 
                     self.window.request_redraw();
                 }
+
+                match event {
+                    winit::event::Event::WindowEvent { event, .. } => {
+                        self.gui.handle_event(&event);
+                    }
+                    winit::event::Event::RedrawRequested(_) => {
+                        {
+                            let vbuf2 = self.vbuf2.lock().clone();
+                            self.pixels.get_frame().copy_from_slice(&vbuf2);
+                        }
+
+                        self.gui.prepare(&self.window);
+                        self.pixels
+                            .render_with(|encoder, render_target, context| {
+                                context.scaling_renderer.render(encoder, render_target);
+                                self.gui.render(encoder, render_target, context)?;
+                                Ok(())
+                            })
+                            .expect("render pixels");
+                    }
+                    _ => {}
+                };
             });
     }
 }

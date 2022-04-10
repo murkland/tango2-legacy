@@ -1,162 +1,124 @@
+use egui::{ClippedMesh, Context, TexturesDelta};
+use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
-use std::time::Instant;
+use winit::window::Window;
 
-/// Manages all state required for rendering Dear ImGui over `Pixels`.
+/// Manages all state required for rendering egui over `Pixels`.
 pub struct Gui {
-    imgui: imgui::Context,
-    platform: imgui_winit_support::WinitPlatform,
-    renderer: imgui_wgpu::Renderer,
-    last_frame: Instant,
-    last_cursor: Option<imgui::MouseCursor>,
+    // State for egui.
+    egui_ctx: Context,
+    egui_state: egui_winit::State,
+    screen_descriptor: ScreenDescriptor,
+    rpass: RenderPass,
+    paint_jobs: Vec<ClippedMesh>,
+    textures: TexturesDelta,
+
+    // State for the GUI
     state: State,
 }
 
-pub struct State {}
-
-impl State {
-    fn new() -> Self {
-        State {}
-    }
-
-    fn layout(&mut self, ui: &imgui::Ui) {
-        imgui::Window::new("link code")
-            .position(
-                [ui.io().display_size[0] / 2.0, ui.io().display_size[1] / 2.0],
-                imgui::Condition::Always,
-            )
-            .position_pivot([0.5, 0.5])
-            .size([300.0, 0.0], imgui::Condition::Always)
-            .no_decoration()
-            .build(ui, || {
-                let mut buf = String::new();
-                ui.text_wrapped("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。");
-                ui.input_text("コード", &mut buf).enter_returns_true(true).chars_noblank(true).build();
-                let mut input_delay = 3u32;
-                imgui::Slider::new("入力遅延", 3u32, 10u32).display_format("%df").build(ui, &mut input_delay);
-                ui.button("接続");
-                ui.same_line();
-                ui.button("キャンセル");
-            });
-    }
+/// Example application state. A real application will need a lot more state than this.
+struct State {
+    /// Only show the egui window when true.
+    window_open: bool,
 }
 
 impl Gui {
-    /// Create Dear ImGui.
-    pub fn new(window: &winit::window::Window, pixels: &pixels::Pixels) -> Self {
-        // Create Dear ImGui context
-        let mut imgui = imgui::Context::create();
-        imgui.set_ini_filename(None);
+    /// Create egui.
+    pub(crate) fn new(width: u32, height: u32, scale_factor: f32, pixels: &pixels::Pixels) -> Self {
+        let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
-        // Initialize winit platform support
-        let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
-        platform.attach_window(
-            imgui.io_mut(),
-            window,
-            imgui_winit_support::HiDpiMode::Default,
-        );
-
-        // Configure Dear ImGui fonts
-        let hidpi_factor = window.scale_factor();
-        let font_size = (20.0 * hidpi_factor) as f32;
-        imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
-        imgui.fonts().add_font(&[
-            imgui::FontSource::TtfData {
-                data: include_bytes!("fonts/NotoSans-Regular.ttf"),
-                size_pixels: font_size,
-                config: Some(imgui::FontConfig {
-                    oversample_h: 4,
-                    oversample_v: 4,
-                    ..imgui::FontConfig::default()
-                }),
-            },
-            imgui::FontSource::TtfData {
-                data: include_bytes!("fonts/NotoSansJP-Regular.otf"),
-                size_pixels: font_size,
-                config: Some(imgui::FontConfig {
-                    oversample_h: 4,
-                    oversample_v: 4,
-                    glyph_ranges: imgui::FontGlyphRanges::japanese(),
-                    ..imgui::FontConfig::default()
-                }),
-            },
-        ]);
-
-        // Create Dear ImGui WGPU renderer
-        let device = pixels.device();
-        let queue = pixels.queue();
-        let config = imgui_wgpu::RendererConfig {
-            texture_format: pixels.render_texture_format(),
-            ..Default::default()
+        let egui_ctx = Context::default();
+        let egui_state = egui_winit::State::from_pixels_per_point(max_texture_size, scale_factor);
+        let screen_descriptor = ScreenDescriptor {
+            physical_width: width,
+            physical_height: height,
+            scale_factor,
         };
-        let renderer = imgui_wgpu::Renderer::new(&mut imgui, device, queue, config);
+        let rpass = RenderPass::new(pixels.device(), pixels.render_texture_format(), 1);
+        let textures = TexturesDelta::default();
+        let state = State::new();
 
-        // Return GUI context
         Self {
-            imgui,
-            platform,
-            renderer,
-            last_frame: Instant::now(),
-            last_cursor: None,
-            state: State::new(),
+            egui_ctx,
+            egui_state,
+            screen_descriptor,
+            rpass,
+            paint_jobs: Vec::new(),
+            textures,
+            state,
         }
     }
 
-    /// Prepare Dear ImGui.
-    pub fn prepare(
-        &mut self,
-        window: &winit::window::Window,
-    ) -> Result<(), winit::error::ExternalError> {
-        // Prepare Dear ImGui
-        let now = Instant::now();
-        self.imgui.io_mut().update_delta_time(now - self.last_frame);
-        self.last_frame = now;
-        self.platform.prepare_frame(self.imgui.io_mut(), window)
+    /// Handle input events from the window manager.
+    pub(crate) fn handle_event(&mut self, event: &winit::event::WindowEvent) {
+        self.egui_state.on_event(&self.egui_ctx, event);
     }
 
-    /// Render Dear ImGui.
-    pub fn render(
+    /// Resize egui.
+    pub(crate) fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.screen_descriptor.physical_width = width;
+            self.screen_descriptor.physical_height = height;
+        }
+    }
+
+    /// Update scaling factor.
+    pub(crate) fn scale_factor(&mut self, scale_factor: f64) {
+        self.screen_descriptor.scale_factor = scale_factor as f32;
+    }
+
+    /// Prepare egui.
+    pub(crate) fn prepare(&mut self, window: &Window) {
+        // Run the egui frame and create all paint jobs to prepare for rendering.
+        let raw_input = self.egui_state.take_egui_input(window);
+        let output = self.egui_ctx.run(raw_input, |egui_ctx| {
+            // Draw the demo application.
+            self.state.layout(egui_ctx);
+        });
+
+        self.textures.append(output.textures_delta);
+        self.egui_state
+            .handle_platform_output(window, &self.egui_ctx, output.platform_output);
+        self.paint_jobs = self.egui_ctx.tessellate(output.shapes);
+    }
+
+    /// Render egui.
+    pub(crate) fn render(
         &mut self,
-        window: &winit::window::Window,
         encoder: &mut wgpu::CommandEncoder,
         render_target: &wgpu::TextureView,
         context: &PixelsContext,
-    ) -> imgui_wgpu::RendererResult<()> {
-        // Start a new Dear ImGui frame and update the cursor
-        let mut ui = self.imgui.frame();
+    ) -> Result<(), BackendError> {
+        // Upload all resources to the GPU.
+        self.rpass
+            .add_textures(&context.device, &context.queue, &self.textures)?;
+        self.rpass.update_buffers(
+            &context.device,
+            &context.queue,
+            &self.paint_jobs,
+            &self.screen_descriptor,
+        );
 
-        let mouse_cursor = ui.mouse_cursor();
-        if self.last_cursor != mouse_cursor {
-            self.last_cursor = mouse_cursor;
-            self.platform.prepare_render(&ui, window);
-        }
+        // Record all render passes.
+        self.rpass.execute(
+            encoder,
+            render_target,
+            &self.paint_jobs,
+            &self.screen_descriptor,
+            None,
+        )?;
 
-        self.state.layout(&mut ui);
+        // Cleanup
+        let textures = std::mem::take(&mut self.textures);
+        self.rpass.remove_textures(textures)
+    }
+}
 
-        // Render Dear ImGui with WGPU
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("imgui"),
-            color_attachments: &[wgpu::RenderPassColorAttachment {
-                view: render_target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        });
-
-        self.renderer
-            .render(ui.render(), &context.queue, &context.device, &mut rpass)
+impl State {
+    fn new() -> Self {
+        Self { window_open: true }
     }
 
-    /// Handle any outstanding events.
-    pub fn handle_event(
-        &mut self,
-        window: &winit::window::Window,
-        event: &winit::event::Event<()>,
-    ) {
-        self.platform
-            .handle_event(self.imgui.io_mut(), window, event);
-    }
+    fn layout(&mut self, ctx: &Context) {}
 }
