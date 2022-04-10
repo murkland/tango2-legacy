@@ -135,16 +135,17 @@ impl Game {
                             Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
-                                    match &*match_state {
-                                        MatchState::Match(m) => {
-                                            let _ = m.lock_battle_state().await.battle.as_ref().expect("attempted to get p2 battle information while no battle was active!");
-                                            return;
-                                        }
-                                        _ => {
-                                        }
+                                    let m = if let MatchState::Match(m) = &*match_state {
+                                        m
+                                    } else {
+                                        return;
                                     };
+
+                                    core.gba_mut().cpu_mut().set_gpr(0, 0);
                                     let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
+
+                                    m.lock_battle_state().await.battle.as_ref().expect("attempted to get p2 battle information while no battle was active!");
                                 });
                             }),
                         )
@@ -351,10 +352,12 @@ impl Game {
                                         return;
                                     };
 
-                                    let battle_state = &mut m.lock_battle_state().await;
-                                    let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
+                                    core.gba_mut().cpu_mut().set_gpr(0, 0);
                                     let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
+
+                                    let battle_state = &mut m.lock_battle_state().await;
+                                    let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
 
                                     if !battle.is_accepting_input() {
                                         battle.start_accepting_input();
@@ -507,7 +510,6 @@ impl Game {
                                     let mut r0 = core.as_ref().gba().cpu().gpr(0);
                                     if r0 != 2 {
                                         log::warn!("expected r0 to be 2 but got {}", r0);
-                                        r0 = 2;
                                     }
 
                                     let match_state = match_state.lock().await;

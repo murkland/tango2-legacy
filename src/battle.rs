@@ -413,6 +413,7 @@ impl Match {
     pub async fn start_battle(&self) {
         let mut battle_state = self.r#impl.battle_state.lock().await;
         let is_p2 = !battle_state.won_last_battle;
+        log::info!("starting battle: is_p2 = {}", is_p2);
         battle_state.battle = Some(Battle {
             is_p2,
             iq: input::Queue::new(60, 0, if is_p2 { 1 } else { 0 }),
