@@ -13,7 +13,7 @@ struct State {
 }
 
 pub struct Fastforwarder {
-    core: std::rc::Rc<std::cell::RefCell<mgba::core::Core>>,
+    core: mgba::core::Core,
     _trapper: mgba::trapper::Trapper,
     bn6: bn6::BN6,
     state: std::rc::Rc<std::cell::RefCell<Option<State>>>,
@@ -21,19 +21,17 @@ pub struct Fastforwarder {
 
 impl Fastforwarder {
     pub fn new(rom_path: &std::path::Path, bn6: bn6::BN6) -> anyhow::Result<Self> {
-        let core = std::rc::Rc::new(std::cell::RefCell::new({
-            let mut core = mgba::core::Core::new_gba("tango")?;
+        let mut core = {
+            let core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.as_mut().load_rom(rom_vf)?;
             core
-        }));
+        };
 
         let state =
             std::rc::Rc::<std::cell::RefCell<Option<State>>>::new(std::cell::RefCell::new(None));
 
         let trapper = {
-            let core = core.clone();
-            let mut core = core.borrow_mut();
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
@@ -43,8 +41,6 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move |mut core| {
-                                log::info!("read joyflags");
-
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
@@ -214,8 +210,8 @@ impl Fastforwarder {
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
     ) -> anyhow::Result<(mgba::state::State, mgba::state::State, [input::Input; 2])> {
-        self.core.borrow_mut().as_mut().load_state(state)?;
-        let start_in_battle_time = self.bn6.in_battle_time(self.core.borrow().as_mut());
+        self.core.as_mut().load_state(state)?;
+        let start_in_battle_time = self.bn6.in_battle_time(self.core.as_mut());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
 
         let input_pairs = commit_pairs
@@ -239,12 +235,13 @@ impl Fastforwarder {
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
+        log::info!("r15: 0x{:08x}", self.core.as_ref().gba().cpu().gpr(15));
         self.core
-            .borrow_mut()
             .as_mut()
             .gba_mut()
             .cpu_mut()
             .set_pc(self.bn6.offsets.rom.main_read_joyflags);
+        log::info!("r15: 0x{:08x}", self.core.as_ref().gba().cpu().gpr(15));
 
         *self.state.borrow_mut() = Some(State {
             local_player_index,
@@ -266,7 +263,7 @@ impl Fastforwarder {
             && self.state.borrow().as_ref().unwrap().dirty_state.is_none()
         {
             self.state.borrow_mut().as_mut().unwrap().result = Ok(());
-            self.core.borrow_mut().as_mut().run_frame();
+            self.core.as_mut().run_frame();
             if let Err(_) = self.state.borrow().as_ref().unwrap().result {
                 let state = self.state.take().unwrap();
                 return Err(state.result.unwrap_err());
