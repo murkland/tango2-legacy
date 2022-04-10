@@ -32,63 +32,23 @@ enum Negotiation {
 }
 
 pub struct Match {
-    negotiation: tokio::sync::Mutex<Negotiation>,
     cancellation_token: tokio_util::sync::CancellationToken,
+    r#impl: std::sync::Arc<MatchImpl>,
+}
+
+struct MatchImpl {
+    negotiation: tokio::sync::Mutex<Negotiation>,
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
-    local_joyflags: std::sync::atomic::AtomicU16,
     battle_state: tokio::sync::Mutex<BattleState>,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
 }
 
-fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
-    let mut shake128 = sha3::Shake128::default();
-    shake128.write_all(b"syncrand:nonce:")?;
-    shake128.write_all(&nonce)?;
-
-    let mut commitment = [0u8; 32];
-    shake128
-        .finalize_xof()
-        .read_exact(commitment.as_mut_slice())?;
-
-    Ok(commitment)
-}
-
-impl Drop for Match {
-    fn drop(&mut self) {
-        self.cancellation_token.cancel();
-    }
-}
-
-impl Match {
-    pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
-        let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
-        Match {
-            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
-            cancellation_token: tokio_util::sync::CancellationToken::new(),
-            session_id,
-            match_type,
-            game_title,
-            game_crc32,
-            battle_state: tokio::sync::Mutex::new(BattleState {
-                number: 0,
-                battle: None,
-                won_last_battle: false,
-            }),
-            local_joyflags: 0.into(),
-            remote_init_sender,
-            remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
-        }
-    }
-
-    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
-        self.battle_state.lock().await
-    }
-
-    pub async fn negotiate(&self) -> anyhow::Result<()> {
+impl MatchImpl {
+    async fn negotiate(&self) -> anyhow::Result<()> {
         let mut sc = signor::Client::new("http://localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
@@ -243,77 +203,121 @@ impl Match {
         Ok(())
     }
 
-    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
-        self.remote_init_receiver.lock().await.recv().await
-    }
-
-    pub async fn run(&self) -> anyhow::Result<()> {
-        let cancellation_token = self.cancellation_token.clone();
-        let r = (move || async move {
-            tokio::select! {
-                _ = cancellation_token.cancelled() => {
-                    anyhow::bail!("match cancelled");
-                },
-                r = async {
-                    self.negotiate().await?;
-                    let dc = match &*self.negotiation.lock().await {
-                        Negotiation::Negotiated { dc, .. } => dc.clone(),
-                        _ => unreachable!(),
-                    };
-
-                    loop {
-                        match match protocol::Packet::decode(match dc.receive().await {
-                            None => break,
-                            Some(buf) => buf,
-                        }.as_slice())?.which {
-                            None => break,
-                            Some(b) => b,
-                        } {
-                            protocol::packet::Which::Init(init) => {
-                                self.remote_init_sender.send(init).await.unwrap();
-                            },
-                            protocol::packet::Which::Input(input) => {
-                                let mut battle_state = self.battle_state.lock().await;
-                                if input.battle_number != battle_state.number {
-                                    log::info!("battle number mismatch, dropping input");
-                                    continue;
-                                }
-
-                                let battle = match &mut battle_state.battle {
-                                    None => {
-                                        log::info!("no battle in progress, dropping input");
-                                        continue;
-                                    },
-                                    Some(b) => b,
-                                };
-
-                                battle.add_input(battle.remote_player_index(), input::Input{
-                                    local_tick: input.local_tick,
-                                    remote_tick: input.remote_tick,
-                                    joyflags: input.joyflags as u16,
-                                    custom_screen_state: input.custom_screen_state as u8,
-                                    turn: if input.turn.is_empty() { None } else { Some(input.turn.as_slice().try_into().unwrap()) },
-                                }).await;
-                            },
-                            p => anyhow::bail!("unknown packet: {:?}", p)
-                        }
-                    }
-                    Ok(())
-                } => {
-                    r
-                }
-            }
-        })().await;
+    async fn run(&self) -> anyhow::Result<()> {
+        self.negotiate().await?;
         let dc = match &*self.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             _ => unreachable!(),
         };
-        let _ = dc.close().await;
-        r
+
+        loop {
+            match match protocol::Packet::decode(
+                match dc.receive().await {
+                    None => break,
+                    Some(buf) => buf,
+                }
+                .as_slice(),
+            )?
+            .which
+            {
+                None => break,
+                Some(b) => b,
+            } {
+                protocol::packet::Which::Init(init) => {
+                    self.remote_init_sender.send(init).await.unwrap();
+                }
+                protocol::packet::Which::Input(input) => {
+                    let mut battle_state = self.battle_state.lock().await;
+                    if input.battle_number != battle_state.number {
+                        log::info!("battle number mismatch, dropping input");
+                        continue;
+                    }
+
+                    let battle = match &mut battle_state.battle {
+                        None => {
+                            log::info!("no battle in progress, dropping input");
+                            continue;
+                        }
+                        Some(b) => b,
+                    };
+
+                    battle
+                        .add_input(
+                            battle.remote_player_index(),
+                            input::Input {
+                                local_tick: input.local_tick,
+                                remote_tick: input.remote_tick,
+                                joyflags: input.joyflags as u16,
+                                custom_screen_state: input.custom_screen_state as u8,
+                                turn: if input.turn.is_empty() {
+                                    None
+                                } else {
+                                    Some(input.turn.as_slice().try_into().unwrap())
+                                },
+                            },
+                        )
+                        .await;
+                }
+                p => anyhow::bail!("unknown packet: {:?}", p),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
+    let mut shake128 = sha3::Shake128::default();
+    shake128.write_all(b"syncrand:nonce:")?;
+    shake128.write_all(&nonce)?;
+
+    let mut commitment = [0u8; 32];
+    shake128
+        .finalize_xof()
+        .read_exact(commitment.as_mut_slice())?;
+
+    Ok(commitment)
+}
+
+impl Drop for Match {
+    fn drop(&mut self) {
+        self.cancellation_token.cancel();
+    }
+}
+
+impl Match {
+    pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
+        let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
+        let r#impl = std::sync::Arc::new(MatchImpl {
+            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
+            session_id,
+            match_type,
+            game_title,
+            game_crc32,
+            battle_state: tokio::sync::Mutex::new(BattleState {
+                number: 0,
+                battle: None,
+                won_last_battle: false,
+            }),
+            remote_init_sender,
+            remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
+        });
+        Match {
+            cancellation_token: tokio_util::sync::CancellationToken::new(),
+            r#impl,
+        }
+    }
+
+    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
+        self.r#impl.battle_state.lock().await
+    }
+
+    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
+        self.r#impl.remote_init_receiver.lock().await.recv().await
     }
 
     pub async fn poll_for_ready(&self) -> anyhow::Result<bool> {
-        match &*self.negotiation.lock().await {
+        match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { .. } => Ok(true),
             Negotiation::NotReady => Ok(false),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -326,7 +330,7 @@ impl Match {
         input_delay: u32,
         marshaled: &[u8; 0x100],
     ) -> anyhow::Result<()> {
-        let dc = match &*self.negotiation.lock().await {
+        let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -355,7 +359,7 @@ impl Match {
         custom_screen_state: u8,
         turn: &Option<[u8; 0x100]>,
     ) -> anyhow::Result<()> {
-        let dc = match &*self.negotiation.lock().await {
+        let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -383,13 +387,13 @@ impl Match {
     }
 
     pub async fn set_won_last_battle(&self, won: bool) {
-        self.battle_state.lock().await.won_last_battle = won;
+        self.r#impl.battle_state.lock().await.won_last_battle = won;
     }
 
     pub async fn rng(
         &self,
     ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
-        let negotiation = self.negotiation.lock().await;
+        let negotiation = self.r#impl.negotiation.lock().await;
         match &*negotiation {
             Negotiation::Negotiated { .. } => {
                 Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
@@ -403,11 +407,11 @@ impl Match {
     }
 
     pub fn match_type(&self) -> u16 {
-        self.match_type
+        self.r#impl.match_type
     }
 
     pub async fn start_battle(&self) {
-        let mut battle_state = self.battle_state.lock().await;
+        let mut battle_state = self.r#impl.battle_state.lock().await;
         let is_p2 = !battle_state.won_last_battle;
         battle_state.battle = Some(Battle {
             is_p2,
@@ -425,21 +429,23 @@ impl Match {
             state_committed_notify: tokio::sync::Notify::new(),
             committed_state: None,
             local_pending_turn: None,
+            local_joyflags: 0xfc00,
         });
     }
 
     pub async fn end_battle(&self) {
-        self.battle_state.lock().await.battle = None;
+        self.r#impl.battle_state.lock().await.battle = None;
     }
 
-    pub fn set_local_joyflags(&self, joyflags: u16) {
-        self.local_joyflags
-            .store(joyflags, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn local_joyflags(&self) -> u16 {
-        self.local_joyflags
-            .load(std::sync::atomic::Ordering::SeqCst)
+    pub fn start(&self, handle: tokio::runtime::Handle) {
+        let cancellation_token = self.cancellation_token.clone();
+        let r#impl = self.r#impl.clone();
+        handle.spawn(async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {},
+                _ = r#impl.run() => {},
+            }
+        });
     }
 }
 
@@ -458,6 +464,7 @@ pub struct Battle {
     state_committed_notify: tokio::sync::Notify,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
+    local_joyflags: u16,
 }
 
 impl Battle {
@@ -555,5 +562,13 @@ impl Battle {
             }
             None => None,
         }
+    }
+
+    pub fn set_local_joyflags(&mut self, joyflags: u16) {
+        self.local_joyflags = joyflags;
+    }
+
+    pub fn local_joyflags(&self) -> u16 {
+        self.local_joyflags
     }
 }

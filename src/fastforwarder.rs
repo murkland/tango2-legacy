@@ -14,7 +14,7 @@ struct State {
 
 pub struct Fastforwarder {
     core: std::rc::Rc<std::cell::RefCell<mgba::core::Core>>,
-    trapper: mgba::trapper::Trapper,
+    _trapper: mgba::trapper::Trapper,
     bn6: bn6::BN6,
     state: std::rc::Rc<std::cell::RefCell<Option<State>>>,
 }
@@ -210,7 +210,7 @@ impl Fastforwarder {
 
         Ok(Fastforwarder {
             core,
-            trapper,
+            _trapper: trapper,
             bn6,
             state,
         })

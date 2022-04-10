@@ -12,7 +12,7 @@ enum MatchState {
 }
 
 pub struct Game {
-    _rt: tokio::runtime::Runtime,
+    rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     _trapper: mgba::trapper::Trapper,
@@ -289,7 +289,7 @@ impl Game {
                                             log::info!("battle state committed");
                                         }
 
-                                        let joyflags: u16 = m.local_joyflags();
+                                        let joyflags: u16 = battle.local_joyflags();
                                         let local_tick = in_battle_time + battle.local_delay();
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
@@ -436,7 +436,7 @@ impl Game {
                                     } else {
                                         return;
                                     };
-                                    m.start_battle();
+                                    m.start_battle().await;
                                 });
                             }),
                         )
@@ -557,12 +557,12 @@ impl Game {
                                 .rom
                                 .comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input,
                             Box::new(move || {
+                                let handle2 = handle.clone();
                                 handle.block_on(async {
                                     let mut core = core.lock();
                                     let r15 = core.gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                    let match_state2 = match_state.clone();
                                     let mut match_state = match_state.lock().await;
                                     match &*match_state {
                                         MatchState::Aborted => {
@@ -576,20 +576,10 @@ impl Game {
                                                 core.crc32(),
                                             );
                                             *match_state = MatchState::Match(m);
-
-                                            handle.spawn(async move {
-                                                if let Err(e) = match &*match_state2.lock().await {
-                                                    MatchState::Match(m) => m,
-                                                    _ => todo!(),
-                                                }
-                                                .run()
-                                                .await
-                                                {
-                                                    log::info!("match ended with {}", e);
-                                                } else {
-                                                    log::info!("match ended with ok");
-                                                }
-                                            });
+                                            match &*match_state {
+                                                MatchState::Match(m) => m.start(handle2),
+                                                _ => unreachable!(),
+                                            }
                                         }
                                         MatchState::Match(m) => match m.poll_for_ready().await {
                                             Ok(true) => {
@@ -689,7 +679,7 @@ impl Game {
         let gui = gui::Gui::new(&window, &pixels);
 
         let mut game = Game {
-            _rt: rt,
+            rt,
             main_core,
             match_state,
             _trapper: trapper,
@@ -720,6 +710,7 @@ impl Game {
     }
 
     pub fn run(mut self: Self) {
+        let handle = self.rt.handle().clone();
         let match_state = self.match_state.clone();
 
         self.event_loop
@@ -794,7 +785,14 @@ impl Game {
 
                     match &*self.match_state.blocking_lock() {
                         MatchState::Match(m) => {
-                            m.set_local_joyflags(keys as u16 | 0xfc00);
+                            handle.block_on(async {
+                                let mut battle_state = m.lock_battle_state().await;
+                                if let Some(b) = &mut battle_state.battle {
+                                    b.set_local_joyflags(keys as u16 | 0xfc00);
+                                } else {
+                                    core.set_keys(keys);
+                                }
+                            });
                         }
                         _ => {
                             core.set_keys(keys);
