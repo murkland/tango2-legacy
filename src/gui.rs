@@ -1,4 +1,4 @@
-use egui::{ClippedMesh, Context, InnerResponse, TexturesDelta};
+use egui::{ClippedMesh, Context, TexturesDelta};
 use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
 use winit::window::Window;
@@ -18,6 +18,7 @@ impl Gui {
         let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
         let ctx = Context::default();
+        ctx.set_visuals(egui::Visuals::light());
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "NotoSans".to_owned(),
@@ -75,10 +76,6 @@ impl Gui {
         }
     }
 
-    pub fn scale_factor(&mut self, scale_factor: f64) {
-        self.screen_descriptor.scale_factor = scale_factor as f32;
-    }
-
     pub fn prepare(&mut self, window: &Window) {
         let raw_input = self.winit_state.take_egui_input(window);
         let output = self.ctx.run(raw_input, |ctx| {
@@ -131,12 +128,33 @@ pub enum DialogStatus<T> {
 
 pub struct State {
     link_code_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
+    show_debug: std::sync::atomic::AtomicBool,
+    debug_status_getter: Box<dyn Fn() -> DebugStats>,
+}
+
+pub struct BattleDebugStatus {
+    pub local_player_index: u8,
+    pub local_qlen: usize,
+    pub remote_qlen: usize,
+    pub local_delay: usize,
+}
+
+pub struct DebugStats {
+    pub fps: f64,
+    pub target_tps: usize,
+    pub battle_debug_stats: Option<BattleDebugStatus>,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             link_code_state: parking_lot::Mutex::new(None),
+            show_debug: true.into(),
+            debug_status_getter: Box::new(|| DebugStats {
+                fps: 0.0,
+                target_tps: 0,
+                battle_debug_stats: None,
+            }),
         }
     }
 
@@ -191,5 +209,38 @@ impl State {
                     }
                 }
         }
+
+        let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::SeqCst);
+        egui::Window::new("Debug")
+            .open(&mut show_debug)
+            .show(ctx, |ui| {
+                let debug_stats = (self.debug_status_getter)();
+                egui::Grid::new("debug_grid").show(ui, |ui| {
+                    ui.label("draw fps");
+                    ui.label(format!("{:.0}", debug_stats.fps));
+                    ui.end_row();
+
+                    ui.label("target tps");
+                    ui.label(format!("{}", debug_stats.target_tps));
+                    ui.end_row();
+
+                    if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
+                        ui.label("local player index");
+                        ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
+                        ui.end_row();
+
+                        ui.label("qlen");
+                        ui.label(format!(
+                            "{} (-{}) : {}",
+                            battle_debug_stats.local_qlen,
+                            battle_debug_stats.local_delay,
+                            battle_debug_stats.remote_qlen
+                        ));
+                        ui.end_row();
+                    }
+                });
+            });
+        self.show_debug
+            .store(show_debug, std::sync::atomic::Ordering::SeqCst)
     }
 }
