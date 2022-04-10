@@ -16,7 +16,14 @@ fn main() {
     );
     println!("cargo:rustc-link-lib=static=mgba");
     match target_os.as_ref().map(|x| &**x) {
-        Ok("macos") => println!("cargo:rustc-link-lib=framework=Cocoa"),
+        Ok("macos") => {
+            println!("cargo:rustc-link-lib=framework=Cocoa");
+        }
+        Ok("windows") => {
+            println!("cargo:rustc-link-lib=shlwapi");
+            println!("cargo:rustc-link-lib=ole32");
+            println!("cargo:rustc-link-lib=uuid");
+        }
         tos => panic!("unknown target os {:?}!", tos),
     }
     println!("cargo:rerun-if-changed=mgba_wrapper.h");
