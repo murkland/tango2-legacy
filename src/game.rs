@@ -35,7 +35,8 @@ impl Game {
 
         let handle = rt.handle().clone();
 
-        let rom_path = "bn6f.gba";
+        let rom_path = std::path::Path::new("bn6f.gba");
+        let save_path = rom_path.with_extension("sav");
 
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
@@ -45,7 +46,7 @@ impl Game {
             core.load_rom(rom_vf)?;
 
             let save_vf = mgba::vfile::VFile::open(
-                "bn6f.sav",
+                &save_path,
                 mgba::vfile::flags::O_CREAT | mgba::vfile::flags::O_RDWR,
             )?;
             core.load_save(save_vf)?;

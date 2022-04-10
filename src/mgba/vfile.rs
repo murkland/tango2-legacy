@@ -29,9 +29,9 @@ pub mod flags {
 }
 
 impl VFile {
-    pub fn open(path: &str, flags: u32) -> anyhow::Result<Self> {
+    pub fn open(path: &std::path::Path, flags: u32) -> anyhow::Result<Self> {
         let ptr = unsafe {
-            let path_cstr = CString::new(path).unwrap();
+            let path_cstr = CString::new(path.to_str().unwrap()).unwrap();
             c::VFileOpen(path_cstr.as_ptr(), flags as i32)
         };
         if ptr.is_null() {
