@@ -367,7 +367,10 @@ impl Game {
                                     let r15 = core.gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                    battle.start_accepting_input();
+                                    if !battle.is_accepting_input() {
+                                        battle.start_accepting_input();
+                                        return;
+                                    }
 
                                     let ip = battle.take_last_input().unwrap();
 
