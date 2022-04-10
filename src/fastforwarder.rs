@@ -41,7 +41,6 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move |mut core| {
-                                log::info!("READ JOYFLAGS");
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
@@ -59,7 +58,8 @@ impl Fastforwarder {
                                     return;
                                 }
 
-                                let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
+                                let ip =
+                                    state.as_mut().unwrap().input_pairs.front().unwrap().clone();
                                 if ip[0].local_tick != ip[1].local_tick {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
@@ -93,7 +93,6 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move |mut core| {
-                                log::info!("COPY INPUT DATA");
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
