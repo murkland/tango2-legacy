@@ -261,9 +261,9 @@ impl<'a> CoreMutRef<'a> {
         }
     }
 
-    pub fn set_video_buffer(&mut self, buffer: &mut Vec<u8>, stride: u64) {
+    pub fn set_video_buffer(&mut self, buffer: &mut [u8], stride: u64) {
         unsafe {
-            (*self.ptr).setVideoBuffer.unwrap()(self.ptr, buffer.as_mut_ptr() as *mut u32, stride)
+            (*self.ptr).setVideoBuffer.unwrap()(self.ptr, buffer as *mut _ as *mut u32, stride)
         }
     }
 }

@@ -11,30 +11,31 @@ enum MatchState {
     Match(battle::Match),
 }
 
-pub struct Game {
-    rt: tokio::runtime::Runtime,
+struct GameState {
     main_core: Arc<Mutex<mgba::core::Core>>,
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
-    fps_counter: Arc<Mutex<tps::Counter>>,
     _trapper: mgba::trapper::Trapper,
-    event_loop: Option<winit::event_loop::EventLoop<()>>,
-    vbuf: Arc<Vec<u8>>,
-    vbuf2: Arc<Mutex<Vec<u8>>>,
-    window: winit::window::Window,
-    pixels: pixels::Pixels,
-    thread: mgba::thread::Thread,
+    _thread: mgba::thread::Thread,
     _stream: rodio::OutputStream,
-    gui: gui::Gui,
 }
 
-impl Game {
-    pub fn new() -> Result<Game, anyhow::Error> {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()?;
+pub struct Game {
+    rt: tokio::runtime::Runtime,
+    fps_counter: Arc<Mutex<tps::Counter>>,
+    event_loop: Option<winit::event_loop::EventLoop<()>>,
+    window: winit::window::Window,
+    pixels: pixels::Pixels,
+    gui: gui::Gui,
+    vbuf2: Arc<Mutex<Vec<u8>>>,
+    game_state: Option<Arc<GameState>>,
+}
 
-        let handle = rt.handle().clone();
-
+impl GameState {
+    fn new(
+        handle: tokio::runtime::Handle,
+        gui_state: std::sync::Weak<gui::State>,
+        vbuf2: std::sync::Weak<Mutex<Vec<u8>>>,
+    ) -> Result<Self, anyhow::Error> {
         let rom_path = std::path::Path::new("bn6f.gba");
         let save_path = rom_path.with_extension("sav");
 
@@ -55,8 +56,6 @@ impl Game {
             core
         }));
 
-        let event_loop = Some(winit::event_loop::EventLoop::new());
-
         let (width, height, vbuf, bn6) = {
             let core = main_core.clone();
             let core = core.lock();
@@ -64,84 +63,10 @@ impl Game {
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
             let bn6 = bn6::BN6::new(&core.as_ref().game_title());
             core.as_mut().set_video_buffer(&mut vbuf, width.into());
-            (width, height, Arc::new(vbuf), bn6.unwrap())
+            (width, height, vbuf, bn6.unwrap())
         };
-
-        let window = {
-            let size = winit::dpi::LogicalSize::new(width * 3, height * 3);
-            winit::window::WindowBuilder::new()
-                .with_title("tango")
-                .with_inner_size(size)
-                .with_min_inner_size(size)
-                .build(event_loop.as_ref().expect("event loop"))?
-        };
-
-        let vbuf2 = Arc::new(Mutex::new(vec![0u8; (width * height * 4) as usize]));
-
-        let fps_counter = Arc::new(Mutex::new(tps::Counter::new(30)));
-        let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
-        let gui_state = {
-            let core = main_core.clone();
-            let match_state = match_state.clone();
-            let fps_counter = fps_counter.clone();
-            let emu_tps_counter = emu_tps_counter.clone();
-            let handle = handle.clone();
-            std::sync::Arc::new(gui::State::new(Box::new(move || {
-                handle.block_on(async {
-                    let core = core.lock();
-                    let emu_tps_counter = emu_tps_counter.lock();
-                    let fps_counter = fps_counter.lock();
-                    let match_state = match_state.lock().await;
-                    gui::DebugStats {
-                        fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
-                        emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
-                        target_tps: core.as_ref().gba().sync().unwrap().fps_target(),
-                        battle_debug_stats: match &*match_state {
-                            MatchState::NoMatch => None,
-                            MatchState::Aborted => None,
-                            MatchState::Match(m) => {
-                                let battle_state = m.lock_battle_state().await;
-                                match &battle_state.battle {
-                                    Some(battle) => Some(gui::BattleDebugStats {
-                                        local_player_index: battle.local_player_index(),
-                                        local_qlen: battle.local_queue_length().await,
-                                        remote_qlen: battle.remote_queue_length().await,
-                                        local_delay: battle.local_delay(),
-                                        remote_delay: battle.remote_delay(),
-                                    }),
-                                    None => None,
-                                }
-                            }
-                        },
-                    }
-                })
-            })))
-        };
-
-        let (pixels, gui) = {
-            let window_size = window.inner_size();
-            let surface_texture =
-                pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
-            let pixels = pixels::PixelsBuilder::new(width, height, surface_texture)
-                .request_adapter_options(pixels::wgpu::RequestAdapterOptions {
-                    power_preference: pixels::wgpu::PowerPreference::HighPerformance,
-                    force_fallback_adapter: false,
-                    compatible_surface: None,
-                })
-                .build()?;
-            let gui = gui::Gui::new(
-                gui_state,
-                window_size.width,
-                window_size.height,
-                window.scale_factor() as f32,
-                &pixels,
-            );
-            (pixels, gui)
-        };
-
-        let gui_state = gui.state();
 
         let mut thread = {
             let core = main_core.clone();
@@ -602,6 +527,7 @@ impl Game {
                                             panic!("match was aborted without being started?")
                                         }
                                         MatchState::NoMatch => {
+                                            let gui_state = gui_state.upgrade().expect("upgrade");
                                             gui_state.open_link_code_dialog();
                                             match &*gui_state
                                                 .lock_link_code_status()
@@ -728,38 +654,149 @@ impl Game {
             )
         };
 
-        let mut game = Game {
-            rt,
-            fps_counter,
-            main_core,
-            match_state,
-            _trapper: trapper,
-            event_loop,
-            window,
-            pixels,
-            vbuf,
-            vbuf2,
-            thread,
-            _stream: stream,
-            gui,
-        };
-
         {
-            let vbuf = Arc::clone(&game.vbuf);
-            let vbuf2 = Arc::clone(&game.vbuf2);
-            let emu_tps_counter = emu_tps_counter.clone();
-            game.thread.set_frame_callback(Some(Box::new(move || {
+            let vbuf2 = vbuf2.clone();
+            // let emu_tps_counter = emu_tps_counter.clone();
+            thread.set_frame_callback(Some(Box::new(move || {
+                let vbuf2 = match vbuf2.upgrade() {
+                    Some(vbuf2) => vbuf2,
+                    None => {
+                        return;
+                    }
+                };
                 let mut vbuf2 = vbuf2.lock();
-                let mut emu_tps_counter = emu_tps_counter.lock();
+                // let mut emu_tps_counter = emu_tps_counter.lock();
                 vbuf2.copy_from_slice(&vbuf);
                 for i in (0..vbuf2.len()).step_by(4) {
                     vbuf2[i + 3] = 0xff;
                 }
-                emu_tps_counter.mark();
+                // emu_tps_counter.mark();
             })));
         }
 
-        Ok(game)
+        Ok(GameState {
+            main_core,
+            match_state,
+            _trapper: trapper,
+            _thread: thread,
+            _stream: stream,
+        })
+    }
+}
+
+impl Game {
+    pub fn new() -> Result<Game, anyhow::Error> {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+
+        let handle = rt.handle().clone();
+
+        let event_loop = Some(winit::event_loop::EventLoop::new());
+
+        let vbuf2 = Arc::new(Mutex::new(vec![
+            0u8;
+            (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4)
+                as usize
+        ]));
+
+        let window = {
+            let size = winit::dpi::LogicalSize::new(
+                mgba::gba::SCREEN_WIDTH * 3,
+                mgba::gba::SCREEN_HEIGHT * 3,
+            );
+            winit::window::WindowBuilder::new()
+                .with_title("tango")
+                .with_inner_size(size)
+                .with_min_inner_size(size)
+                .build(event_loop.as_ref().expect("event loop"))?
+        };
+
+        let fps_counter = Arc::new(Mutex::new(tps::Counter::new(30)));
+        let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
+
+        let (pixels, gui) = {
+            let window_size = window.inner_size();
+            let surface_texture =
+                pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
+            let pixels = pixels::PixelsBuilder::new(
+                mgba::gba::SCREEN_WIDTH,
+                mgba::gba::SCREEN_HEIGHT,
+                surface_texture,
+            )
+            .request_adapter_options(pixels::wgpu::RequestAdapterOptions {
+                power_preference: pixels::wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
+            .build()?;
+            let gui = gui::Gui::new(
+                window_size.width,
+                window_size.height,
+                window.scale_factor() as f32,
+                &pixels,
+            );
+            (pixels, gui)
+        };
+
+        let gui_state = gui.state();
+        let game_state = {
+            let handle = handle.clone();
+            Arc::new(GameState::new(
+                handle,
+                Arc::downgrade(&gui_state),
+                Arc::downgrade(&vbuf2),
+            )?)
+        };
+
+        {
+            let game_state = game_state.clone();
+            let core = game_state.main_core.clone();
+            let fps_counter = fps_counter.clone();
+            let emu_tps_counter = emu_tps_counter.clone();
+            let handle = handle.clone();
+            gui_state.set_debug_stats_getter(Some(Box::new(move || {
+                handle.block_on(async {
+                    let core = core.lock();
+                    let emu_tps_counter = emu_tps_counter.lock();
+                    let fps_counter = fps_counter.lock();
+                    let match_state = game_state.match_state.lock().await;
+                    gui::DebugStats {
+                        fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
+                        emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
+                        target_tps: core.as_ref().gba().sync().unwrap().fps_target(),
+                        battle_debug_stats: match &*match_state {
+                            MatchState::NoMatch => None,
+                            MatchState::Aborted => None,
+                            MatchState::Match(m) => {
+                                let battle_state = m.lock_battle_state().await;
+                                match &battle_state.battle {
+                                    Some(battle) => Some(gui::BattleDebugStats {
+                                        local_player_index: battle.local_player_index(),
+                                        local_qlen: battle.local_queue_length().await,
+                                        remote_qlen: battle.remote_queue_length().await,
+                                        local_delay: battle.local_delay(),
+                                        remote_delay: battle.remote_delay(),
+                                    }),
+                                    None => None,
+                                }
+                            }
+                        },
+                    }
+                })
+            })));
+        };
+
+        Ok(Game {
+            rt,
+            fps_counter,
+            event_loop,
+            window,
+            pixels,
+            vbuf2,
+            gui,
+            game_state: Some(game_state),
+        })
     }
 
     pub fn run(mut self: Self) {
@@ -794,8 +831,8 @@ impl Game {
                     winit::event::Event::MainEventsCleared => {
                         input_helper.update(&event);
 
-                        {
-                            let core = self.main_core.lock();
+                        if let Some(game_state) = &self.game_state {
+                            let core = game_state.main_core.lock();
 
                             let mut keys = 0u32;
                             if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
@@ -830,7 +867,7 @@ impl Game {
                             }
 
                             handle.block_on(async {
-                                match &*self.match_state.lock().await {
+                                match &*game_state.match_state.lock().await {
                                     MatchState::Match(m) => {
                                         let mut battle_state = m.lock_battle_state().await;
                                         if let Some(b) = &mut battle_state.battle {

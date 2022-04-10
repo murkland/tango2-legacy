@@ -2,6 +2,9 @@ use super::arm_core;
 use super::c;
 use super::sync;
 
+pub const SCREEN_WIDTH: u32 = c::GBA_VIDEO_HORIZONTAL_PIXELS;
+pub const SCREEN_HEIGHT: u32 = c::GBA_VIDEO_VERTICAL_PIXELS;
+
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct GBARef<'a> {
