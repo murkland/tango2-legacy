@@ -183,7 +183,6 @@ impl Fastforwarder {
                     },
                     {
                         let bn6 = bn6::BN6::clone(&bn6);
-                        let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets
                                 .rom

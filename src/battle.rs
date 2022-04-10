@@ -550,13 +550,13 @@ impl Battle {
             Some(lpt) => {
                 if lpt.ticks_left > 0 {
                     lpt.ticks_left -= 1;
-                    if lpt.ticks_left == 0 {
-                        let t = lpt.marshaled;
-                        self.local_pending_turn = None;
-                        Some(t)
-                    } else {
-                        None
+                    if lpt.ticks_left != 0 {
+                        return None;
                     }
+
+                    let t = lpt.marshaled;
+                    self.local_pending_turn = None;
+                    Some(t)
                 } else {
                     None
                 }
