@@ -44,6 +44,8 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move || {
+                                log::info!("read joyflags");
+
                                 let mut core = core.borrow_mut();
 
                                 let in_battle_time = bn6.in_battle_time(&core);
@@ -248,6 +250,12 @@ impl Fastforwarder {
             .collect::<std::collections::VecDeque<[input::Input; 2]>>();
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
+
+        self.core
+            .borrow_mut()
+            .gba_mut()
+            .cpu_mut()
+            .set_pc(self.bn6.offsets.rom.main_read_joyflags);
 
         *self.state.borrow_mut() = Some(State {
             local_player_index,
