@@ -16,8 +16,8 @@ impl Counter {
         self.marks.push_back(std::time::Instant::now());
     }
 
-    pub fn median_duration(&self) -> std::time::Duration {
-        let mut durations = self
+    pub fn mean_duration(&self) -> std::time::Duration {
+        let durations = self
             .marks
             .iter()
             .zip(self.marks.iter().skip(1))
@@ -26,8 +26,6 @@ impl Counter {
         if durations.is_empty() {
             return std::time::Duration::ZERO;
         }
-        let mid = durations.len() / 2;
-        let (_, v, _) = durations.as_mut_slice().select_nth_unstable(mid);
-        *v
+        durations.iter().sum::<std::time::Duration>() / durations.len() as u32
     }
 }

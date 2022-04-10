@@ -576,6 +576,14 @@ impl Battle {
         self.remote_delay
     }
 
+    pub async fn local_queue_length(&self) -> usize {
+        self.iq.local_queue_length().await
+    }
+
+    pub async fn remote_queue_length(&self) -> usize {
+        self.iq.remote_queue_length().await
+    }
+
     pub fn start_accepting_input(&mut self) {
         self.is_accepting_input = true;
     }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::{audio, battle, bn6, fastforwarder, gui, input, mgba};
+use crate::{audio, battle, bn6, fastforwarder, gui, input, mgba, tps};
 
 const EXPECTED_FPS: u32 = 60;
 enum MatchState {
@@ -15,6 +15,7 @@ pub struct Game {
     rt: tokio::runtime::Runtime,
     main_core: Arc<Mutex<mgba::core::Core>>,
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
+    fps_counter: Arc<Mutex<tps::Counter>>,
     _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     vbuf: Arc<Vec<u8>>,
@@ -77,6 +78,48 @@ impl Game {
 
         let vbuf2 = Arc::new(Mutex::new(vec![0u8; (width * height * 4) as usize]));
 
+        let fps_counter = Arc::new(Mutex::new(tps::Counter::new(30)));
+        let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
+
+        let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
+        let gui_state = {
+            let core = main_core.clone();
+            let match_state = match_state.clone();
+            let fps_counter = fps_counter.clone();
+            let emu_tps_counter = emu_tps_counter.clone();
+            let handle = handle.clone();
+            std::sync::Arc::new(gui::State::new(Box::new(move || {
+                handle.block_on(async {
+                    let core = core.lock();
+                    let emu_tps_counter = emu_tps_counter.lock();
+                    let fps_counter = fps_counter.lock();
+                    let match_state = match_state.lock().await;
+                    gui::DebugStats {
+                        fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
+                        emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
+                        target_tps: core.as_ref().gba().sync().unwrap().fps_target(),
+                        battle_debug_stats: match &*match_state {
+                            MatchState::NoMatch => None,
+                            MatchState::Aborted => None,
+                            MatchState::Match(m) => {
+                                let battle_state = m.lock_battle_state().await;
+                                match &battle_state.battle {
+                                    Some(battle) => Some(gui::BattleDebugStats {
+                                        local_player_index: battle.local_player_index(),
+                                        local_qlen: battle.local_queue_length().await,
+                                        remote_qlen: battle.remote_queue_length().await,
+                                        local_delay: battle.local_delay(),
+                                        remote_delay: battle.remote_delay(),
+                                    }),
+                                    None => None,
+                                }
+                            }
+                        },
+                    }
+                })
+            })))
+        };
+
         let (pixels, gui) = {
             let window_size = window.inner_size();
             let surface_texture =
@@ -89,6 +132,7 @@ impl Game {
                 })
                 .build()?;
             let gui = gui::Gui::new(
+                gui_state,
                 window_size.width,
                 window_size.height,
                 window.scale_factor() as f32,
@@ -104,8 +148,6 @@ impl Game {
             mgba::thread::Thread::new(core)
         };
         thread.start();
-
-        let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
         let (stream, stream_handle) =
             rodio::OutputStream::try_default().expect("rodio OutputStream");
@@ -124,11 +166,6 @@ impl Game {
                 .as_mut()
                 .expect("sync")
                 .set_fps_target(60.0);
-        }
-
-        {
-            let core = main_core.clone();
-            let match_state = match_state.clone();
         }
 
         let trapper = {
@@ -693,6 +730,7 @@ impl Game {
 
         let mut game = Game {
             rt,
+            fps_counter,
             main_core,
             match_state,
             _trapper: trapper,
@@ -709,12 +747,15 @@ impl Game {
         {
             let vbuf = Arc::clone(&game.vbuf);
             let vbuf2 = Arc::clone(&game.vbuf2);
+            let emu_tps_counter = emu_tps_counter.clone();
             game.thread.set_frame_callback(Some(Box::new(move || {
                 let mut vbuf2 = vbuf2.lock();
+                let mut emu_tps_counter = emu_tps_counter.lock();
                 vbuf2.copy_from_slice(&vbuf);
                 for i in (0..vbuf2.len()).step_by(4) {
                     vbuf2[i + 3] = 0xff;
                 }
+                emu_tps_counter.mark();
             })));
         }
 
@@ -753,60 +794,60 @@ impl Game {
                     winit::event::Event::MainEventsCleared => {
                         input_helper.update(&event);
 
-                        let core = self.main_core.lock();
+                        {
+                            let core = self.main_core.lock();
 
-                        let mut keys = 0u32;
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
-                            keys |= mgba::input::keys::LEFT;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Right) {
-                            keys |= mgba::input::keys::RIGHT;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Up) {
-                            keys |= mgba::input::keys::UP;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Down) {
-                            keys |= mgba::input::keys::DOWN;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Z) {
-                            keys |= mgba::input::keys::A;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::X) {
-                            keys |= mgba::input::keys::B;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::A) {
-                            keys |= mgba::input::keys::L;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::S) {
-                            keys |= mgba::input::keys::R;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Return) {
-                            keys |= mgba::input::keys::START;
-                        }
-                        if input_helper.key_held(winit::event::VirtualKeyCode::Back) {
-                            keys |= mgba::input::keys::SELECT;
-                        }
+                            let mut keys = 0u32;
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
+                                keys |= mgba::input::keys::LEFT;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Right) {
+                                keys |= mgba::input::keys::RIGHT;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Up) {
+                                keys |= mgba::input::keys::UP;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Down) {
+                                keys |= mgba::input::keys::DOWN;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Z) {
+                                keys |= mgba::input::keys::A;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::X) {
+                                keys |= mgba::input::keys::B;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::A) {
+                                keys |= mgba::input::keys::L;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::S) {
+                                keys |= mgba::input::keys::R;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Return) {
+                                keys |= mgba::input::keys::START;
+                            }
+                            if input_helper.key_held(winit::event::VirtualKeyCode::Back) {
+                                keys |= mgba::input::keys::SELECT;
+                            }
 
-                        handle.block_on(async {
-                            match &*self.match_state.lock().await {
-                                MatchState::Match(m) => {
-                                    let mut battle_state = m.lock_battle_state().await;
-                                    if let Some(b) = &mut battle_state.battle {
-                                        b.set_local_joyflags(keys as u16 | 0xfc00);
-                                    } else {
+                            handle.block_on(async {
+                                match &*self.match_state.lock().await {
+                                    MatchState::Match(m) => {
+                                        let mut battle_state = m.lock_battle_state().await;
+                                        if let Some(b) = &mut battle_state.battle {
+                                            b.set_local_joyflags(keys as u16 | 0xfc00);
+                                        } else {
+                                            core.as_mut().set_keys(keys);
+                                        }
+                                    }
+                                    _ => {
                                         core.as_mut().set_keys(keys);
                                     }
                                 }
-                                _ => {
-                                    core.as_mut().set_keys(keys);
-                                }
-                            }
-                        });
-
-                        {
-                            let vbuf2 = self.vbuf2.lock().clone();
-                            self.pixels.get_frame().copy_from_slice(&vbuf2);
+                            });
                         }
+
+                        let vbuf2 = self.vbuf2.lock().clone();
+                        self.pixels.get_frame().copy_from_slice(&vbuf2);
 
                         self.gui.prepare(&self.window);
                         self.pixels
@@ -816,6 +857,7 @@ impl Game {
                                 Ok(())
                             })
                             .expect("render pixels");
+                        self.fps_counter.lock().mark();
                     }
                     _ => {}
                 }

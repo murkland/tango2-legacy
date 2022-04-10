@@ -14,7 +14,13 @@ pub struct Gui {
 }
 
 impl Gui {
-    pub fn new(width: u32, height: u32, scale_factor: f32, pixels: &pixels::Pixels) -> Self {
+    pub fn new(
+        state: std::sync::Arc<State>,
+        width: u32,
+        height: u32,
+        scale_factor: f32,
+        pixels: &pixels::Pixels,
+    ) -> Self {
         let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
         let ctx = Context::default();
@@ -52,7 +58,6 @@ impl Gui {
         };
         let rpass = RenderPass::new(pixels.device(), pixels.render_texture_format(), 1);
         let textures = TexturesDelta::default();
-        let state = std::sync::Arc::new(State::new());
 
         Self {
             ctx,
@@ -132,29 +137,27 @@ pub struct State {
     debug_status_getter: Box<dyn Fn() -> DebugStats>,
 }
 
-pub struct BattleDebugStatus {
+pub struct BattleDebugStats {
     pub local_player_index: u8,
     pub local_qlen: usize,
     pub remote_qlen: usize,
-    pub local_delay: usize,
+    pub local_delay: u32,
+    pub remote_delay: u32,
 }
 
 pub struct DebugStats {
-    pub fps: f64,
-    pub target_tps: usize,
-    pub battle_debug_stats: Option<BattleDebugStatus>,
+    pub fps: f32,
+    pub emu_tps: f32,
+    pub target_tps: f32,
+    pub battle_debug_stats: Option<BattleDebugStats>,
 }
 
 impl State {
-    fn new() -> Self {
+    pub fn new(debug_status_getter: Box<dyn Fn() -> DebugStats>) -> Self {
         Self {
             link_code_state: parking_lot::Mutex::new(None),
             show_debug: true.into(),
-            debug_status_getter: Box::new(|| DebugStats {
-                fps: 0.0,
-                target_tps: 0,
-                battle_debug_stats: None,
-            }),
+            debug_status_getter,
         }
     }
 
@@ -176,10 +179,11 @@ impl State {
     }
 
     fn layout(&self, ctx: &Context) {
-        let mut maybe_link_code_state = self.link_code_state.lock();
+        {
+            let mut maybe_link_code_state = self.link_code_state.lock();
 
-        if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state {
-            if let Some(egui::InnerResponse { inner: Some((ok, cancel)), .. }) = egui::Window::new("")
+            if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state {
+                if let Some(egui::InnerResponse { inner: Some((ok, cancel)), .. }) = egui::Window::new("link_code")
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
@@ -208,11 +212,14 @@ impl State {
                         *maybe_link_code_state = Some(DialogStatus::Cancelled);
                     }
                 }
+            }
         }
 
         let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::SeqCst);
-        egui::Window::new("Debug")
+        egui::Window::new("debug")
             .open(&mut show_debug)
+            .title_bar(false)
+            .auto_sized()
             .show(ctx, |ui| {
                 let debug_stats = (self.debug_status_getter)();
                 egui::Grid::new("debug_grid").show(ui, |ui| {
@@ -220,8 +227,11 @@ impl State {
                     ui.label(format!("{:.0}", debug_stats.fps));
                     ui.end_row();
 
-                    ui.label("target tps");
-                    ui.label(format!("{}", debug_stats.target_tps));
+                    ui.label("tps");
+                    ui.label(format!(
+                        "{:.0} (target = {:.0})",
+                        debug_stats.emu_tps, debug_stats.target_tps
+                    ));
                     ui.end_row();
 
                     if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
@@ -231,10 +241,11 @@ impl State {
 
                         ui.label("qlen");
                         ui.label(format!(
-                            "{} (-{}) : {}",
+                            "{} (-{}) vs {} (-{})",
                             battle_debug_stats.local_qlen,
                             battle_debug_stats.local_delay,
-                            battle_debug_stats.remote_qlen
+                            battle_debug_stats.remote_qlen,
+                            battle_debug_stats.remote_delay,
                         ));
                         ui.end_row();
                     }
