@@ -17,7 +17,27 @@ impl State {
     fn new() -> Self {
         State {}
     }
-    fn layout(&mut self, ui: &mut imgui::Ui) {}
+
+    fn layout(&mut self, ui: &imgui::Ui) {
+        imgui::Window::new("link code")
+            .position(
+                [ui.io().display_size[0] / 2.0, ui.io().display_size[1] / 2.0],
+                imgui::Condition::Always,
+            )
+            .position_pivot([0.5, 0.5])
+            .size([300.0, 0.0], imgui::Condition::Always)
+            .no_decoration()
+            .build(ui, || {
+                let mut buf = String::new();
+                ui.text_wrapped("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。");
+                ui.input_text("コード", &mut buf).enter_returns_true(true).chars_noblank(true).build();
+                let mut input_delay = 3u32;
+                imgui::Slider::new("入力遅延", 3u32, 10u32).display_format("%df").build(ui, &mut input_delay);
+                ui.button("接続");
+                ui.same_line();
+                ui.button("キャンセル");
+            });
+    }
 }
 
 impl Gui {
@@ -37,18 +57,29 @@ impl Gui {
 
         // Configure Dear ImGui fonts
         let hidpi_factor = window.scale_factor();
-        let font_size = (13.0 * hidpi_factor) as f32;
+        let font_size = (20.0 * hidpi_factor) as f32;
         imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
-        imgui
-            .fonts()
-            .add_font(&[imgui::FontSource::DefaultFontData {
+        imgui.fonts().add_font(&[
+            imgui::FontSource::TtfData {
+                data: include_bytes!("fonts/NotoSans-Regular.ttf"),
+                size_pixels: font_size,
                 config: Some(imgui::FontConfig {
-                    oversample_h: 1,
-                    pixel_snap_h: true,
-                    size_pixels: font_size,
-                    ..Default::default()
+                    oversample_h: 4,
+                    oversample_v: 4,
+                    ..imgui::FontConfig::default()
                 }),
-            }]);
+            },
+            imgui::FontSource::TtfData {
+                data: include_bytes!("fonts/NotoSansJP-Regular.otf"),
+                size_pixels: font_size,
+                config: Some(imgui::FontConfig {
+                    oversample_h: 4,
+                    oversample_v: 4,
+                    glyph_ranges: imgui::FontGlyphRanges::japanese(),
+                    ..imgui::FontConfig::default()
+                }),
+            },
+        ]);
 
         // Create Dear ImGui WGPU renderer
         let device = pixels.device();
