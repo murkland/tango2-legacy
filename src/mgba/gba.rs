@@ -3,6 +3,7 @@ use super::c;
 use super::sync;
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct GBARef<'a> {
     pub(super) ptr: *const c::GBA,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
@@ -30,6 +31,7 @@ impl<'a> GBARef<'a> {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct GBAMutRef<'a> {
     pub(super) ptr: *mut c::GBA,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,

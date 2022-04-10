@@ -1,6 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct BlipMutRef<'a> {
     pub(super) ptr: *mut c::blip_t,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,

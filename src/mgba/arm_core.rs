@@ -1,6 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct ARMCoreRef<'a> {
     pub(super) ptr: *const c::ARMCore,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
@@ -13,6 +14,7 @@ impl<'a> ARMCoreRef<'a> {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct ARMCoreMutRef<'a> {
     pub(super) ptr: *mut c::ARMCore,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,

@@ -24,7 +24,7 @@ impl Fastforwarder {
         let core = std::rc::Rc::new(std::cell::RefCell::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
-            core.load_rom(rom_vf)?;
+            core.as_mut().load_rom(rom_vf)?;
             core
         }));
 
@@ -32,23 +32,20 @@ impl Fastforwarder {
             std::rc::Rc::<std::cell::RefCell<Option<State>>>::new(std::cell::RefCell::new(None));
 
         let trapper = {
-            let core2 = std::rc::Rc::clone(&core);
-            let mut core2 = core2.borrow_mut();
+            let core = core.clone();
+            let mut core = core.borrow_mut();
             mgba::trapper::Trapper::new(
-                &mut core2,
+                &mut core,
                 vec![
                     {
-                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.main_read_joyflags,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 log::info!("read joyflags");
 
-                                let mut core = core.borrow_mut();
-
-                                let in_battle_time = bn6.in_battle_time(&core);
+                                let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
                                 if in_battle_time == state.as_ref().unwrap().commit_time {
@@ -94,15 +91,12 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.main_read_joyflags,
-                            Box::new(move || {
-                                let mut core = core.borrow_mut();
-
-                                let in_battle_time = bn6.in_battle_time(&core);
+                            Box::new(move |mut core| {
+                                let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
                                 let commit_time = state.as_ref().unwrap().commit_time;
@@ -112,7 +106,7 @@ impl Fastforwarder {
                                 }
 
                                 core.gba_mut().cpu_mut().set_gpr(0, 0);
-                                let r15 = core.gba().cpu().gpr(15) as u32;
+                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
@@ -136,26 +130,26 @@ impl Fastforwarder {
                                 }
 
                                 bn6.set_player_input_state(
-                                    &mut core,
+                                    core,
                                     0,
                                     ip[0].joyflags,
                                     ip[0].custom_screen_state,
                                 );
                                 if let Some(turn) = ip[0].turn {
-                                    bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
+                                    bn6.set_player_marshaled_battle_state(core, 0, &turn);
                                     if in_battle_time < commit_time {
                                         log::info!("p1 turn committed at tick {}", in_battle_time);
                                     }
                                 }
 
                                 bn6.set_player_input_state(
-                                    &mut core,
+                                    core,
                                     1,
                                     ip[1].joyflags,
                                     ip[1].custom_screen_state,
                                 );
                                 if let Some(turn) = ip[1].turn {
-                                    bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
+                                    bn6.set_player_marshaled_battle_state(core, 1, &turn);
                                     if in_battle_time < commit_time {
                                         log::info!("p2 turn committed at tick {}", in_battle_time);
                                     }
@@ -166,13 +160,11 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
-                            Box::new(move || {
-                                let mut core = core.borrow_mut();
+                            Box::new(move |mut core| {
                                 let state = state.borrow();
                                 core.gba_mut()
                                     .cpu_mut()
@@ -181,13 +173,11 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
                             bn6.offsets.rom.link_is_p2_ret,
-                            Box::new(move || {
-                                let mut core = core.borrow_mut();
+                            Box::new(move |mut core| {
                                 let state = state.borrow();
                                 core.gba_mut()
                                     .cpu_mut()
@@ -196,12 +186,10 @@ impl Fastforwarder {
                         )
                     },
                     {
-                        let core = std::rc::Rc::clone(&core);
                         let bn6 = bn6::BN6::clone(&bn6);
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
-                            Box::new(move || {
-                                let mut core = core.borrow_mut();
+                            Box::new(move |mut core| {
                                 core.gba_mut().cpu_mut().set_gpr(0, 2);
                             }),
                         )
@@ -226,8 +214,8 @@ impl Fastforwarder {
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
     ) -> anyhow::Result<(mgba::state::State, mgba::state::State, [input::Input; 2])> {
-        self.core.borrow_mut().load_state(state)?;
-        let start_in_battle_time = self.bn6.in_battle_time(&self.core.borrow());
+        self.core.borrow_mut().as_mut().load_state(state)?;
+        let start_in_battle_time = self.bn6.in_battle_time(self.core.borrow().as_mut());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
 
         let input_pairs = commit_pairs
@@ -253,6 +241,7 @@ impl Fastforwarder {
 
         self.core
             .borrow_mut()
+            .as_mut()
             .gba_mut()
             .cpu_mut()
             .set_pc(self.bn6.offsets.rom.main_read_joyflags);
@@ -277,7 +266,7 @@ impl Fastforwarder {
             && self.state.borrow().as_ref().unwrap().dirty_state.is_none()
         {
             self.state.borrow_mut().as_mut().unwrap().result = Ok(());
-            self.core.borrow_mut().run_frame();
+            self.core.borrow_mut().as_mut().run_frame();
             if let Err(_) = self.state.borrow().as_ref().unwrap().result {
                 let state = self.state.take().unwrap();
                 return Err(state.result.unwrap_err());

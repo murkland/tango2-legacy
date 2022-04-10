@@ -13,12 +13,13 @@ struct TrapperCStruct {
 }
 
 struct Trap {
-    handler: Box<dyn Fn()>,
+    handler: Box<dyn Fn(core::CoreMutRef)>,
     original: u16,
 }
 
 struct Impl {
     traps: std::collections::HashMap<u32, Trap>,
+    core_ptr: *mut c::mCore,
 }
 
 const TRAPPER_IMM: i32 = 0xef;
@@ -41,16 +42,20 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
     let trapper = components[c::mCPUComponentType_CPU_COMPONENT_MISC_1 as usize] as *mut _
         as *mut TrapperCStruct;
     if imm == TRAPPER_IMM {
+        let r#impl = &(*trapper).r#impl;
         let caller = arm_core.as_ref().gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
-        let trap = (*trapper).r#impl.traps.get(&caller).unwrap();
+        let trap = r#impl.traps.get(&caller).unwrap();
         c::ARMRunFake(arm_core.ptr, trap.original as u32);
-        (trap.handler)();
+        (trap.handler)(core::CoreMutRef {
+            ptr: r#impl.core_ptr,
+            _lifetime: std::marker::PhantomData,
+        });
     }
     (*trapper).real_bkpt16.unwrap()(arm_core.ptr, imm)
 }
 
 impl Trapper {
-    pub fn new(core: &mut core::Core, handlers: Vec<(u32, Box<dyn Fn()>)>) -> Self {
+    pub fn new(core: &mut core::Core, handlers: Vec<(u32, Box<dyn Fn(core::CoreMutRef)>)>) -> Self {
         let mut cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
         cpu_component.init = Some(c_trapper_init);
         cpu_component.deinit = Some(c_trapper_deinit);
@@ -59,11 +64,12 @@ impl Trapper {
             real_bkpt16: None,
             r#impl: Impl {
                 traps: std::collections::HashMap::new(),
+                core_ptr: core.0,
             },
         });
 
         unsafe {
-            let arm_core = core.gba_mut().cpu_mut().ptr;
+            let arm_core = core.as_mut().gba_mut().cpu_mut().ptr;
             trapper_c_struct.real_bkpt16 = (*arm_core).irqh.bkpt16;
             let components = std::slice::from_raw_parts_mut(
                 (*arm_core).components,
@@ -76,8 +82,9 @@ impl Trapper {
         }
 
         for (addr, handler) in handlers {
-            let original = core.raw_read_16(addr, -1);
-            core.raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
+            let original = core.as_mut().raw_read_16(addr, -1);
+            core.as_mut()
+                .raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
             trapper_c_struct
                 .r#impl
                 .traps

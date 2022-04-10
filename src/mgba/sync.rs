@@ -1,6 +1,7 @@
 use super::c;
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct SyncRef<'a> {
     pub(super) ptr: *const c::mCoreSync,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
@@ -13,6 +14,7 @@ impl<'a> SyncRef<'a> {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct SyncMutRef<'a> {
     pub(super) ptr: *mut c::mCoreSync,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,

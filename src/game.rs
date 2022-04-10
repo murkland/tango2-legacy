@@ -40,18 +40,18 @@ impl Game {
 
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
-            core.set_audio_buffer_size(1024);
+            core.as_mut().set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
-            core.load_rom(rom_vf)?;
+            core.as_mut().load_rom(rom_vf)?;
 
             let save_vf = mgba::vfile::VFile::open(
                 &save_path,
                 mgba::vfile::flags::O_CREAT | mgba::vfile::flags::O_RDWR,
             )?;
-            core.load_save(save_vf)?;
+            core.as_mut().load_save(save_vf)?;
 
-            log::info!("loaded game: {}", core.game_title());
+            log::info!("loaded game: {}", core.as_ref().game_title());
             core
         }));
 
@@ -60,10 +60,10 @@ impl Game {
         let (width, height, vbuf, bn6) = {
             let core = main_core.clone();
             let mut core = core.lock();
-            let (width, height) = core.desired_video_dimensions();
+            let (width, height) = core.as_ref().desired_video_dimensions();
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
-            let bn6 = bn6::BN6::new(&core.game_title());
-            core.set_video_buffer(&mut vbuf, width.into());
+            let bn6 = bn6::BN6::new(&core.as_ref().game_title());
+            core.as_mut().set_video_buffer(&mut vbuf, width.into());
             (width, height, Arc::new(vbuf), bn6.unwrap())
         };
 
@@ -111,7 +111,8 @@ impl Game {
         {
             let core = main_core.clone();
             let mut core = core.lock();
-            core.gba_mut()
+            core.as_mut()
+                .gba_mut()
                 .sync_mut()
                 .as_mut()
                 .unwrap()
@@ -120,19 +121,18 @@ impl Game {
 
         let trapper = {
             let core = main_core.clone();
+            let mut core = core.lock();
             let bn6 = bn6.clone();
             let handle = handle.clone();
-            let mut core = core.lock();
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_call_battle_copy_input_data,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     match &*match_state {
@@ -143,21 +143,19 @@ impl Game {
                                         _ => {
                                         }
                                     };
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_marshal_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let mut match_state = match_state.lock().await;
                                     'abort: loop {
@@ -170,11 +168,9 @@ impl Game {
                                         let mut battle_state = m.lock_battle_state().await;
                                         let battle_number = battle_state.number;
                                         let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
-
-                                        let mut core = core.lock();
-                                        let local_init = bn6.local_marshaled_battle_state(&core);
+                                        let local_init = bn6.local_marshaled_battle_state(core);
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
-                                        bn6.set_player_marshaled_battle_state(&mut core, battle.local_player_index() as u32, &local_init);
+                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &local_init);
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
@@ -183,7 +179,7 @@ impl Game {
                                                 break 'abort;
                                             }
                                         };
-                                        bn6.set_player_marshaled_battle_state(&mut core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().unwrap());
+                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().unwrap());
 
                                         battle.set_remote_delay(remote_init.input_delay);
                                         return;
@@ -194,13 +190,12 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -212,15 +207,13 @@ impl Game {
                                     let mut battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
 
-                                    let core = core.lock();
-                                    let local_turn = bn6.local_marshaled_battle_state(&core);
+                                    let local_turn = bn6.local_marshaled_battle_state(core);
                                     battle.add_local_pending_turn(local_turn);
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
@@ -229,7 +222,7 @@ impl Game {
                         );
                         (
                             bn6.offsets.rom.main_read_joyflags,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let mut match_state = match_state.lock().await;
                                     'abort: loop {
@@ -251,9 +244,7 @@ impl Game {
                                             return;
                                         }
 
-                                        let mut core = core.lock();
-
-                                        let in_battle_time = bn6.in_battle_time(&core);
+                                        let in_battle_time = bn6.in_battle_time(core);
                                         if let None = battle.committed_state() {
                                             for i in 0..battle.local_delay() {
                                                 battle
@@ -294,7 +285,7 @@ impl Game {
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
                                         let remote_tick = last_committed_remote_input.local_tick;
-                                        let custom_screen_state = bn6.local_custom_screen_state(&core);
+                                        let custom_screen_state = bn6.local_custom_screen_state(core);
                                         let turn = battle.take_local_pending_turn();
 
                                         const TIMEOUT: std::time::Duration =
@@ -331,7 +322,7 @@ impl Game {
                                         let tps = EXPECTED_FPS + (remote_tick - local_tick - battle.local_delay()) - (last_committed_remote_input.remote_tick - last_committed_remote_input.local_tick - battle.remote_delay());
                                         core.gba_mut().sync_mut().unwrap().set_fps_target(tps as f32);
 
-                                        let new_in_battle_time = bn6.in_battle_time(&core);
+                                        let new_in_battle_time = bn6.in_battle_time(core);
                                         if new_in_battle_time != in_battle_time {
                                             panic!("fastforwarder moved battle time: expected {}, got {}", in_battle_time, new_in_battle_time);
                                         }
@@ -346,13 +337,12 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -363,8 +353,7 @@ impl Game {
 
                                     let battle_state = &mut m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                     if !battle.is_accepting_input() {
@@ -375,35 +364,34 @@ impl Game {
                                     let ip = battle.take_last_input().unwrap();
 
                                     bn6.set_player_input_state(
-                                        &mut core,
+                                        core,
                                         0,
                                         ip[0].joyflags as u16,
                                         ip[0].custom_screen_state as u8,
                                     );
                                     if let Some(turn) = ip[0].turn {
-                                        bn6.set_player_marshaled_battle_state(&mut core, 0, &turn);
+                                        bn6.set_player_marshaled_battle_state(core, 0, &turn);
                                     }
                                     bn6.set_player_input_state(
-                                        &mut core,
+                                        core,
                                         1,
                                         ip[1].joyflags as u16,
                                         ip[1].custom_screen_state as u8,
                                     );
                                     if let Some(turn) = ip[1].turn {
-                                        bn6.set_player_marshaled_battle_state(&mut core, 1, &turn);
+                                        bn6.set_player_marshaled_battle_state(core, 1, &turn);
                                     }
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -412,11 +400,10 @@ impl Game {
                                         return;
                                     };
 
-                                    let core = core.lock();
 
                                     let battle_state = &mut m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
-                                    match core.gba().cpu().gpr(0) {
+                                    match core.as_ref().gba().cpu().gpr(0) {
                                         0 => m.set_won_last_battle(true).await,
                                         1 => m.set_won_last_battle(false).await,
                                         _ => {}
@@ -431,7 +418,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -445,13 +432,12 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_ending_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -465,12 +451,11 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_is_p2_tst,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -481,8 +466,7 @@ impl Game {
 
                                     let battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
-                                    core.lock()
-                                        .gba_mut()
+                                    core.gba_mut()
                                         .cpu_mut()
                                         .set_gpr(0, battle.local_player_index() as i32);
                                 });
@@ -490,12 +474,11 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.link_is_p2_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -506,8 +489,7 @@ impl Game {
 
                                     let battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
-                                    core.lock()
-                                        .gba_mut()
+                                    core.gba_mut()
                                         .cpu_mut()
                                         .set_gpr(0, battle.local_player_index() as i32);
                                 });
@@ -515,16 +497,14 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
-                                    let mut core = core.lock();
-                                    let mut r0 = core.gba().cpu().gpr(0);
+                                    let mut r0 = core.as_ref().gba().cpu().gpr(0);
                                     if r0 != 2 {
                                         log::warn!("expected r0 to be 2 but got {}", r0);
                                         r0 = 2;
@@ -541,17 +521,14 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
-                            Box::new(move || {
-                                let core = core.lock();
-                                log::warn!("unhandled call to commMenu_handleLinkCableInput at 0x{:0x}: uh oh!", core.gba().cpu().gpr(15)-4);
+                            Box::new(move |mut core| {
+                                log::warn!("unhandled call to commMenu_handleLinkCableInput at 0x{:0x}: uh oh!", core.as_ref().gba().cpu().gpr(15)-4);
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
@@ -559,11 +536,10 @@ impl Game {
                             bn6.offsets
                                 .rom
                                 .comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 let handle2 = handle.clone();
                                 handle.block_on(async {
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                     let mut match_state = match_state.lock().await;
@@ -574,9 +550,9 @@ impl Game {
                                         MatchState::NoMatch => {
                                             let m = Match::new(
                                                 "test".to_string(),
-                                                bn6.match_type(&core),
-                                                core.game_title(),
-                                                core.crc32(),
+                                                bn6.match_type(core),
+                                                core.as_ref().game_title(),
+                                                core.as_ref().crc32(),
                                             );
                                             *match_state = MatchState::Match(m);
                                             match &*match_state {
@@ -586,13 +562,13 @@ impl Game {
                                         }
                                         MatchState::Match(m) => match m.poll_for_ready().await {
                                             Ok(true) => {
-                                                bn6.start_battle_from_comm_menu(&mut core);
+                                                bn6.start_battle_from_comm_menu(core);
                                                 log::info!("match started");
                                             }
                                             Ok(false) => {}
                                             Err(err) => {
                                                 // TODO: return the correct error.
-                                                bn6.drop_matchmaking_from_comm_menu(&mut core, 0);
+                                                bn6.drop_matchmaking_from_comm_menu(core, 0);
                                             }
                                         },
                                     };
@@ -601,76 +577,66 @@ impl Game {
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
-                                    let mut core = core.lock();
                                     // TODO: get appropriate link settings and background
-                                    bn6.set_link_battle_settings_and_background(&mut core, 0);
+                                    bn6.set_link_battle_settings_and_background(core, 0);
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_wait_for_friend_ret_cancel,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     log::info!("match canceled by user");
                                     let mut match_state = match_state.lock().await;
                                     *match_state = MatchState::NoMatch;
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         let match_state = match_state.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
-                            Box::new(move || {
+                            Box::new(move |mut core| {
                                 handle.block_on(async {
                                     let mut match_state = match_state.lock().await;
                                     *match_state = MatchState::NoMatch;
-                                    let mut core = core.lock();
-                                    let r15 = core.gba().cpu().gpr(15) as u32;
+                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
                                 });
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
-                            Box::new(move || {
-                                let mut core = core.lock();
-                                let r15 = core.gba().cpu().gpr(15) as u32;
+                            Box::new(move |mut core| {
+                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
                             }),
                         )
                     },
                     {
-                        let core = main_core.clone();
                         (
                             bn6.offsets
                                 .rom
                                 .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
-                            Box::new(move || {
-                                let mut core = core.lock();
-                                let r15 = core.gba().cpu().gpr(15) as u32;
+                            Box::new(move |mut core| {
+                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
                             }),
                         )
@@ -793,12 +759,12 @@ impl Game {
                                 if let Some(b) = &mut battle_state.battle {
                                     b.set_local_joyflags(keys as u16 | 0xfc00);
                                 } else {
-                                    core.set_keys(keys);
+                                    core.as_mut().set_keys(keys);
                                 }
                             });
                         }
                         _ => {
-                            core.set_keys(keys);
+                            core.as_mut().set_keys(keys);
                         }
                     }
 
