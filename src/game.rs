@@ -710,6 +710,13 @@ impl Game {
             .run(move |event, _, control_flow| {
                 *control_flow = winit::event_loop::ControlFlow::Poll;
 
+                let mut gui_handled = false;
+                if let winit::event::Event::WindowEvent { ref event, .. } = event {
+                    if self.gui.handle_event(&event) {
+                        gui_handled = true;
+                    }
+                }
+
                 if self.input.update(&event) {
                     if self.input.quit() {
                         *control_flow = winit::event_loop::ControlFlow::Exit;
@@ -725,63 +732,62 @@ impl Game {
                         self.gui.resize(size.width, size.height);
                     }
 
-                    let core = self.main_core.lock();
+                    if !gui_handled {
+                        let core = self.main_core.lock();
 
-                    let mut keys = 0u32;
-                    if self.input.key_held(winit::event::VirtualKeyCode::Left) {
-                        keys |= mgba::input::keys::LEFT;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Right) {
-                        keys |= mgba::input::keys::RIGHT;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Up) {
-                        keys |= mgba::input::keys::UP;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Down) {
-                        keys |= mgba::input::keys::DOWN;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Z) {
-                        keys |= mgba::input::keys::A;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::X) {
-                        keys |= mgba::input::keys::B;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::A) {
-                        keys |= mgba::input::keys::L;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::S) {
-                        keys |= mgba::input::keys::R;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Return) {
-                        keys |= mgba::input::keys::START;
-                    }
-                    if self.input.key_held(winit::event::VirtualKeyCode::Back) {
-                        keys |= mgba::input::keys::SELECT;
-                    }
+                        let mut keys = 0u32;
+                        if self.input.key_held(winit::event::VirtualKeyCode::Left) {
+                            keys |= mgba::input::keys::LEFT;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Right) {
+                            keys |= mgba::input::keys::RIGHT;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Up) {
+                            keys |= mgba::input::keys::UP;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Down) {
+                            keys |= mgba::input::keys::DOWN;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Z) {
+                            keys |= mgba::input::keys::A;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::X) {
+                            keys |= mgba::input::keys::B;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::A) {
+                            keys |= mgba::input::keys::L;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::S) {
+                            keys |= mgba::input::keys::R;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Return) {
+                            keys |= mgba::input::keys::START;
+                        }
+                        if self.input.key_held(winit::event::VirtualKeyCode::Back) {
+                            keys |= mgba::input::keys::SELECT;
+                        }
 
-                    handle.block_on(async {
-                        match &*self.match_state.lock().await {
-                            MatchState::Match(m) => {
-                                let mut battle_state = m.lock_battle_state().await;
-                                if let Some(b) = &mut battle_state.battle {
-                                    b.set_local_joyflags(keys as u16 | 0xfc00);
-                                } else {
+                        handle.block_on(async {
+                            match &*self.match_state.lock().await {
+                                MatchState::Match(m) => {
+                                    let mut battle_state = m.lock_battle_state().await;
+                                    if let Some(b) = &mut battle_state.battle {
+                                        b.set_local_joyflags(keys as u16 | 0xfc00);
+                                    } else {
+                                        core.as_mut().set_keys(keys);
+                                    }
+                                }
+                                _ => {
                                     core.as_mut().set_keys(keys);
                                 }
                             }
-                            _ => {
-                                core.as_mut().set_keys(keys);
-                            }
-                        }
-                    });
+                        });
+                    }
 
                     self.window.request_redraw();
                 }
 
                 match event {
-                    winit::event::Event::WindowEvent { event, .. } => {
-                        self.gui.handle_event(&event);
-                    }
                     winit::event::Event::RedrawRequested(_) => {
                         {
                             let vbuf2 = self.vbuf2.lock().clone();
