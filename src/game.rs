@@ -166,22 +166,22 @@ impl Game {
                                 handle.block_on(async {
                                     let mut game_state = game_state.lock().await;
                                     'abort: loop {
-                                        let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                            match_state
+                                        let m = if let MatchState::Match(m) = &game_state.match_state {
+                                            m
                                         } else {
                                             return;
                                         };
 
-                                        let mut battle_state = match_state.lock_battle_state().await;
+                                        let mut battle_state = m.lock_battle_state().await;
                                         let battle_number = battle_state.number;
                                         let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
 
                                         let mut core = core.lock();
                                         let local_init = bn6.local_marshaled_battle_state(&core);
-                                        match_state.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
+                                        m.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
                                         bn6.set_player_marshaled_battle_state(&mut core, battle.local_player_index() as u32, &local_init);
 
-                                        let remote_init = match match_state.receive_remote_init().await {
+                                        let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
                                             None => {
                                                 core.gba_mut().sync_mut().unwrap().set_fps_target(EXPECTED_FPS as f32);
@@ -208,13 +208,13 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
 
-                                    let mut battle_state = match_state.lock_battle_state().await;
+                                    let mut battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
 
                                     let core = core.lock();
@@ -238,13 +238,13 @@ impl Game {
                                 handle.block_on(async {
                                     let mut game_state = game_state.lock().await;
                                     'abort: loop {
-                                        let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                            match_state
+                                        let m = if let MatchState::Match(m) = &game_state.match_state {
+                                            m
                                         } else {
                                             return;
                                         };
 
-                                        let battle_state = &mut match_state.lock_battle_state().await;
+                                        let battle_state = &mut m.lock_battle_state().await;
                                         let battle_number = battle_state.number;
                                         let battle = if let Some(battle) = &mut battle_state.battle {
                                             battle
@@ -324,7 +324,7 @@ impl Game {
                                             break 'abort;
                                         }
 
-                                        match_state.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, &turn).await.unwrap();
+                                        m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, &turn).await.unwrap();
 
                                         let (input_pairs, left) = battle.consume_and_peek_local().await;
                                         let mut fastforwarder = fastforwarder.lock();
@@ -360,13 +360,13 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
 
-                                    let battle_state = &mut match_state.lock_battle_state().await;
+                                    let battle_state = &mut m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
                                     let mut core = core.lock();
                                     let r15 = core.gba().cpu().gpr(15) as u32;
@@ -408,19 +408,19 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
 
                                     let core = core.lock();
 
-                                    let battle_state = &mut match_state.lock_battle_state().await;
+                                    let battle_state = &mut m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
                                     match core.gba().cpu().gpr(0) {
-                                        0 => match_state.set_won_last_battle(true).await,
-                                        1 => match_state.set_won_last_battle(false).await,
+                                        0 => m.set_won_last_battle(true).await,
+                                        1 => m.set_won_last_battle(false).await,
                                         _ => {}
                                     }
                                 });
@@ -436,10 +436,8 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) =
-                                        &game_state.match_state
-                                    {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
@@ -459,15 +457,12 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) =
-                                        &game_state.match_state
-                                    {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
-
-                                    // TODO: call end_battle
+                                    m.end_battle().await;
                                 });
                             }),
                         )
@@ -481,13 +476,13 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
 
-                                    let battle_state = match_state.lock_battle_state().await;
+                                    let battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
                                     core.lock()
                                         .gba_mut()
@@ -506,13 +501,13 @@ impl Game {
                             Box::new(move || {
                                 handle.block_on(async {
                                     let game_state = game_state.lock().await;
-                                    let match_state = if let MatchState::Match(match_state) = &game_state.match_state {
-                                        match_state
+                                    let m = if let MatchState::Match(m) = &game_state.match_state {
+                                        m
                                     } else {
                                         return;
                                     };
 
-                                    let battle_state = match_state.lock_battle_state().await;
+                                    let battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_ref().expect("attempted to get battle p2 information while no battle was active!");
                                     core.lock()
                                         .gba_mut()
@@ -591,9 +586,7 @@ impl Game {
                                             handle.spawn(async move {
                                                 if let Err(e) =
                                                     match &game_state2.lock().await.match_state {
-                                                        MatchState::Match(match_state) => {
-                                                            match_state
-                                                        }
+                                                        MatchState::Match(m) => m,
                                                         _ => todo!(),
                                                     }
                                                     .run()
@@ -605,10 +598,7 @@ impl Game {
                                                 }
                                             });
                                         }
-                                        MatchState::Match(match_state) => match match_state
-                                            .poll_for_ready()
-                                            .await
-                                        {
+                                        MatchState::Match(m) => match m.poll_for_ready().await {
                                             Ok(true) => {
                                                 bn6.start_battle_from_comm_menu(&mut core);
                                                 log::info!("match started");

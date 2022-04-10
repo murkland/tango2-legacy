@@ -404,7 +404,9 @@ impl Match {
         self.match_type
     }
 
-    // TODO: end battle
+    pub async fn end_battle(&self) {
+        self.battle_state.lock().await.battle = None;
+    }
 }
 
 struct LocalPendingTurn {
