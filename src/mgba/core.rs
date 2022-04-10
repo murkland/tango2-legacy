@@ -103,7 +103,12 @@ impl Core {
 
     pub fn save_state(&self) -> anyhow::Result<state::State> {
         unsafe {
-            let mut state = state::State(Box::<c::GBASerializedState>::new(std::mem::zeroed()));
+            let mut buf = vec![0u8; std::mem::size_of::<c::GBASerializedState>()];
+            let buf_ptr = buf.as_mut_ptr();
+            std::mem::forget(buf);
+            let mut state = state::State(Box::<c::GBASerializedState>::from_raw(
+                buf_ptr as *mut _ as *mut c::GBASerializedState,
+            ));
             if !(*self.0).saveState.unwrap()(
                 self.0,
                 &mut *state.0 as *mut _ as *mut std::os::raw::c_void,
