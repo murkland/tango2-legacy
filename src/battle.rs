@@ -454,7 +454,7 @@ pub struct Battle {
     remote_delay: u32,
     is_accepting_input: bool,
     last_committed_remote_input: input::Input,
-    last_input: Option<(input::Input, input::Input)>,
+    last_input: Option<input::Pair<input::Input>>,
     state_committed_notify: tokio::sync::Notify,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
@@ -479,11 +479,11 @@ impl Battle {
         self.state_committed_notify.notify_one();
     }
 
-    pub fn set_last_input(&mut self, inp: (input::Input, input::Input)) {
+    pub fn set_last_input(&mut self, inp: input::Pair<input::Input>) {
         self.last_input = Some(inp);
     }
 
-    pub fn take_last_input(&mut self) -> Option<(input::Input, input::Input)> {
+    pub fn take_last_input(&mut self) -> Option<input::Pair<input::Input>> {
         self.last_input.take()
     }
 
@@ -521,10 +521,10 @@ impl Battle {
 
     pub async fn consume_and_peek_local(
         &mut self,
-    ) -> (Vec<(input::Input, input::Input)>, Vec<input::Input>) {
+    ) -> (Vec<input::Pair<input::Input>>, Vec<input::Input>) {
         let (input_pairs, left) = self.iq.consume_and_peek_local().await;
         if let Some(last) = input_pairs.last() {
-            self.last_committed_remote_input = last.1.clone();
+            self.last_committed_remote_input = last.remote.clone();
         }
         (input_pairs, left)
     }

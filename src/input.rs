@@ -20,6 +20,15 @@ where
     local_delay: u32,
 }
 
+#[derive(Clone)]
+pub struct Pair<T>
+where
+    T: Clone,
+{
+    pub local: T,
+    pub remote: T,
+}
+
 impl<T> PairQueue<T>
 where
     T: Clone,
@@ -64,7 +73,7 @@ where
         queues.1.len()
     }
 
-    pub async fn consume_and_peek_local(&mut self) -> (Vec<(T, T)>, Vec<T>) {
+    pub async fn consume_and_peek_local(&mut self) -> (Vec<Pair<T>>, Vec<T>) {
         let mut queues = self.queues.lock().await;
 
         let to_commit = {
@@ -81,7 +90,7 @@ where
                 let remotexs = remoteq.drain(..n as usize);
                 localxs
                     .zip(remotexs)
-                    .map(|((localx, _), (remotex, _))| (localx, remotex))
+                    .map(|((local, _), (remote, _))| Pair { local, remote })
                     .collect()
             }
         };

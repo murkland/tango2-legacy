@@ -4,7 +4,7 @@ use super::mgba;
 
 struct State {
     local_player_index: u8,
-    input_pairs: std::collections::VecDeque<(input::Input, input::Input)>,
+    input_pairs: std::collections::VecDeque<input::Pair<input::Input>>,
     commit_time: u32,
     committed_state: Option<mgba::state::State>,
     dirty_time: u32,
@@ -60,26 +60,28 @@ impl Fastforwarder {
 
                                 let ip =
                                     state.as_mut().unwrap().input_pairs.front().unwrap().clone();
-                                if ip.0.local_tick != ip.1.local_tick {
+                                if ip.local.local_tick != ip.remote.local_tick {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
                                         in_battle_time,
-                                        ip.0.local_tick,
-                                        ip.1.local_tick
+                                        ip.local.local_tick,
+                                        ip.remote.local_tick
                                     ));
                                     return;
                                 }
 
-                                if ip.0.local_tick != in_battle_time {
+                                if ip.local.local_tick != in_battle_time {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "input tick != in battle tick: {} != {}",
-                                        ip.0.local_tick,
+                                        ip.local.local_tick,
                                         in_battle_time,
                                     ));
                                     return;
                                 }
 
-                                core.gba_mut().cpu_mut().set_gpr(4, ip.0.joyflags as i32);
+                                core.gba_mut()
+                                    .cpu_mut()
+                                    .set_gpr(4, ip.local.joyflags as i32);
                             }),
                         )
                     },
@@ -104,20 +106,20 @@ impl Fastforwarder {
 
                                 let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
 
-                                if ip.0.local_tick != ip.0.local_tick {
+                                if ip.local.local_tick != ip.local.local_tick {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
                                         in_battle_time,
-                                        ip.0.local_tick,
-                                        ip.0.local_tick
+                                        ip.local.local_tick,
+                                        ip.local.local_tick
                                     ));
                                     return;
                                 }
 
-                                if ip.0.local_tick != in_battle_time {
+                                if ip.local.local_tick != in_battle_time {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "input tick != in battle tick: {} != {}",
-                                        ip.0.local_tick,
+                                        ip.local.local_tick,
                                         in_battle_time,
                                     ));
                                     return;
@@ -129,10 +131,10 @@ impl Fastforwarder {
                                 bn6.set_player_input_state(
                                     core,
                                     local_player_index as u32,
-                                    ip.0.joyflags,
-                                    ip.0.custom_screen_state,
+                                    ip.local.joyflags,
+                                    ip.local.custom_screen_state,
                                 );
-                                if let Some(turn) = ip.0.turn {
+                                if let Some(turn) = ip.local.turn {
                                     bn6.set_player_marshaled_battle_state(
                                         core,
                                         local_player_index as u32,
@@ -146,10 +148,10 @@ impl Fastforwarder {
                                 bn6.set_player_input_state(
                                     core,
                                     remote_player_index as u32,
-                                    ip.1.joyflags,
-                                    ip.1.custom_screen_state,
+                                    ip.remote.joyflags,
+                                    ip.remote.custom_screen_state,
                                 );
-                                if let Some(turn) = ip.1.turn {
+                                if let Some(turn) = ip.remote.turn {
                                     bn6.set_player_marshaled_battle_state(
                                         core,
                                         remote_player_index as u32,
@@ -229,13 +231,13 @@ impl Fastforwarder {
         &mut self,
         state: &mgba::state::State,
         local_player_index: u8,
-        commit_pairs: &[(input::Input, input::Input)],
+        commit_pairs: &[input::Pair<input::Input>],
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
     ) -> anyhow::Result<(
         mgba::state::State,
         mgba::state::State,
-        (input::Input, input::Input),
+        input::Pair<input::Input>,
     )> {
         self.core.as_mut().load_state(state)?;
         let start_in_battle_time = self.bn6.in_battle_time(self.core.as_mut());
@@ -244,12 +246,12 @@ impl Fastforwarder {
         let input_pairs = commit_pairs
             .iter()
             .cloned()
-            .chain(local_player_inputs_left.iter().cloned().map(|inp| {
-                let local_tick = inp.local_tick;
-                let remote_tick = inp.remote_tick;
-                (
-                    inp,
-                    input::Input {
+            .chain(local_player_inputs_left.iter().cloned().map(|local| {
+                let local_tick = local.local_tick;
+                let remote_tick = local.remote_tick;
+                input::Pair {
+                    local,
+                    remote: input::Input {
                         local_tick: local_tick,
                         remote_tick: remote_tick,
                         joyflags: {
@@ -269,9 +271,9 @@ impl Fastforwarder {
                         custom_screen_state: last_committed_remote_input.custom_screen_state,
                         turn: None,
                     },
-                )
+                }
             }))
-            .collect::<std::collections::VecDeque<(input::Input, input::Input)>>();
+            .collect::<std::collections::VecDeque<input::Pair<input::Input>>>();
         let last_input = input_pairs.back().unwrap().clone();
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
