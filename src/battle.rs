@@ -11,11 +11,6 @@ use std::io::Read;
 use std::io::Write;
 use subtle::ConstantTimeEq;
 
-pub struct Init {
-    input_delay: u32,
-    marshaled: [u8; 0x100],
-}
-
 pub struct BattleState {
     pub number: u32,
     pub battle: Option<Battle>,
@@ -28,7 +23,7 @@ enum Negotiation {
         dc: std::sync::Arc<datachannel::DataChannel>,
         rng: rand_pcg::Mcg128Xsl64,
     },
-    Err(anyhow::Error),
+    Err(NegotiationError),
 }
 
 pub struct Match {
@@ -47,8 +42,67 @@ struct MatchImpl {
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
 }
 
+#[derive(Debug)]
+pub enum NegotiationError {
+    ExpectedHello,
+    ExpectedHola,
+    IdenticalCommitment,
+    ProtocolVersionMismatch,
+    MatchTypeMismatch,
+    GameMismatch,
+    InvalidCommitment,
+    WebRTC(webrtc::Error),
+    IO(std::io::Error),
+    Signor(signor::Error),
+}
+
+impl std::fmt::Display for NegotiationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            NegotiationError::ExpectedHello => write!(f, "expected hello"),
+            NegotiationError::ExpectedHola => write!(f, "expected hola"),
+            NegotiationError::IdenticalCommitment => write!(f, "identical commitment"),
+            NegotiationError::ProtocolVersionMismatch => write!(f, "protocol version mismatch"),
+            NegotiationError::MatchTypeMismatch => write!(f, "match type mismatch"),
+            NegotiationError::GameMismatch => write!(f, "game mismatch"),
+            NegotiationError::InvalidCommitment => write!(f, "invalid commitment"),
+            NegotiationError::WebRTC(e) => write!(f, "WebRTC error: {}", e),
+            NegotiationError::IO(e) => write!(f, "IO error: {}", e),
+            NegotiationError::Signor(e) => write!(f, "signor error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for NegotiationError {}
+
+pub enum NegotiationStatus {
+    Ready,
+    NotReady,
+    MatchTypeMismatch,
+    GameMismatch,
+    Failed,
+}
+
+impl From<webrtc::Error> for NegotiationError {
+    fn from(e: webrtc::Error) -> Self {
+        NegotiationError::WebRTC(e)
+    }
+}
+
+impl From<std::io::Error> for NegotiationError {
+    fn from(e: std::io::Error) -> Self {
+        NegotiationError::IO(e)
+    }
+}
+
+impl From<signor::Error> for NegotiationError {
+    fn from(e: signor::Error) -> Self {
+        NegotiationError::Signor(e)
+    }
+}
+
 impl MatchImpl {
-    async fn negotiate(&self) -> anyhow::Result<()> {
+    async fn negotiate(&self) -> Result<(), NegotiationError> {
         let mut sc = signor::Client::new("http://localhost:12345").await?;
 
         let api = webrtc::api::APIBuilder::new().build();
@@ -115,42 +169,38 @@ impl MatchImpl {
         let hello = match protocol::Packet::decode(
             match dc.receive().await {
                 Some(d) => d,
-                None => anyhow::bail!("did not receive packet from peer"),
+                None => {
+                    return Err(NegotiationError::ExpectedHello);
+                }
             }
             .as_slice(),
-        )? {
+        )
+        .map_err(|_| NegotiationError::ExpectedHello)?
+        {
             protocol::Packet {
                 which: Some(protocol::packet::Which::Hello(hello)),
             } => hello,
-            p => {
-                anyhow::bail!("expected hello, got {:?}", p)
+            _ => {
+                return Err(NegotiationError::ExpectedHello);
             }
         };
 
         log::info!("their hello={:?}", hello);
 
         if commitment.ct_eq(hello.rng_commitment.as_slice()).into() {
-            anyhow::bail!("peer replayed our commitment")
+            return Err(NegotiationError::IdenticalCommitment);
         }
 
         if hello.protocol_version != protocol::VERSION {
-            anyhow::bail!(
-                "protocol version mismatch: {} != {}",
-                hello.protocol_version,
-                protocol::VERSION
-            );
+            return Err(NegotiationError::ProtocolVersionMismatch);
         }
 
         if hello.match_type != self.match_type as u32 {
-            anyhow::bail!(
-                "match type mismatch: {} != {}",
-                hello.match_type,
-                self.match_type
-            );
+            return Err(NegotiationError::MatchTypeMismatch);
         }
 
         if hello.game_title[..8] != self.game_title[..8] {
-            anyhow::bail!("game mismatch: {} != {}", hello.game_title, self.game_title);
+            return Err(NegotiationError::GameMismatch);
         }
 
         dc.send(
@@ -167,15 +217,19 @@ impl MatchImpl {
         let hola = match protocol::Packet::decode(
             match dc.receive().await {
                 Some(d) => d,
-                None => anyhow::bail!("did not receive packet from peer"),
+                None => {
+                    return Err(NegotiationError::ExpectedHola);
+                }
             }
             .as_slice(),
-        )? {
+        )
+        .map_err(|_| NegotiationError::ExpectedHola)?
+        {
             protocol::Packet {
                 which: Some(protocol::packet::Which::Hola(hola)),
             } => hola,
-            p => {
-                anyhow::bail!("expected hello, got {:?}", p)
+            _ => {
+                return Err(NegotiationError::ExpectedHola);
             }
         };
 
@@ -183,7 +237,7 @@ impl MatchImpl {
 
         if !bool::from(make_rng_commitment(&hola.rng_nonce)?.ct_eq(hello.rng_commitment.as_slice()))
         {
-            anyhow::bail!("failed to verify rng commitment")
+            return Err(NegotiationError::InvalidCommitment);
         }
 
         log::info!("connection ok!");
@@ -204,7 +258,12 @@ impl MatchImpl {
     }
 
     async fn run(&self) -> anyhow::Result<()> {
-        self.negotiate().await?;
+        if let Err(e) = self.negotiate().await {
+            let e2 = anyhow::format_err!("{}", e);
+            *self.negotiation.lock().await = Negotiation::Err(e);
+            return Err(e2);
+        }
+
         let dc = match &*self.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             _ => unreachable!(),
@@ -263,7 +322,7 @@ impl MatchImpl {
     }
 }
 
-fn make_rng_commitment(nonce: &[u8]) -> anyhow::Result<[u8; 32]> {
+fn make_rng_commitment(nonce: &[u8]) -> std::io::Result<[u8; 32]> {
     let mut shake128 = sha3::Shake128::default();
     shake128.write_all(b"syncrand:nonce:")?;
     shake128.write_all(&nonce)?;
@@ -313,11 +372,15 @@ impl Match {
         self.r#impl.remote_init_receiver.lock().await.recv().await
     }
 
-    pub async fn poll_for_ready(&self) -> anyhow::Result<bool> {
+    pub async fn poll_for_ready(&self) -> NegotiationStatus {
         match &*self.r#impl.negotiation.lock().await {
-            Negotiation::Negotiated { .. } => Ok(true),
-            Negotiation::NotReady => Ok(false),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
+            Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
+            Negotiation::NotReady => NegotiationStatus::NotReady,
+            Negotiation::Err(NegotiationError::GameMismatch) => NegotiationStatus::GameMismatch,
+            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
+                NegotiationStatus::MatchTypeMismatch
+            }
+            _ => NegotiationStatus::Failed,
         }
     }
 
@@ -405,10 +468,13 @@ impl Match {
 
     pub async fn start_battle(&self) {
         let mut battle_state = self.r#impl.battle_state.lock().await;
-        let is_p2 = !battle_state.won_last_battle;
-        log::info!("starting battle: is_p2 = {}", is_p2);
+        let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
+        log::info!(
+            "starting battle: local_player_index = {}",
+            local_player_index
+        );
         battle_state.battle = Some(Battle {
-            is_p2,
+            local_player_index,
             iq: input::PairQueue::new(60, 0),
             remote_delay: 0,
             is_accepting_input: false,
@@ -449,7 +515,7 @@ struct LocalPendingTurn {
 }
 
 pub struct Battle {
-    is_p2: bool,
+    local_player_index: u8,
     iq: input::PairQueue<input::Input>,
     remote_delay: u32,
     is_accepting_input: bool,
@@ -463,15 +529,11 @@ pub struct Battle {
 
 impl Battle {
     pub fn local_player_index(&self) -> u8 {
-        if self.is_p2 {
-            1
-        } else {
-            0
-        }
+        self.local_player_index
     }
 
     pub fn remote_player_index(&self) -> u8 {
-        1 - self.local_player_index()
+        1 - self.local_player_index
     }
 
     pub fn set_committed_state(&mut self, state: mgba::state::State) {
@@ -485,10 +547,6 @@ impl Battle {
 
     pub fn take_last_input(&mut self) -> Option<input::Pair<input::Input>> {
         self.last_input.take()
-    }
-
-    pub fn is_p2(&self) -> bool {
-        self.is_p2
     }
 
     pub fn local_delay(&self) -> u32 {

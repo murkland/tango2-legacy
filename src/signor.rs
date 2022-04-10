@@ -12,8 +12,55 @@ pub struct Client {
     client: pb::session_service_client::SessionServiceClient<tonic::transport::Channel>,
 }
 
+#[derive(Debug)]
+pub enum Error {
+    InvalidHandshake,
+    WebRTC(webrtc::Error),
+    TonicTransport(tonic::transport::Error),
+    TonicStatus(tonic::Status),
+    Other(anyhow::Error),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Error::InvalidHandshake => write!(f, "invalid handshake"),
+            Error::WebRTC(e) => write!(f, "WebRTC error: {}", e),
+            Error::TonicTransport(e) => write!(f, "tonic transport error: {}", e),
+            Error::TonicStatus(e) => write!(f, "tonic status: {}", e),
+            Error::Other(e) => write!(f, "other error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<webrtc::Error> for Error {
+    fn from(e: webrtc::Error) -> Self {
+        Error::WebRTC(e)
+    }
+}
+
+impl From<tonic::transport::Error> for Error {
+    fn from(e: tonic::transport::Error) -> Self {
+        Error::TonicTransport(e)
+    }
+}
+
+impl From<tonic::Status> for Error {
+    fn from(e: tonic::Status) -> Self {
+        Error::TonicStatus(e)
+    }
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(e: anyhow::Error) -> Self {
+        Error::Other(e)
+    }
+}
+
 impl Client {
-    pub async fn new(host: &str) -> anyhow::Result<Client> {
+    pub async fn new(host: &str) -> Result<Client, Error> {
         let client =
             pb::session_service_client::SessionServiceClient::connect(host.to_string()).await?;
         Ok(Client { client })
@@ -23,11 +70,14 @@ impl Client {
         &mut self,
         make_peer_conn: F,
         session_id: &str,
-    ) -> anyhow::Result<(
-        webrtc::peer_connection::RTCPeerConnection,
-        T,
-        ConnectionSide,
-    )>
+    ) -> Result<
+        (
+            webrtc::peer_connection::RTCPeerConnection,
+            T,
+            ConnectionSide,
+        ),
+        Error,
+    >
     where
         Fut: std::future::Future<
             Output = anyhow::Result<(webrtc::peer_connection::RTCPeerConnection, T)>,
@@ -51,7 +101,8 @@ impl Client {
                     },
                 )),
             })
-            .await?;
+            .await
+            .expect("negotiation start sent");
 
         let negotiation = self
             .client
@@ -66,7 +117,7 @@ impl Client {
         match if let Some(pb::NegotiateResponse { which: Some(which) }) = inbound.message().await? {
             which
         } else {
-            anyhow::bail!("failed to receive message");
+            return Err(Error::InvalidHandshake);
         } {
             pb::negotiate_response::Which::Offer(offer) => {
                 let (peer_conn2, r2) = make_peer_conn().await?;
@@ -93,7 +144,8 @@ impl Client {
                             },
                         )),
                     })
-                    .await?;
+                    .await
+                    .unwrap();
 
                 if let Some(pb::NegotiateResponse {
                     which:
@@ -103,7 +155,7 @@ impl Client {
                 }) = inbound.message().await?
                 {
                 } else {
-                    anyhow::bail!("failed to receive answered message");
+                    return Err(Error::InvalidHandshake);
                 }
             }
             pb::negotiate_response::Which::Answer(answer) => {
@@ -114,10 +166,10 @@ impl Client {
                 peer_conn.set_remote_description(sdp).await?;
             }
             pb::negotiate_response::Which::IceCandidate(_) => {
-                anyhow::bail!("trickle ice not supported")
+                return Err(Error::InvalidHandshake);
             }
-            r => {
-                anyhow::bail!("unknown message: {:?}", r)
+            _ => {
+                return Err(Error::InvalidHandshake);
             }
         };
         Ok((peer_conn, r, side))

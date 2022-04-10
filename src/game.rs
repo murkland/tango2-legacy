@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::{audio, battle::Match, bn6, fastforwarder, gui, input, mgba};
+use crate::{audio, battle, bn6, fastforwarder, gui, input, mgba};
 
 const EXPECTED_FPS: u32 = 60;
 enum MatchState {
     NoMatch,
     Aborted,
-    Match(Match),
+    Match(battle::Match),
 }
 
 pub struct Game {
@@ -28,7 +28,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new() -> Result<Game, Box<dyn std::error::Error>> {
+    pub fn new() -> Result<Game, anyhow::Error> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
@@ -39,7 +39,7 @@ impl Game {
         let save_path = rom_path.with_extension("sav");
 
         let main_core = Arc::new(Mutex::new({
-            let mut core = mgba::core::Core::new_gba("tango")?;
+            let core = mgba::core::Core::new_gba("tango")?;
             core.as_mut().set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
@@ -59,7 +59,7 @@ impl Game {
 
         let (width, height, vbuf, bn6) = {
             let core = main_core.clone();
-            let mut core = core.lock();
+            let core = core.lock();
             let (width, height) = core.as_ref().desired_video_dimensions();
             let mut vbuf = vec![0u8; (width * height * 4) as usize];
             let bn6 = bn6::BN6::new(&core.as_ref().game_title());
@@ -110,7 +110,7 @@ impl Game {
 
         {
             let core = main_core.clone();
-            let mut core = core.lock();
+            let core = core.lock();
             core.as_mut()
                 .gba_mut()
                 .sync_mut()
@@ -198,7 +198,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
-                            Box::new(move |mut core| {
+                            Box::new(move |core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -396,7 +396,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
-                            Box::new(move |mut core| {
+                            Box::new(move |core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -423,7 +423,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
-                            Box::new(move |mut core| {
+                            Box::new(move |_core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -442,7 +442,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_ending_ret,
-                            Box::new(move |mut core| {
+                            Box::new(move |_core| {
                                 handle.block_on(async {
                                     let match_state = match_state.lock().await;
                                     let m = if let MatchState::Match(m) = &*match_state {
@@ -527,7 +527,7 @@ impl Game {
                     {
                         (
                             bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
-                            Box::new(move |mut core| {
+                            Box::new(move |core| {
                                 log::warn!("unhandled call to commMenu_handleLinkCableInput at 0x{:0x}: uh oh!", core.as_ref().gba().cpu().gpr(15)-4);
                             }),
                         )
@@ -552,7 +552,7 @@ impl Game {
                                             todo!()
                                         }
                                         MatchState::NoMatch => {
-                                            let m = Match::new(
+                                            let m = battle::Match::new(
                                                 "test".to_string(),
                                                 bn6.match_type(core),
                                                 core.as_ref().game_title(),
@@ -565,14 +565,24 @@ impl Game {
                                             }
                                         }
                                         MatchState::Match(m) => match m.poll_for_ready().await {
-                                            Ok(true) => {
+                                            battle::NegotiationStatus::NotReady => {}
+                                            battle::NegotiationStatus::Ready => {
                                                 bn6.start_battle_from_comm_menu(core);
                                                 log::info!("match started");
                                             }
-                                            Ok(false) => {}
-                                            Err(err) => {
-                                                // TODO: return the correct error.
-                                                bn6.drop_matchmaking_from_comm_menu(core, 0);
+                                            battle::NegotiationStatus::MatchTypeMismatch
+                                            | battle::NegotiationStatus::GameMismatch => {
+                                                const WRONG_MODE: u32 = 0x25;
+                                                bn6.drop_matchmaking_from_comm_menu(
+                                                    core, WRONG_MODE,
+                                                );
+                                            }
+                                            battle::NegotiationStatus::Failed => {
+                                                const CONNECTION_ERROR: u32 = 0x26;
+                                                bn6.drop_matchmaking_from_comm_menu(
+                                                    core,
+                                                    CONNECTION_ERROR,
+                                                );
                                             }
                                         },
                                     };
@@ -581,12 +591,11 @@ impl Game {
                         )
                     },
                     {
-                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
-                            Box::new(move |mut core| {
+                            Box::new(move |core| {
                                 handle.block_on(async {
                                     // TODO: get appropriate link settings and background
                                     bn6.set_link_battle_settings_and_background(core, 0);
@@ -615,7 +624,7 @@ impl Game {
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
-                            Box::new(move |mut core| {
+                            Box::new(move |_core| {
                                 handle.block_on(async {
                                     let mut match_state = match_state.lock().await;
                                     *match_state = MatchState::NoMatch;
@@ -674,7 +683,6 @@ impl Game {
 
     pub fn run(mut self: Self) {
         let handle = self.rt.handle().clone();
-        let match_state = self.match_state.clone();
 
         self.event_loop
             .take()
@@ -712,7 +720,7 @@ impl Game {
                         self.pixels.resize_surface(size.width, size.height);
                     }
 
-                    let mut core = self.main_core.lock();
+                    let core = self.main_core.lock();
 
                     let mut keys = 0u32;
                     if self.input.key_held(winit::event::VirtualKeyCode::Left) {

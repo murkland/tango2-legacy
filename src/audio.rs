@@ -25,7 +25,7 @@ impl MGBAAudioSource {
     }
 
     fn read_new_buf(&mut self) {
-        let mut core = self.core.as_ref().lock();
+        let core = self.core.as_ref().lock();
 
         let clock_rate = core.as_ref().frequency();
 

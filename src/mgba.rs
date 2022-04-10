@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub mod arm_core;
 pub mod blip;
 mod c;
