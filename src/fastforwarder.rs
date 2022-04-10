@@ -41,6 +41,7 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.main_read_joyflags,
                             Box::new(move |mut core| {
+                                log::info!("READ JOYFLAGS");
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
@@ -92,6 +93,7 @@ impl Fastforwarder {
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move |mut core| {
+                                log::info!("COPY INPUT DATA");
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
@@ -278,7 +280,7 @@ impl Fastforwarder {
         {
             self.state.borrow_mut().as_mut().unwrap().result = Ok(());
             self.core.as_mut().run_frame();
-            if let Err(_) = self.state.borrow().as_ref().unwrap().result {
+            if self.state.borrow().as_ref().unwrap().result.is_err() {
                 let state = self.state.take().unwrap();
                 return Err(state.result.unwrap_err());
             }
