@@ -75,7 +75,7 @@ impl Game {
                 .with_title("tango")
                 .with_inner_size(size)
                 .with_min_inner_size(size)
-                .build(event_loop.as_ref().unwrap())?
+                .build(event_loop.as_ref().expect("event loop"))?
         };
 
         let vbuf2 = Arc::new(Mutex::new(vec![0u8; (width * height * 4) as usize]));
@@ -101,7 +101,8 @@ impl Game {
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
-        let (stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+        let (stream, stream_handle) =
+            rodio::OutputStream::try_default().expect("rodio OutputStream");
         let audio_source = {
             let core = main_core.clone();
             audio::MGBAAudioSource::new(core, 48000)
@@ -115,7 +116,7 @@ impl Game {
                 .gba_mut()
                 .sync_mut()
                 .as_mut()
-                .unwrap()
+                .expect("sync")
                 .set_fps_target(60.0);
         }
 
@@ -170,19 +171,19 @@ impl Game {
                                         let battle_number = battle_state.number;
                                         let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
                                         let local_init = bn6.local_marshaled_battle_state(core);
-                                        m.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
+                                        m.send_init(battle_number, battle.local_delay(), &local_init).await.expect("send init");
                                         log::info!("sent local init");
                                         bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &local_init);
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
                                             None => {
-                                                core.gba_mut().sync_mut().unwrap().set_fps_target(EXPECTED_FPS as f32);
+                                                core.gba_mut().sync_mut().expect("sync").set_fps_target(EXPECTED_FPS as f32);
                                                 break 'abort;
                                             }
                                         };
                                         log::info!("received remote init: {:?}", remote_init);
-                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().unwrap());
+                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().expect("remote init"));
 
                                         battle.set_remote_delay(remote_init.input_delay);
                                         return;
@@ -277,7 +278,7 @@ impl Game {
                                                     )
                                                     .await;
                                             }
-                                            let committed_state = core.save_state().unwrap();
+                                            let committed_state = core.save_state().expect("save committed state");
                                             battle.set_committed_state(committed_state);
 
                                             log::info!("battle state committed");
@@ -308,28 +309,28 @@ impl Game {
                                         .await
                                         {
                                             log::error!("could not queue local input within {:?}, dropping connection", TIMEOUT);
-                                            core.gba_mut().sync_mut().unwrap().set_fps_target(EXPECTED_FPS as f32);
+                                            core.gba_mut().sync_mut().expect("sync").set_fps_target(EXPECTED_FPS as f32);
                                             break 'abort;
                                         }
 
-                                        m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, &turn).await.unwrap();
+                                        m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, &turn).await.expect("send input");
 
                                         let (input_pairs, left) = battle.consume_and_peek_local().await;
                                         let mut fastforwarder = fastforwarder.lock();
-                                        let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(battle.committed_state().as_ref().unwrap(), battle.local_player_index(), &input_pairs, battle.last_committed_remote_input(), &left).unwrap();
+                                        let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(battle.committed_state().as_ref().expect("committed state"), battle.local_player_index(), &input_pairs, battle.last_committed_remote_input(), &left).expect("fastforward");
                                         battle.set_committed_state(committed_state);
                                         let last_joyflags = last_input.remote.joyflags;
                                         battle.set_last_input(last_input);
 
                                         let tps = EXPECTED_FPS as i32 + (remote_tick as i32 - local_tick as i32 - battle.local_delay() as i32) - (last_committed_remote_input.remote_tick as i32 - last_committed_remote_input.local_tick as i32 - battle.remote_delay() as i32);
-                                        core.gba_mut().sync_mut().unwrap().set_fps_target(tps as f32);
+                                        core.gba_mut().sync_mut().expect("sync").set_fps_target(tps as f32);
 
                                         let new_in_battle_time = bn6.in_battle_time(core);
                                         if new_in_battle_time != in_battle_time {
                                             panic!("fastforwarder moved battle time: expected {}, got {}", in_battle_time, new_in_battle_time);
                                         }
 
-                                        core.load_state(&dirty_state).unwrap();
+                                        core.load_state(&dirty_state).expect("load dirty state");
                                         core.gba_mut().cpu_mut().set_gpr(4, last_joyflags as i32);
                                         return;
                                     }
@@ -366,7 +367,7 @@ impl Game {
                                         return;
                                     }
 
-                                    let ip = battle.take_last_input().unwrap();
+                                    let ip = battle.take_last_input().expect("last input");
 
                                     bn6.set_player_input_state(
                                         core,
@@ -700,7 +701,7 @@ impl Game {
 
         self.event_loop
             .take()
-            .unwrap()
+            .expect("event loop")
             .run(move |event, _, control_flow| {
                 *control_flow = winit::event_loop::ControlFlow::Poll;
 
@@ -710,9 +711,7 @@ impl Game {
                         self.pixels.get_frame().copy_from_slice(&vbuf2);
                     }
 
-                    self.gui
-                        .prepare(&self.window)
-                        .expect("gui.prepare() failed");
+                    self.gui.prepare(&self.window).expect("prepare gui");
                     self.pixels
                         .render_with(|encoder, render_target, context| {
                             context.scaling_renderer.render(encoder, render_target);
@@ -720,7 +719,7 @@ impl Game {
                                 .render(&self.window, encoder, render_target, context)?;
                             Ok(())
                         })
-                        .unwrap();
+                        .expect("render pixels");
                 }
 
                 self.gui.handle_event(&self.window, &event);

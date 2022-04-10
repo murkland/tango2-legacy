@@ -47,14 +47,14 @@ where
 
     pub async fn add_local_input(&self, v: T) {
         let sem = self.local_semaphore.clone();
-        let permit = sem.acquire_owned().await.unwrap();
+        let permit = sem.acquire_owned().await.expect("acquire semaphore permit");
         let mut queues = self.queues.lock().await;
         queues.0.push_back((v, permit));
     }
 
     pub async fn add_remote_input(&self, v: T) {
         let sem = self.remote_semaphore.clone();
-        let permit = sem.acquire_owned().await.unwrap();
+        let permit = sem.acquire_owned().await.expect("acquire semaphore permit");
         let mut queues = self.queues.lock().await;
         queues.1.push_back((v, permit));
     }

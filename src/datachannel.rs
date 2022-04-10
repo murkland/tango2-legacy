@@ -26,7 +26,10 @@ impl DataChannel {
                 .on_message(Box::new(move |msg| {
                     let sender = sender.clone();
                     Box::pin(async move {
-                        sender.send(msg.data.to_vec()).await.unwrap();
+                        sender
+                            .send(msg.data.to_vec())
+                            .await
+                            .expect("receive message");
                     })
                 }))
                 .await;

@@ -97,7 +97,7 @@ impl Client {
                 which: Some(pb::negotiate_request::Which::Start(
                     pb::negotiate_request::Start {
                         session_id: session_id.to_string(),
-                        offer_sdp: peer_conn.local_description().await.unwrap().sdp,
+                        offer_sdp: peer_conn.local_description().await.expect("local sdp").sdp,
                     },
                 )),
             })
@@ -140,12 +140,12 @@ impl Client {
                     .send(pb::NegotiateRequest {
                         which: Some(pb::negotiate_request::Which::Answer(
                             pb::negotiate_request::Answer {
-                                sdp: peer_conn.local_description().await.unwrap().sdp,
+                                sdp: peer_conn.local_description().await.expect("remote sdp").sdp,
                             },
                         )),
                     })
                     .await
-                    .unwrap();
+                    .expect("send Answer");
 
                 if let Some(pb::NegotiateResponse {
                     which:

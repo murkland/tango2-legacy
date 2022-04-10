@@ -44,24 +44,29 @@ impl Fastforwarder {
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
-                                if in_battle_time == state.as_ref().unwrap().commit_time {
-                                    state.as_mut().unwrap().committed_state =
-                                        Some(core.save_state().unwrap());
+                                if in_battle_time == state.as_ref().expect("state").commit_time {
+                                    state.as_mut().expect("state").committed_state =
+                                        Some(core.save_state().expect("save committed state"));
                                 }
 
-                                if in_battle_time == state.as_ref().unwrap().dirty_time {
-                                    state.as_mut().unwrap().dirty_state =
-                                        Some(core.save_state().unwrap());
+                                if in_battle_time == state.as_ref().expect("state").dirty_time {
+                                    state.as_mut().expect("state").dirty_state =
+                                        Some(core.save_state().expect("save dirty state"));
                                 }
 
-                                if state.as_ref().unwrap().input_pairs.is_empty() {
+                                if state.as_ref().expect("state").input_pairs.is_empty() {
                                     return;
                                 }
 
-                                let ip =
-                                    state.as_mut().unwrap().input_pairs.front().unwrap().clone();
+                                let ip = state
+                                    .as_mut()
+                                    .expect("state")
+                                    .input_pairs
+                                    .front()
+                                    .expect("first input pair")
+                                    .clone();
                                 if ip.local.local_tick != ip.remote.local_tick {
-                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
                                         in_battle_time,
                                         ip.local.local_tick,
@@ -71,7 +76,7 @@ impl Fastforwarder {
                                 }
 
                                 if ip.local.local_tick != in_battle_time {
-                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
                                         "input tick != in battle tick: {} != {}",
                                         ip.local.local_tick,
                                         in_battle_time,
@@ -94,9 +99,9 @@ impl Fastforwarder {
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
 
-                                let commit_time = state.as_ref().unwrap().commit_time;
+                                let commit_time = state.as_ref().expect("state").commit_time;
 
-                                if state.as_ref().unwrap().input_pairs.is_empty() {
+                                if state.as_ref().expect("state").input_pairs.is_empty() {
                                     return;
                                 }
 
@@ -104,10 +109,15 @@ impl Fastforwarder {
                                 let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                                let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
+                                let ip = state
+                                    .as_mut()
+                                    .expect("state")
+                                    .input_pairs
+                                    .pop_front()
+                                    .expect("first input pair");
 
                                 if ip.local.local_tick != ip.local.local_tick {
-                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
                                         in_battle_time,
                                         ip.local.local_tick,
@@ -117,7 +127,7 @@ impl Fastforwarder {
                                 }
 
                                 if ip.local.local_tick != in_battle_time {
-                                    state.as_mut().unwrap().result = Err(anyhow::anyhow!(
+                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
                                         "input tick != in battle tick: {} != {}",
                                         ip.local.local_tick,
                                         in_battle_time,
@@ -125,7 +135,8 @@ impl Fastforwarder {
                                     return;
                                 }
 
-                                let local_player_index = state.as_ref().unwrap().local_player_index;
+                                let local_player_index =
+                                    state.as_ref().expect("state").local_player_index;
                                 let remote_player_index = 1 - local_player_index;
 
                                 bn6.set_player_input_state(
@@ -173,9 +184,10 @@ impl Fastforwarder {
                             bn6.offsets.rom.battle_is_p2_tst,
                             Box::new(move |mut core| {
                                 let state = state.borrow();
-                                core.gba_mut()
-                                    .cpu_mut()
-                                    .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
+                                core.gba_mut().cpu_mut().set_gpr(
+                                    0,
+                                    state.as_ref().expect("state").local_player_index as i32,
+                                );
                             }),
                         )
                     },
@@ -186,9 +198,10 @@ impl Fastforwarder {
                             bn6.offsets.rom.link_is_p2_ret,
                             Box::new(move |mut core| {
                                 let state = state.borrow();
-                                core.gba_mut()
-                                    .cpu_mut()
-                                    .set_gpr(0, state.as_ref().unwrap().local_player_index as i32);
+                                core.gba_mut().cpu_mut().set_gpr(
+                                    0,
+                                    state.as_ref().expect("state").local_player_index as i32,
+                                );
                             }),
                         )
                     },
@@ -274,7 +287,7 @@ impl Fastforwarder {
                 }
             }))
             .collect::<std::collections::VecDeque<input::Pair<input::Input>>>();
-        let last_input = input_pairs.back().unwrap().clone();
+        let last_input = input_pairs.back().expect("last input pair").clone();
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
@@ -301,20 +314,26 @@ impl Fastforwarder {
             .unwrap()
             .committed_state
             .is_none()
-            || self.state.borrow().as_ref().unwrap().dirty_state.is_none()
+            || self
+                .state
+                .borrow()
+                .as_ref()
+                .expect("state")
+                .dirty_state
+                .is_none()
         {
-            self.state.borrow_mut().as_mut().unwrap().result = Ok(());
+            self.state.borrow_mut().as_mut().expect("state").result = Ok(());
             self.core.as_mut().run_frame();
-            if self.state.borrow().as_ref().unwrap().result.is_err() {
-                let state = self.state.take().unwrap();
-                return Err(state.result.unwrap_err());
+            if self.state.borrow().as_ref().expect("state").result.is_err() {
+                let state = self.state.take().expect("state");
+                return Err(state.result.expect_err("state result err"));
             }
         }
 
-        let state = self.state.take().unwrap();
+        let state = self.state.take().expect("state");
         Ok((
-            state.committed_state.unwrap(),
-            state.dirty_state.unwrap(),
+            state.committed_state.expect("committed state"),
+            state.dirty_state.expect("dirty state"),
             last_input,
         ))
     }

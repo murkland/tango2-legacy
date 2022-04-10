@@ -139,11 +139,15 @@ impl MatchImpl {
 
         log::info!(
             "local sdp: {}",
-            peer_conn.local_description().await.unwrap().sdp
+            peer_conn.local_description().await.expect("local sdp").sdp
         );
         log::info!(
             "remote sdp: {}",
-            peer_conn.remote_description().await.unwrap().sdp
+            peer_conn
+                .remote_description()
+                .await
+                .expect("remote sdp")
+                .sdp
         );
 
         let mut nonce = [0u8; 16];
@@ -250,7 +254,7 @@ impl MatchImpl {
             .map(|(&x1, &x2)| x1 ^ x2)
             .collect::<Vec<u8>>();
 
-        let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().unwrap());
+        let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().expect("rng seed"));
 
         self.battle_state.lock().await.won_last_battle =
             rng.gen::<bool>() == (side == signor::ConnectionSide::Polite);
@@ -284,7 +288,10 @@ impl MatchImpl {
                 Some(b) => b,
             } {
                 protocol::packet::Which::Init(init) => {
-                    self.remote_init_sender.send(init).await.unwrap();
+                    self.remote_init_sender
+                        .send(init)
+                        .await
+                        .expect("receive init");
                 }
                 protocol::packet::Which::Input(input) => {
                     let mut battle_state = self.battle_state.lock().await;
@@ -310,7 +317,7 @@ impl MatchImpl {
                             turn: if input.turn.is_empty() {
                                 None
                             } else {
-                                Some(input.turn.as_slice().try_into().unwrap())
+                                Some(input.turn.as_slice().try_into().expect("remote turn"))
                             },
                         })
                         .await;
