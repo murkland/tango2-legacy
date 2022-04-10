@@ -3179,6 +3179,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "bindgen",
+ "cmake",
  "const-zero",
  "egui",
  "egui-winit",

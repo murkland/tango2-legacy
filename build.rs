@@ -6,8 +6,15 @@ use std::path::PathBuf;
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS");
 
-    println!("cargo:rustc-link-search=external/mgba/build");
-    println!("cargo:rustc-link-lib=mgba");
+    let mgba_dst = cmake::Config::new("external/mgba")
+        .define("LIBMGBA_ONLY", "on")
+        .build();
+
+    println!(
+        "cargo:rustc-link-search=native={}/build",
+        mgba_dst.display()
+    );
+    println!("cargo:rustc-link-lib=static=mgba");
     match target_os.as_ref().map(|x| &**x) {
         Ok("macos") => println!("cargo:rustc-link-lib=framework=Cocoa"),
         tos => panic!("unknown target os {:?}!", tos),
