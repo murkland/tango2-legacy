@@ -234,6 +234,7 @@ impl Fastforwarder {
                 ip
             }))
             .collect::<std::collections::VecDeque<[input::Input; 2]>>();
+        let last_input = input_pairs.back().unwrap().clone();
 
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
@@ -274,7 +275,7 @@ impl Fastforwarder {
         Ok((
             state.committed_state.unwrap(),
             state.dirty_state.unwrap(),
-            state.input_pairs.back().unwrap().clone(),
+            last_input,
         ))
     }
 }

@@ -1,6 +1,4 @@
-use std::time::Instant;
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Input {
     pub local_tick: u32,
     pub remote_tick: u32,

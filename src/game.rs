@@ -319,7 +319,7 @@ impl Game {
                                         let last_joyflags = last_input[battle.local_player_index() as usize].joyflags;
                                         battle.set_last_input(last_input);
 
-                                        let tps = EXPECTED_FPS + (remote_tick - local_tick - battle.local_delay()) - (last_committed_remote_input.remote_tick - last_committed_remote_input.local_tick - battle.remote_delay());
+                                        let tps = EXPECTED_FPS as i32 + (remote_tick as i32 - local_tick as i32 - battle.local_delay() as i32) - (last_committed_remote_input.remote_tick as i32 - last_committed_remote_input.local_tick as i32 - battle.remote_delay() as i32);
                                         core.gba_mut().sync_mut().unwrap().set_fps_target(tps as f32);
 
                                         let new_in_battle_time = bn6.in_battle_time(core);
