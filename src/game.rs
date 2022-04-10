@@ -17,7 +17,6 @@ pub struct Game {
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     _trapper: mgba::trapper::Trapper,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
-    input: winit_input_helper::WinitInputHelper,
     vbuf: Arc<Vec<u8>>,
     vbuf2: Arc<Mutex<Vec<u8>>>,
     window: winit::window::Window,
@@ -66,8 +65,6 @@ impl Game {
             core.as_mut().set_video_buffer(&mut vbuf, width.into());
             (width, height, Arc::new(vbuf), bn6.unwrap())
         };
-
-        let input = winit_input_helper::WinitInputHelper::new();
 
         let window = {
             let size = winit::dpi::LogicalSize::new(width * 3, height * 3);
@@ -564,7 +561,11 @@ impl Game {
                                         }
                                         MatchState::NoMatch => {
                                             gui_state.open_link_code_dialog();
-                                            match &*gui_state.link_code_status().as_ref().unwrap() {
+                                            match &*gui_state
+                                                .lock_link_code_status()
+                                                .as_ref()
+                                                .unwrap()
+                                            {
                                                 gui::DialogStatus::Pending(_) => {
                                                     return;
                                                 }
@@ -691,7 +692,6 @@ impl Game {
             match_state,
             _trapper: trapper,
             event_loop,
-            input,
             window,
             pixels,
             vbuf,
@@ -718,6 +718,7 @@ impl Game {
 
     pub fn run(mut self: Self) {
         let handle = self.rt.handle().clone();
+        let mut input_helper = winit_input_helper::WinitInputHelper::new();
 
         self.event_loop
             .take()
@@ -725,60 +726,59 @@ impl Game {
             .run(move |event, _, control_flow| {
                 *control_flow = winit::event_loop::ControlFlow::Poll;
 
-                let mut gui_handled = false;
-                if let winit::event::Event::WindowEvent { ref event, .. } = event {
-                    if self.gui.handle_event(&event) {
-                        gui_handled = true;
+                match event {
+                    winit::event::Event::WindowEvent {
+                        event: ref window_event,
+                        ..
+                    } => {
+                        match window_event {
+                            winit::event::WindowEvent::CloseRequested => {
+                                *control_flow = winit::event_loop::ControlFlow::Exit;
+                            }
+                            winit::event::WindowEvent::Resized(size) => {
+                                self.pixels.resize_surface(size.width, size.height);
+                                self.gui.resize(size.width, size.height);
+                            }
+                            _ => {}
+                        };
+                        if !self.gui.handle_event(&window_event) {
+                            input_helper.update(&event);
+                        }
                     }
-                }
+                    winit::event::Event::MainEventsCleared => {
+                        input_helper.update(&event);
 
-                if self.input.update(&event) {
-                    if self.input.quit() {
-                        *control_flow = winit::event_loop::ControlFlow::Exit;
-                        return;
-                    }
-
-                    if let Some(scale_factor) = self.input.scale_factor() {
-                        self.gui.scale_factor(scale_factor);
-                    }
-
-                    if let Some(size) = self.input.window_resized() {
-                        self.pixels.resize_surface(size.width, size.height);
-                        self.gui.resize(size.width, size.height);
-                    }
-
-                    if !gui_handled {
                         let core = self.main_core.lock();
 
                         let mut keys = 0u32;
-                        if self.input.key_held(winit::event::VirtualKeyCode::Left) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
                             keys |= mgba::input::keys::LEFT;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Right) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Right) {
                             keys |= mgba::input::keys::RIGHT;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Up) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Up) {
                             keys |= mgba::input::keys::UP;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Down) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Down) {
                             keys |= mgba::input::keys::DOWN;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Z) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Z) {
                             keys |= mgba::input::keys::A;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::X) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::X) {
                             keys |= mgba::input::keys::B;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::A) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::A) {
                             keys |= mgba::input::keys::L;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::S) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::S) {
                             keys |= mgba::input::keys::R;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Return) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Return) {
                             keys |= mgba::input::keys::START;
                         }
-                        if self.input.key_held(winit::event::VirtualKeyCode::Back) {
+                        if input_helper.key_held(winit::event::VirtualKeyCode::Back) {
                             keys |= mgba::input::keys::SELECT;
                         }
 
@@ -797,13 +797,7 @@ impl Game {
                                 }
                             }
                         });
-                    }
 
-                    self.window.request_redraw();
-                }
-
-                match event {
-                    winit::event::Event::RedrawRequested(_) => {
                         {
                             let vbuf2 = self.vbuf2.lock().clone();
                             self.pixels.get_frame().copy_from_slice(&vbuf2);
@@ -819,7 +813,7 @@ impl Game {
                             .expect("render pixels");
                     }
                     _ => {}
-                };
+                }
             });
     }
 }

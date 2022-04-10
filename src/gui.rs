@@ -153,7 +153,7 @@ impl State {
         *maybe_link_code_state = None;
     }
 
-    pub fn link_code_status(&self) -> parking_lot::MutexGuard<Option<DialogStatus<String>>> {
+    pub fn lock_link_code_status(&self) -> parking_lot::MutexGuard<Option<DialogStatus<String>>> {
         self.link_code_state.lock()
     }
 
@@ -162,28 +162,31 @@ impl State {
 
         if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state {
             if let Some(egui::InnerResponse { inner: Some((ok, cancel)), .. }) = egui::Window::new("")
-                .open(&mut true)
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-                .fixed_pos(egui::pos2(0.0, 0.0))
+                .open(&mut true)
                 .show(ctx, |ui| {
                     ui.label(egui::RichText::new("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。"));
                     ui.separator();
-                    ui.add(egui::TextEdit::singleline( code).hint_text("リンクコード"));
+                    let response = ui.add(egui::TextEdit::singleline( code).hint_text("リンクコード"));
+                    *code = code.to_lowercase().trim().to_string();
+                    let text_ok = response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) && !code.is_empty();
+                    response.request_focus();
                     ui.separator();
-                    ui.horizontal(|ui| {
-                        let ok = ui.add(egui::Button::new("接続"));
-                        let cancel = ui.add(egui::Button::new("キャンセル"));
+                    let (button_ok, cancel) = ui.horizontal(|ui| {
+                        let ok = ui.add(egui::Button::new("接続")).clicked();
+                        let cancel = ui.add(egui::Button::new("キャンセル")).clicked();
                         (ok, cancel)
-                    }).inner
+                    }).inner;
+                    (text_ok || button_ok, cancel)
                 }) {
-                    if ok.clicked() {
+                    if ok {
                         *maybe_link_code_state = Some(DialogStatus::Ok(code.to_string()));
                     }
 
-                    if cancel.clicked() {
+                    if cancel {
                         *maybe_link_code_state = Some(DialogStatus::Cancelled);
                     }
                 }
