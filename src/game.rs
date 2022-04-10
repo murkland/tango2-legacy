@@ -749,21 +749,21 @@ impl Game {
                         keys |= mgba::input::keys::SELECT;
                     }
 
-                    match &*self.match_state.blocking_lock() {
-                        MatchState::Match(m) => {
-                            handle.block_on(async {
+                    handle.block_on(async {
+                        match &*self.match_state.lock().await {
+                            MatchState::Match(m) => {
                                 let mut battle_state = m.lock_battle_state().await;
                                 if let Some(b) = &mut battle_state.battle {
                                     b.set_local_joyflags(keys as u16 | 0xfc00);
                                 } else {
                                     core.as_mut().set_keys(keys);
                                 }
-                            });
+                            }
+                            _ => {
+                                core.as_mut().set_keys(keys);
+                            }
                         }
-                        _ => {
-                            core.as_mut().set_keys(keys);
-                        }
-                    }
+                    });
 
                     self.window.request_redraw();
                 }
