@@ -16,22 +16,7 @@ pub struct State {
 }
 
 impl State {
-    fn layout(&mut self, ui: &mut imgui::Ui) {
-        // Draw windows and GUI elements here
-        let mut about_open = false;
-        ui.main_menu_bar(|| {
-            ui.menu("Help", || {
-                about_open = imgui::MenuItem::new("About...").build(&ui);
-            });
-        });
-        if about_open {
-            self.about_open = true;
-        }
-
-        if self.about_open {
-            ui.show_about_window(&mut self.about_open);
-        }
-    }
+    fn layout(&mut self, ui: &mut imgui::Ui) {}
 }
 
 impl Gui {
