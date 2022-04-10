@@ -12,6 +12,7 @@ mod input;
 mod mgba;
 mod protocol;
 mod signor;
+mod tps;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();

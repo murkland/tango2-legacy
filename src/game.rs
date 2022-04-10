@@ -126,6 +126,11 @@ impl Game {
                 .set_fps_target(60.0);
         }
 
+        {
+            let core = main_core.clone();
+            let match_state = match_state.clone();
+        }
+
         let trapper = {
             let core = main_core.clone();
             let mut core = core.lock();
