@@ -82,13 +82,17 @@ impl Trapper {
         }
 
         for (addr, handler) in handlers {
-            let original = core.as_mut().raw_read_16(addr, -1);
-            core.as_mut()
-                .raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
-            trapper_c_struct
-                .r#impl
-                .traps
-                .insert(addr, Trap { original, handler });
+            match trapper_c_struct.r#impl.traps.entry(addr) {
+                std::collections::hash_map::Entry::Occupied(_) => {
+                    panic!("attempting to install a second trap at 0x{:08x}", addr);
+                }
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    let original = core.as_mut().raw_read_16(addr, -1);
+                    core.as_mut()
+                        .raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
+                    e.insert(Trap { original, handler });
+                }
+            };
         }
         Trapper(trapper_c_struct)
     }

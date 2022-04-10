@@ -623,15 +623,6 @@ impl Game {
                     },
                     {
                         (
-                            bn6.offsets.rom.comm_menu_handle_link_cable_input_entry,
-                            Box::new(move |mut core| {
-                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
-                            }),
-                        )
-                    },
-                    {
-                        (
                             bn6.offsets
                                 .rom
                                 .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
