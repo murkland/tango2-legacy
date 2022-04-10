@@ -591,14 +591,28 @@ impl Game {
                         )
                     },
                     {
+                        let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
                             Box::new(move |core| {
                                 handle.block_on(async {
-                                    // TODO: get appropriate link settings and background
-                                    bn6.set_link_battle_settings_and_background(core, 0);
+                                    let match_state = match_state.lock().await;
+                                    let m = if let MatchState::Match(m) = &*match_state {
+                                        m
+                                    } else {
+                                        return;
+                                    };
+
+                                    let mut rng = m.rng().await.expect("rng");
+                                    bn6.set_link_battle_settings_and_background(
+                                        core,
+                                        bn6::random_battle_settings_and_background(
+                                            &mut *rng,
+                                            (m.match_type() & 0xff) as u8,
+                                        ),
+                                    );
                                 });
                             }),
                         )

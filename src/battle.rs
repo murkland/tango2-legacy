@@ -20,6 +20,7 @@ pub struct BattleState {
 enum Negotiation {
     NotReady,
     Negotiated {
+        peer_conn: webrtc::peer_connection::RTCPeerConnection,
         dc: std::sync::Arc<datachannel::DataChannel>,
         rng: rand_pcg::Mcg128Xsl64,
     },
@@ -253,7 +254,7 @@ impl MatchImpl {
 
         self.battle_state.lock().await.won_last_battle =
             rng.gen::<bool>() == (side == signor::ConnectionSide::Polite);
-        *self.negotiation.lock().await = Negotiation::Negotiated { dc, rng };
+        *self.negotiation.lock().await = Negotiation::Negotiated { dc, peer_conn, rng };
         Ok(())
     }
 
@@ -504,6 +505,11 @@ impl Match {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {},
                 _ = r#impl.run() => {},
+            };
+            if let Negotiation::Negotiated { dc, peer_conn, .. } = &*r#impl.negotiation.lock().await
+            {
+                let _ = dc.close().await;
+                let _ = peer_conn.close().await;
             }
         });
     }

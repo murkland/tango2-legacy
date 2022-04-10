@@ -34,10 +34,6 @@ impl BN6 {
         }
     }
 
-    pub fn local_joy_flags(&self, mut core: core::CoreMutRef) -> u16 {
-        core.raw_read_16(self.offsets.ewram.joypad + 0x00, -1)
-    }
-
     pub fn local_custom_screen_state(&self, mut core: core::CoreMutRef) -> u8 {
         core.raw_read_8(self.offsets.ewram.battle_state + 0x11, -1)
     }
@@ -78,22 +74,6 @@ impl BN6 {
         )
     }
 
-    pub fn local_wins(&self, mut core: core::CoreMutRef) -> u8 {
-        core.raw_read_8(self.offsets.ewram.battle_state + 0x18, -1)
-    }
-
-    pub fn remote_wins(&self, mut core: core::CoreMutRef) -> u8 {
-        core.raw_read_8(self.offsets.ewram.battle_state + 0x19, -1)
-    }
-
-    pub fn rng2_state(&self, mut core: core::CoreMutRef) -> u32 {
-        core.raw_read_32(self.offsets.ewram.rng2, -1)
-    }
-
-    pub fn menu_control_state(&self, mut core: core::CoreMutRef, i: u32) -> u32 {
-        core.raw_read_32(self.offsets.ewram.menu_control + i, -1)
-    }
-
     pub fn set_link_battle_settings_and_background(&self, mut core: core::CoreMutRef, v: u16) {
         core.raw_write_16(self.offsets.ewram.menu_control + 0x2a, -1, v)
     }
@@ -105,4 +85,22 @@ impl BN6 {
     pub fn in_battle_time(&self, mut core: core::CoreMutRef) -> u32 {
         core.raw_read_32(self.offsets.ewram.battle_state + 0x60, -1)
     }
+}
+
+pub fn random_battle_settings_and_background(rng: &mut impl rand::Rng, match_type: u8) -> u16 {
+    const BATTLE_BACKGROUNDS: &[u16] = &[
+        0x00, 0x01, 0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f, 0x10, 0x11, 0x11, 0x13, 0x13,
+    ];
+
+    let lo = match match_type {
+        0 => rng.gen_range(0..0x44u16),
+        1 => rng.gen_range(0..0x60u16),
+        2 => rng.gen_range(0..0x44u16) + 0x60u16,
+        _ => 0u16,
+    };
+
+    let hi = BATTLE_BACKGROUNDS[rng.gen_range(0..BATTLE_BACKGROUNDS.len())];
+
+    hi << 0x8 | lo
 }
