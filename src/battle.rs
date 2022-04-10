@@ -242,20 +242,17 @@ impl MatchImpl {
                     };
 
                     battle
-                        .add_input(
-                            battle.remote_player_index(),
-                            input::Input {
-                                local_tick: input.local_tick,
-                                remote_tick: input.remote_tick,
-                                joyflags: input.joyflags as u16,
-                                custom_screen_state: input.custom_screen_state as u8,
-                                turn: if input.turn.is_empty() {
-                                    None
-                                } else {
-                                    Some(input.turn.as_slice().try_into().unwrap())
-                                },
+                        .add_remote_input(input::Input {
+                            local_tick: input.local_tick,
+                            remote_tick: input.remote_tick,
+                            joyflags: input.joyflags as u16,
+                            custom_screen_state: input.custom_screen_state as u8,
+                            turn: if input.turn.is_empty() {
+                                None
+                            } else {
+                                Some(input.turn.as_slice().try_into().unwrap())
                             },
-                        )
+                        })
                         .await;
                 }
                 p => anyhow::bail!("unknown packet: {:?}", p),
@@ -412,7 +409,7 @@ impl Match {
         log::info!("starting battle: is_p2 = {}", is_p2);
         battle_state.battle = Some(Battle {
             is_p2,
-            iq: input::Queue::new(60, 0, if is_p2 { 1 } else { 0 }),
+            iq: input::PairQueue::new(60, 0),
             remote_delay: 0,
             is_accepting_input: false,
             last_committed_remote_input: input::Input {
@@ -453,11 +450,11 @@ struct LocalPendingTurn {
 
 pub struct Battle {
     is_p2: bool,
-    iq: input::Queue,
+    iq: input::PairQueue<input::Input>,
     remote_delay: u32,
     is_accepting_input: bool,
     last_committed_remote_input: input::Input,
-    last_input: Option<[input::Input; 2]>,
+    last_input: Option<(input::Input, input::Input)>,
     state_committed_notify: tokio::sync::Notify,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
@@ -482,11 +479,11 @@ impl Battle {
         self.state_committed_notify.notify_one();
     }
 
-    pub fn set_last_input(&mut self, inp: [input::Input; 2]) {
+    pub fn set_last_input(&mut self, inp: (input::Input, input::Input)) {
         self.last_input = Some(inp);
     }
 
-    pub fn take_last_input(&mut self) -> Option<[input::Input; 2]> {
+    pub fn take_last_input(&mut self) -> Option<(input::Input, input::Input)> {
         self.last_input.take()
     }
 
@@ -522,16 +519,22 @@ impl Battle {
         &self.committed_state
     }
 
-    pub async fn consume_and_peek_local(&mut self) -> (Vec<[input::Input; 2]>, Vec<input::Input>) {
+    pub async fn consume_and_peek_local(
+        &mut self,
+    ) -> (Vec<(input::Input, input::Input)>, Vec<input::Input>) {
         let (input_pairs, left) = self.iq.consume_and_peek_local().await;
         if let Some(last) = input_pairs.last() {
-            self.last_committed_remote_input = last[1 - self.local_player_index() as usize].clone();
+            self.last_committed_remote_input = last.1.clone();
         }
         (input_pairs, left)
     }
 
-    pub async fn add_input(&mut self, player_index: u8, input: input::Input) {
-        self.iq.add_input(player_index, input).await;
+    pub async fn add_local_input(&mut self, input: input::Input) {
+        self.iq.add_local_input(input).await;
+    }
+
+    pub async fn add_remote_input(&mut self, input: input::Input) {
+        self.iq.add_remote_input(input).await;
     }
 
     pub fn add_local_pending_turn(&mut self, marshaled: [u8; 0x100]) {

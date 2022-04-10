@@ -7,75 +7,92 @@ pub struct Input {
     pub turn: Option<[u8; 0x100]>,
 }
 
-pub struct Queue {
-    semaphores: [std::sync::Arc<tokio::sync::Semaphore>; 2],
-    queues: tokio::sync::Mutex<
-        [std::collections::VecDeque<(Input, tokio::sync::OwnedSemaphorePermit)>; 2],
-    >,
-    local_player_index: u8,
+pub struct PairQueue<T>
+where
+    T: Clone,
+{
+    local_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    remote_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    queues: tokio::sync::Mutex<(
+        std::collections::VecDeque<(T, tokio::sync::OwnedSemaphorePermit)>,
+        std::collections::VecDeque<(T, tokio::sync::OwnedSemaphorePermit)>,
+    )>,
     local_delay: u32,
 }
 
-impl Queue {
-    pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
-        Queue {
-            semaphores: [
-                std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
-                std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
-            ],
-            queues: tokio::sync::Mutex::new([
+impl<T> PairQueue<T>
+where
+    T: Clone,
+{
+    pub fn new(size: usize, local_delay: u32) -> Self {
+        PairQueue {
+            local_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
+            remote_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
+            queues: tokio::sync::Mutex::new((
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
-            ]),
-            local_player_index,
+            )),
             local_delay,
         }
     }
 
-    pub async fn add_input(&mut self, player_index: u8, input: Input) {
-        let sem = self.semaphores[player_index as usize].clone();
+    pub async fn add_local_input(&self, v: T) {
+        let sem = self.local_semaphore.clone();
         let permit = sem.acquire_owned().await.unwrap();
         let mut queues = self.queues.lock().await;
-        let queue = &mut queues[player_index as usize];
-        queue.push_back((input, permit));
+        queues.0.push_back((v, permit));
     }
 
-    pub async fn queue_length(&self, player_index: u8) -> usize {
-        let queues = self.queues.lock().await;
-        queues[player_index as usize].len()
+    pub async fn add_remote_input(&self, v: T) {
+        let sem = self.remote_semaphore.clone();
+        let permit = sem.acquire_owned().await.unwrap();
+        let mut queues = self.queues.lock().await;
+        queues.1.push_back((v, permit));
     }
 
     pub fn local_delay(&self) -> u32 {
         self.local_delay
     }
 
-    pub async fn consume_and_peek_local(&mut self) -> (Vec<[Input; 2]>, Vec<Input>) {
+    pub async fn local_queue_length(&self) -> usize {
+        let queues = self.queues.lock().await;
+        queues.0.len()
+    }
+
+    pub async fn remote_queue_length(&self) -> usize {
+        let queues = self.queues.lock().await;
+        queues.1.len()
+    }
+
+    pub async fn consume_and_peek_local(&mut self) -> (Vec<(T, T)>, Vec<T>) {
         let mut queues = self.queues.lock().await;
 
         let to_commit = {
-            let mut n =
-                queues[self.local_player_index as usize].len() as isize - self.local_delay as isize;
-            if (queues[(1 - self.local_player_index) as usize].len() as isize) < n {
-                n = queues[(1 - self.local_player_index) as usize].len() as isize;
+            let mut n = queues.0.len() as isize - self.local_delay as isize;
+            if (queues.1.len() as isize) < n {
+                n = queues.1.len() as isize;
             }
 
             if n < 0 {
                 vec![]
             } else {
-                let [ref mut q0, ref mut q1] = &mut *queues;
-                let p0 = q0.drain(..n as usize);
-                let p1 = q1.drain(..n as usize);
-                p0.zip(p1).map(|(i0, i1)| [i0, i1]).collect()
+                let (ref mut localq, ref mut remoteq) = &mut *queues;
+                let localxs = localq.drain(..n as usize);
+                let remotexs = remoteq.drain(..n as usize);
+                localxs
+                    .zip(remotexs)
+                    .map(|((localx, _), (remotex, _))| (localx, remotex))
+                    .collect()
             }
         };
 
         let peeked = {
-            let n =
-                queues[self.local_player_index as usize].len() as isize - self.local_delay as isize;
+            let n = queues.0.len() as isize - self.local_delay as isize;
             if n < 0 {
                 vec![]
             } else {
-                queues[self.local_player_index as usize]
+                queues
+                    .0
                     .range(..n as usize)
                     .map(|(inp, _)| inp)
                     .cloned()
@@ -83,12 +100,6 @@ impl Queue {
             }
         };
 
-        (
-            to_commit
-                .iter()
-                .map(|[(inp1, _), (inp2, _)]| [inp1.clone(), inp2.clone()])
-                .collect(),
-            peeked,
-        )
+        (to_commit, peeked)
     }
 }

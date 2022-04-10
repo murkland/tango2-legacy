@@ -253,8 +253,7 @@ impl Game {
                                         if let None = battle.committed_state() {
                                             for i in 0..battle.local_delay() {
                                                 battle
-                                                    .add_input(
-                                                        battle.local_player_index(),
+                                                    .add_local_input(
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
                                                             remote_tick: in_battle_time + i,
@@ -267,8 +266,7 @@ impl Game {
                                             }
                                             for i in 0..battle.remote_delay() {
                                                 battle
-                                                    .add_input(
-                                                        battle.remote_player_index(),
+                                                    .add_remote_input(
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
                                                             remote_tick: in_battle_time + i,
@@ -297,8 +295,7 @@ impl Game {
                                             std::time::Duration::from_secs(5);
                                         if let Err(_) = tokio::time::timeout(
                                             TIMEOUT,
-                                            battle.add_input(
-                                                battle.local_player_index(),
+                                            battle.add_local_input(
                                                 input::Input {
                                                     local_tick,
                                                     remote_tick,
@@ -321,7 +318,7 @@ impl Game {
                                         let mut fastforwarder = fastforwarder.lock();
                                         let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(battle.committed_state().as_ref().unwrap(), battle.local_player_index(), &input_pairs, battle.last_committed_remote_input(), &left).unwrap();
                                         battle.set_committed_state(committed_state);
-                                        let last_joyflags = last_input[battle.local_player_index() as usize].joyflags;
+                                        let last_joyflags = last_input.1.joyflags;
                                         battle.set_last_input(last_input);
 
                                         let tps = EXPECTED_FPS as i32 + (remote_tick as i32 - local_tick as i32 - battle.local_delay() as i32) - (last_committed_remote_input.remote_tick as i32 - last_committed_remote_input.local_tick as i32 - battle.remote_delay() as i32);
@@ -373,21 +370,21 @@ impl Game {
 
                                     bn6.set_player_input_state(
                                         core,
-                                        0,
-                                        ip[0].joyflags as u16,
-                                        ip[0].custom_screen_state as u8,
+                                        battle.local_player_index() as u32,
+                                        ip.0.joyflags as u16,
+                                        ip.0.custom_screen_state as u8,
                                     );
-                                    if let Some(turn) = ip[0].turn {
-                                        bn6.set_player_marshaled_battle_state(core, 0, &turn);
+                                    if let Some(turn) = ip.0.turn {
+                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &turn);
                                     }
                                     bn6.set_player_input_state(
                                         core,
-                                        1,
-                                        ip[1].joyflags as u16,
-                                        ip[1].custom_screen_state as u8,
+                                        battle.remote_player_index() as u32,
+                                        ip.1.joyflags as u16,
+                                        ip.1.custom_screen_state as u8,
                                     );
-                                    if let Some(turn) = ip[1].turn {
-                                        bn6.set_player_marshaled_battle_state(core, 1, &turn);
+                                    if let Some(turn) = ip.1.turn {
+                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &turn);
                                     }
                                 });
                             }),
