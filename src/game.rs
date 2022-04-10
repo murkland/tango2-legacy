@@ -171,6 +171,7 @@ impl Game {
                                         let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
                                         let local_init = bn6.local_marshaled_battle_state(core);
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.unwrap();
+                                        log::info!("sent local init");
                                         bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &local_init);
 
                                         let remote_init = match m.receive_remote_init().await {
@@ -180,6 +181,7 @@ impl Game {
                                                 break 'abort;
                                             }
                                         };
+                                        log::info!("received remote init: {:?}", remote_init);
                                         bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().unwrap());
 
                                         battle.set_remote_delay(remote_init.input_delay);
@@ -207,6 +209,8 @@ impl Game {
 
                                     let mut battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
+
+                                    log::info!("turn data marshaled on {}", bn6.in_battle_time(core));
 
                                     let local_turn = bn6.local_marshaled_battle_state(core);
                                     battle.add_local_pending_turn(local_turn);
@@ -361,6 +365,7 @@ impl Game {
 
                                     if !battle.is_accepting_input() {
                                         battle.start_accepting_input();
+                                        log::info!("battle is now accepting input");
                                         return;
                                     }
 
@@ -617,8 +622,7 @@ impl Game {
                                 handle.block_on(async {
                                     let mut match_state = match_state.lock().await;
                                     *match_state = MatchState::NoMatch;
-                                    let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
-                                    core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                    log::info!("match ended");
                                 });
                             }),
                         )

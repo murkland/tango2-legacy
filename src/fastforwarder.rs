@@ -183,6 +183,19 @@ impl Fastforwarder {
                     },
                     {
                         let bn6 = bn6::BN6::clone(&bn6);
+                        let state = std::rc::Rc::clone(&state);
+                        (
+                            bn6.offsets
+                                .rom
+                                .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
+                            Box::new(move |mut core| {
+                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                            }),
+                        )
+                    },
+                    {
+                        let bn6 = bn6::BN6::clone(&bn6);
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
                             Box::new(move |mut core| {
