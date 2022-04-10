@@ -90,7 +90,7 @@ impl Fastforwarder {
                         let bn6 = bn6::BN6::clone(&bn6);
                         let state = std::rc::Rc::clone(&state);
                         (
-                            bn6.offsets.rom.battle_init_call_battle_copy_input_data,
+                            bn6.offsets.rom.battle_update_call_battle_copy_input_data,
                             Box::new(move |mut core| {
                                 let in_battle_time = bn6.in_battle_time(core);
                                 let mut state = state.borrow_mut();
@@ -106,6 +106,7 @@ impl Fastforwarder {
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 let ip = state.as_mut().unwrap().input_pairs.pop_front().unwrap();
+
                                 if ip[0].local_tick != ip[1].local_tick {
                                     state.as_mut().unwrap().result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",

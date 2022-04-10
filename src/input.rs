@@ -8,8 +8,10 @@ pub struct Input {
 }
 
 pub struct Queue {
-    notify: tokio::sync::Notify,
-    queues: tokio::sync::Mutex<[std::collections::VecDeque<Input>; 2]>,
+    semaphores: [std::sync::Arc<tokio::sync::Semaphore>; 2],
+    queues: tokio::sync::Mutex<
+        [std::collections::VecDeque<(Input, tokio::sync::OwnedSemaphorePermit)>; 2],
+    >,
     local_player_index: u8,
     local_delay: u32,
 }
@@ -17,7 +19,10 @@ pub struct Queue {
 impl Queue {
     pub fn new(size: usize, local_delay: u32, local_player_index: u8) -> Self {
         Queue {
-            notify: tokio::sync::Notify::new(),
+            semaphores: [
+                std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
+                std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
+            ],
             queues: tokio::sync::Mutex::new([
                 std::collections::VecDeque::with_capacity(size),
                 std::collections::VecDeque::with_capacity(size),
@@ -28,18 +33,11 @@ impl Queue {
     }
 
     pub async fn add_input(&mut self, player_index: u8, input: Input) {
-        loop {
-            let mut queues = self.queues.lock().await;
-            let queue = &mut queues[player_index as usize];
-            if queue.len() == queue.capacity() {
-                // TODO: Is this safe? Unclear...
-                drop(queues);
-                self.notify.notified().await;
-                continue;
-            }
-            queue.push_back(input);
-            return;
-        }
+        let sem = self.semaphores[player_index as usize].clone();
+        let permit = sem.acquire_owned().await.unwrap();
+        let mut queues = self.queues.lock().await;
+        let queue = &mut queues[player_index as usize];
+        queue.push_back((input, permit));
     }
 
     pub async fn queue_length(&self, player_index: u8) -> usize {
@@ -79,13 +77,18 @@ impl Queue {
             } else {
                 queues[self.local_player_index as usize]
                     .range(..n as usize)
+                    .map(|(inp, _)| inp)
                     .cloned()
                     .collect()
             }
         };
 
-        self.notify.notify_waiters();
-
-        (to_commit, peeked)
+        (
+            to_commit
+                .iter()
+                .map(|[(inp1, _), (inp2, _)]| [inp1.clone(), inp2.clone()])
+                .collect(),
+            peeked,
+        )
     }
 }

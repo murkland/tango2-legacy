@@ -241,6 +241,7 @@ impl MatchImpl {
                         Some(b) => b,
                     };
 
+                    log::info!("received input: {:?}", input);
                     battle
                         .add_input(
                             battle.remote_player_index(),
