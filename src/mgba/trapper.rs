@@ -64,7 +64,7 @@ impl Trapper {
             real_bkpt16: None,
             r#impl: Impl {
                 traps: std::collections::HashMap::new(),
-                core_ptr: core.0,
+                core_ptr: core.ptr,
             },
         });
 

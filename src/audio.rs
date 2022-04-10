@@ -13,7 +13,7 @@ impl MGBAAudioSource {
         sample_rate: u32,
     ) -> Self {
         let buf = {
-            let core = core.as_ref().lock();
+            let mut core = core.as_ref().lock();
             vec![0; (core.as_mut().audio_buffer_size() * 2) as usize]
         };
         Self {
@@ -25,7 +25,7 @@ impl MGBAAudioSource {
     }
 
     fn read_new_buf(&mut self) {
-        let core = self.core.as_ref().lock();
+        let mut core = self.core.as_ref().lock();
 
         let clock_rate = core.as_ref().frequency();
 

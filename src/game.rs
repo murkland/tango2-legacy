@@ -26,7 +26,7 @@ pub struct Game {
     window: winit::window::Window,
     pixels: pixels::Pixels,
     gui: gui::Gui,
-    vbuf2: Arc<Mutex<Vec<u8>>>,
+    vbuf: Arc<Mutex<Vec<u8>>>,
     game_state: Option<Arc<GameState>>,
 }
 
@@ -34,13 +34,13 @@ impl GameState {
     fn new(
         handle: tokio::runtime::Handle,
         gui_state: std::sync::Weak<gui::State>,
-        vbuf2: std::sync::Weak<Mutex<Vec<u8>>>,
+        vbuf: std::sync::Weak<Mutex<Vec<u8>>>,
     ) -> Result<Self, anyhow::Error> {
         let rom_path = std::path::Path::new("bn6f.gba");
         let save_path = rom_path.with_extension("sav");
 
         let main_core = Arc::new(Mutex::new({
-            let core = mgba::core::Core::new_gba("tango")?;
+            let mut core = mgba::core::Core::new_gba("tango", true)?;
             core.as_mut().set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
@@ -56,14 +56,10 @@ impl GameState {
             core
         }));
 
-        let (width, height, vbuf, bn6) = {
+        let bn6 = {
             let core = main_core.clone();
             let core = core.lock();
-            let (width, height) = core.as_ref().desired_video_dimensions();
-            let mut vbuf = vec![0u8; (width * height * 4) as usize];
-            let bn6 = bn6::BN6::new(&core.as_ref().game_title());
-            core.as_mut().set_video_buffer(&mut vbuf, width.into());
-            (width, height, vbuf, bn6.unwrap())
+            bn6::BN6::new(&core.as_ref().game_title()).unwrap()
         };
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
@@ -84,7 +80,7 @@ impl GameState {
 
         {
             let core = main_core.clone();
-            let core = core.lock();
+            let mut core = core.lock();
             core.as_mut()
                 .gba_mut()
                 .sync_mut()
@@ -655,20 +651,22 @@ impl GameState {
         };
 
         {
-            let vbuf2 = vbuf2.clone();
+            let core = main_core.clone();
+            let vbuf = vbuf.clone();
             // let emu_tps_counter = emu_tps_counter.clone();
             thread.set_frame_callback(Some(Box::new(move || {
-                let vbuf2 = match vbuf2.upgrade() {
-                    Some(vbuf2) => vbuf2,
+                let core = core.lock();
+                let vbuf = match vbuf.upgrade() {
+                    Some(vbuf) => vbuf,
                     None => {
                         return;
                     }
                 };
-                let mut vbuf2 = vbuf2.lock();
+                let mut vbuf = vbuf.lock();
                 // let mut emu_tps_counter = emu_tps_counter.lock();
-                vbuf2.copy_from_slice(&vbuf);
-                for i in (0..vbuf2.len()).step_by(4) {
-                    vbuf2[i + 3] = 0xff;
+                vbuf.copy_from_slice(core.video_buffer().unwrap());
+                for i in (0..vbuf.len()).step_by(4) {
+                    vbuf[i + 3] = 0xff;
                 }
                 // emu_tps_counter.mark();
             })));
@@ -694,7 +692,7 @@ impl Game {
 
         let event_loop = Some(winit::event_loop::EventLoop::new());
 
-        let vbuf2 = Arc::new(Mutex::new(vec![
+        let vbuf = Arc::new(Mutex::new(vec![
             0u8;
             (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4)
                 as usize
@@ -745,7 +743,7 @@ impl Game {
             Arc::new(GameState::new(
                 handle,
                 Arc::downgrade(&gui_state),
-                Arc::downgrade(&vbuf2),
+                Arc::downgrade(&vbuf),
             )?)
         };
 
@@ -793,7 +791,7 @@ impl Game {
             event_loop,
             window,
             pixels,
-            vbuf2,
+            vbuf,
             gui,
             game_state: Some(game_state),
         })
@@ -832,7 +830,7 @@ impl Game {
                         input_helper.update(&event);
 
                         if let Some(game_state) = &self.game_state {
-                            let core = game_state.main_core.lock();
+                            let mut core = game_state.main_core.lock();
 
                             let mut keys = 0u32;
                             if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
@@ -883,8 +881,8 @@ impl Game {
                             });
                         }
 
-                        let vbuf2 = self.vbuf2.lock().clone();
-                        self.pixels.get_frame().copy_from_slice(&vbuf2);
+                        let vbuf = self.vbuf.lock().clone();
+                        self.pixels.get_frame().copy_from_slice(&vbuf);
 
                         self.gui.prepare(&self.window);
                         self.pixels

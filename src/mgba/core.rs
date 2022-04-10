@@ -5,13 +5,15 @@ use super::state;
 use super::vfile;
 use std::ffi::CString;
 
-#[repr(transparent)]
-pub struct Core(pub(super) *mut c::mCore);
+pub struct Core {
+    pub(super) ptr: *mut c::mCore,
+    video_buffer: Option<Vec<u8>>,
+}
 
 unsafe impl Send for Core {}
 
 impl Core {
-    pub fn new_gba(config_name: &str) -> anyhow::Result<Self> {
+    pub fn new_gba(config_name: &str, with_video_buffer: bool) -> anyhow::Result<Self> {
         let ptr = unsafe { c::GBACoreCreate() };
         if ptr.is_null() {
             anyhow::bail!("failed to create core");
@@ -30,29 +32,52 @@ impl Core {
             c::mCoreConfigInit(&mut ptr.as_mut().unwrap().config, config_name_cstr.as_ptr());
             c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
         }
-        Ok(Core(ptr))
+
+        let mut core = Core {
+            ptr,
+            video_buffer: None,
+        };
+
+        if with_video_buffer {
+            let (width, height) = core.as_ref().desired_video_dimensions();
+            let mut buffer = vec![0u8; (width * height * 4) as usize];
+            unsafe {
+                (*core.ptr).setVideoBuffer.unwrap()(
+                    core.ptr,
+                    buffer.as_mut_ptr() as *mut _ as *mut u32,
+                    width as u64,
+                );
+            }
+            core.video_buffer = Some(buffer);
+        }
+
+        Ok(core)
     }
 
     pub fn as_ref(&self) -> CoreRef {
         CoreRef {
-            ptr: self.0,
+            ptr: self.ptr,
             _lifetime: std::marker::PhantomData,
         }
     }
 
-    pub fn as_mut(&self) -> CoreMutRef {
+    pub fn as_mut(&mut self) -> CoreMutRef {
         CoreMutRef {
-            ptr: self.0,
+            ptr: self.ptr,
             _lifetime: std::marker::PhantomData,
         }
+    }
+
+    pub fn video_buffer(&self) -> Option<&[u8]> {
+        self.video_buffer.as_ref().map(|v| v.as_slice())
     }
 }
 
 impl Drop for Core {
     fn drop(&mut self) {
         unsafe {
-            c::mCoreConfigDeinit(&mut self.0.as_mut().unwrap().config);
-            (*self.0).deinit.unwrap()(self.0)
+            c::mCoreConfigDeinit(&mut self.ptr.as_mut().unwrap().config);
+            (*self.ptr).deinit.unwrap()(self.ptr)
         }
     }
 }
@@ -63,6 +88,8 @@ pub struct CoreRef<'a> {
     pub(super) ptr: *const c::mCore,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
 }
+
+unsafe impl<'a> Send for CoreRef<'a> {}
 
 impl<'a> CoreRef<'a> {
     pub fn frequency(&self) -> i32 {
@@ -132,6 +159,8 @@ pub struct CoreMutRef<'a> {
     pub(super) ptr: *mut c::mCore,
     pub(super) _lifetime: std::marker::PhantomData<&'a ()>,
 }
+
+unsafe impl<'a> Send for CoreMutRef<'a> {}
 
 impl<'a> CoreMutRef<'a> {
     pub fn as_ref(&self) -> CoreRef {
@@ -258,12 +287,6 @@ impl<'a> CoreMutRef<'a> {
         blip::BlipMutRef {
             ptr: unsafe { (*self.ptr).getAudioChannel.unwrap()(self.ptr, ch) },
             _lifetime: std::marker::PhantomData,
-        }
-    }
-
-    pub fn set_video_buffer(&mut self, buffer: &mut [u8], stride: u64) {
-        unsafe {
-            (*self.ptr).setVideoBuffer.unwrap()(self.ptr, buffer as *mut _ as *mut u32, stride)
         }
     }
 }
