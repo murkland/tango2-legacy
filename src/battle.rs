@@ -317,6 +317,8 @@ impl MatchImpl {
                         Some(b) => b,
                     };
 
+                    battle.state_committed_notify.notified().await;
+
                     battle
                         .add_remote_input(input::Input {
                             local_tick: input.local_tick,
