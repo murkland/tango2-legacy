@@ -830,7 +830,7 @@ impl Game {
             })));
         };
 
-        let g = Game {
+        Ok(Game {
             rt,
             config,
             fps_counter,
@@ -842,10 +842,7 @@ impl Game {
             gui,
             game_state,
             emu_tps_counter,
-        };
-        g.load(std::path::Path::new("bn6f.gba"))?;
-
-        Ok(g)
+        })
     }
 
     pub fn load(&self, rom_filename: &std::path::Path) -> anyhow::Result<()> {

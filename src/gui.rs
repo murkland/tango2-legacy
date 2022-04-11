@@ -43,31 +43,31 @@ impl Gui {
         ctx.set_fonts(fonts);
 
         let mut style = egui::Style::default();
-        style.spacing.interact_size.y = 16.0;
+        style.spacing.interact_size.y = 18.0;
         *style
             .text_styles
             .get_mut(&egui::TextStyle::Heading)
             .unwrap() = egui::FontId {
-            size: 16.0,
+            size: 18.0,
             family: egui::FontFamily::Proportional,
         };
         *style.text_styles.get_mut(&egui::TextStyle::Body).unwrap() = egui::FontId {
-            size: 16.0,
+            size: 18.0,
             family: egui::FontFamily::Proportional,
         };
         *style.text_styles.get_mut(&egui::TextStyle::Button).unwrap() = egui::FontId {
-            size: 16.0,
+            size: 18.0,
             family: egui::FontFamily::Proportional,
         };
         *style
             .text_styles
             .get_mut(&egui::TextStyle::Monospace)
             .unwrap() = egui::FontId {
-            size: 16.0,
+            size: 18.0,
             family: egui::FontFamily::Monospace,
         };
         *style.text_styles.get_mut(&egui::TextStyle::Small).unwrap() = egui::FontId {
-            size: 14.0,
+            size: 16.0,
             family: egui::FontFamily::Proportional,
         };
         ctx.set_style(style);
@@ -157,6 +157,7 @@ pub enum DialogStatus<T> {
 
 pub struct State {
     link_code_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
+    rom_select_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
     show_debug: std::sync::atomic::AtomicBool,
     show_menu: std::sync::atomic::AtomicBool,
     show_keymapping_config: std::sync::atomic::AtomicBool,
@@ -214,6 +215,7 @@ impl State {
     ) -> Self {
         Self {
             link_code_state: parking_lot::Mutex::new(None),
+            rom_select_state: parking_lot::Mutex::new(Some(DialogStatus::Pending("".to_owned()))),
             show_debug: false.into(),
             show_menu: false.into(),
             show_keymapping_config: false.into(),
@@ -263,6 +265,34 @@ impl State {
                     }
                 });
             });
+        }
+
+        {
+            let mut maybe_rom_select_state = self.rom_select_state.lock();
+
+            let mut open = if let Some(DialogStatus::Pending(_)) = &*maybe_rom_select_state {
+                true
+            } else {
+                false
+            };
+
+            egui::Window::new("Select game")
+                .collapsible(false)
+                .title_bar(false)
+                .fixed_size(egui::vec2(300.0, 0.0))
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.label(egui::RichText::new("Select a game to start below.\n\nIf the list is empty, remember to put your ROMs in the \"roms\" directory (and saves in the \"saves\" directory)!"));
+                    let mut rom_filename = "";
+                    egui::Frame::none().stroke(egui::Stroke::new(1.0, egui::Color32::DARK_GRAY)).rounding(egui::Rounding::same(2.0)).margin(egui::style::Margin::same(2.0)).show(ui, |ui| {
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            for x in &["TODO"] {
+                                ui.selectable_value(&mut rom_filename, &x, x.to_owned());
+                            }
+                        });
+                    });
+                });
         }
 
         {
