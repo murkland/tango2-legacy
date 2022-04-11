@@ -933,19 +933,6 @@ impl Game {
 
                             if current_input.key_actions.iter().any(|action| {
                                 if let current_input::KeyAction::Pressed(
-                                    winit::event::VirtualKeyCode::Grave,
-                                ) = action
-                                {
-                                    true
-                                } else {
-                                    false
-                                }
-                            }) {
-                                self.gui.state().toggle_debug();
-                            }
-
-                            if current_input.key_actions.iter().any(|action| {
-                                if let current_input::KeyAction::Pressed(
                                     winit::event::VirtualKeyCode::Escape,
                                 ) = action
                                 {

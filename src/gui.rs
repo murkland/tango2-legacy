@@ -194,7 +194,7 @@ impl State {
             link_code_state: parking_lot::Mutex::new(None),
             show_debug: false.into(),
             show_menu: false.into(),
-            show_keymapping_config: true.into(),
+            show_keymapping_config: false.into(),
             debug_stats_getter: parking_lot::Mutex::new(None),
             config,
             current_input,
@@ -214,16 +214,6 @@ impl State {
         *maybe_link_code_state = None;
     }
 
-    pub fn open_keymapping_config_dialog(&self) {
-        self.show_keymapping_config
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    pub fn close_keymapping_config_dialog(&self) {
-        self.show_keymapping_config
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-
     pub fn lock_link_code_status(&self) -> parking_lot::MutexGuard<Option<DialogStatus<String>>> {
         self.link_code_state.lock()
     }
@@ -232,18 +222,26 @@ impl State {
         *self.debug_stats_getter.lock() = getter;
     }
 
-    pub fn toggle_debug(&self) {
-        self.show_debug
-            .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
-    }
-
     pub fn toggle_menu(&self) {
         self.show_menu
             .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn layout(&self, ctx: &Context) {
-        if self.show_menu.load(std::sync::atomic::Ordering::Relaxed) {}
+        if self.show_menu.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    if ui.button("Keymapping").clicked() {
+                        self.show_keymapping_config
+                            .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+                    };
+                    if ui.button("Debug").clicked() {
+                        self.show_debug
+                            .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                });
+            });
+        }
 
         {
             let mut maybe_link_code_state = self.link_code_state.lock();
@@ -306,67 +304,69 @@ impl State {
                 .open(&mut show_keymapping_config)
                 .collapsible(false)
                 .show(ctx, |ui| {
-                    egui::Grid::new("debug_grid").num_columns(2).show(ui, |ui| {
-                        ui.label("up");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.up).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                    egui::Grid::new("keymapping-grid")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("up");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.up).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("down");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.down).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("down");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.down).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("left");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.left).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("left");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.left).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("right");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.right).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("right");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.right).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("A");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.a).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("A");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.a).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("B");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.b).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("B");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.b).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("L");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.l).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("L");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.l).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("R");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.r).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("R");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.r).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("start");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.start).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
+                            ui.label("start");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.start).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
 
-                        ui.label("select");
-                        if keybinder(ui, &*current_input, &mut config.keymapping.select).inner {
-                            bound = true;
-                        }
-                        ui.end_row();
-                    });
+                            ui.label("select");
+                            if keybinder(ui, &*current_input, &mut config.keymapping.select).inner {
+                                bound = true;
+                            }
+                            ui.end_row();
+                        });
                 });
             if bound {
                 if let Err(e) = config::save_config(&*config) {
@@ -380,17 +380,17 @@ impl State {
         let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::Relaxed);
         egui::Window::new("Debug")
             .open(&mut show_debug)
-            .title_bar(false)
             .auto_sized()
+            .collapsible(false)
             .show(ctx, |ui| {
                 if let Some(debug_stats_getter) = &*self.debug_stats_getter.lock() {
                     if let Some(debug_stats) = debug_stats_getter() {
                         egui::Grid::new("debug_grid").num_columns(2).show(ui, |ui| {
-                            ui.label("draw fps");
+                            ui.label("FPS");
                             ui.label(format!("{:.0}", debug_stats.fps));
                             ui.end_row();
 
-                            ui.label("tps");
+                            ui.label("TPS");
                             ui.label(format!(
                                 "{:.0} (target = {:.0})",
                                 debug_stats.emu_tps, debug_stats.target_tps
@@ -398,11 +398,11 @@ impl State {
                             ui.end_row();
 
                             if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
-                                ui.label("local player index");
+                                ui.label("Player index");
                                 ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
                                 ui.end_row();
 
-                                ui.label("qlen");
+                                ui.label("Queue length");
                                 ui.label(format!(
                                     "{} (-{}) vs {} (-{})",
                                     battle_debug_stats.local_qlen,
