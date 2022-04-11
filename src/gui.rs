@@ -302,6 +302,7 @@ impl State {
             };
 
             egui::Window::new("Select game")
+                .id(egui::Id::new("select-game-window"))
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
@@ -345,6 +346,7 @@ impl State {
             };
 
             egui::Window::new("Link code")
+                .id(egui::Id::new("link-code-window"))
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
@@ -392,6 +394,7 @@ impl State {
             let mut config = self.config.lock();
             let mut bound = false;
             egui::Window::new("Keymapping")
+                .id(egui::Id::new("keymapping-window"))
                 .open(&mut show_keymapping_config)
                 .fixed_size(egui::vec2(150.0, 0.0))
                 .collapsible(false)
