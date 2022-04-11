@@ -242,7 +242,9 @@ impl State {
 
     pub fn open_link_code_dialog(&self) {
         let mut link_code_state = self.link_code_state.lock();
-        *link_code_state = DialogState::Pending(String::new());
+        if let DialogState::Closed = &*link_code_state {
+            *link_code_state = DialogState::Pending(String::new());
+        }
     }
 
     pub fn close_link_code_dialog(&self) {
@@ -260,7 +262,9 @@ impl State {
 
     pub fn open_rom_select_dialog(&self) {
         let mut rom_select_state = self.rom_select_state.lock();
-        *rom_select_state = DialogState::Pending(None);
+        if let DialogState::Closed = &*rom_select_state {
+            *rom_select_state = DialogState::Pending(None);
+        }
     }
 
     pub fn close_rom_select_dialog(&self) {
