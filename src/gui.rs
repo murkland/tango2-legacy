@@ -1,6 +1,7 @@
-use crate::{config, current_input};
+use crate::{config, current_input, locales};
 use egui::{ClippedMesh, Context, TexturesDelta};
 use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
+use fluent_templates::Loader;
 use pixels::{wgpu, PixelsContext};
 use winit::window::Window;
 
@@ -280,11 +281,17 @@ impl State {
         if self.show_menu.load(std::sync::atomic::Ordering::Relaxed) {
             egui::TopBottomPanel::top("menu-bar").show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
-                    if ui.button("Keymapping").clicked() {
+                    if ui
+                        .button(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping"))
+                        .clicked()
+                    {
                         self.show_keymapping_config
                             .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
                     };
-                    if ui.button("Debug").clicked() {
+                    if ui
+                        .button(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "debug"))
+                        .clicked()
+                    {
                         self.show_debug
                             .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -301,7 +308,7 @@ impl State {
                 false
             };
 
-            egui::Window::new("Select game")
+            egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "select-game"))
                 .id(egui::Id::new("select-game-window"))
                 .collapsible(false)
                 .title_bar(false)
@@ -311,24 +318,41 @@ impl State {
                 .show(ctx, |ui| {
                     let rom_filenames = self.rom_list.lock();
 
-                    let selected_index = if let DialogState::Pending(selected_index) = &mut *maybe_rom_select_state {
+                    let selected_index = if let DialogState::Pending(selected_index) =
+                        &mut *maybe_rom_select_state
+                    {
                         selected_index
                     } else {
                         unreachable!();
                     };
 
-                    ui.label(egui::RichText::new("Select a game to start below.\n\nIf the list is empty, remember to put your ROMs in the \"roms\" directory (and saves in the \"saves\" directory)!"));
-                    egui::Frame::none().stroke(egui::Stroke::new(1.0, egui::Color32::DARK_GRAY)).rounding(egui::Rounding::same(2.0)).margin(egui::style::Margin::same(2.0)).show(ui, |ui| {
-                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                            for (i, rom_info) in rom_filenames.iter().enumerate() {
-                                let mut response = ui.selectable_label(*selected_index == Some(i), format!("{}: {}", rom_info.path.to_string_lossy(), rom_info.title));
-                                if response.clicked() {
-                                    *selected_index = Some(i);
-                                    response.mark_changed();
-                                }
-                            }
+                    ui.label(egui::RichText::new(
+                        locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "select-game.description"),
+                    ));
+                    egui::Frame::none()
+                        .stroke(egui::Stroke::new(1.0, egui::Color32::DARK_GRAY))
+                        .rounding(egui::Rounding::same(2.0))
+                        .margin(egui::style::Margin::same(2.0))
+                        .show(ui, |ui| {
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    for (i, rom_info) in rom_filenames.iter().enumerate() {
+                                        let mut response = ui.selectable_label(
+                                            *selected_index == Some(i),
+                                            format!(
+                                                "{}: {}",
+                                                rom_info.path.to_string_lossy(),
+                                                rom_info.title
+                                            ),
+                                        );
+                                        if response.clicked() {
+                                            *selected_index = Some(i);
+                                            response.mark_changed();
+                                        }
+                                    }
+                                });
                         });
-                    });
 
                     if selected_index.is_some() {
                         *maybe_rom_select_state = DialogState::Ok(*selected_index);
@@ -345,7 +369,7 @@ impl State {
                 false
             };
 
-            egui::Window::new("Link code")
+            egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code"))
                 .id(egui::Id::new("link-code-window"))
                 .collapsible(false)
                 .title_bar(false)
@@ -353,14 +377,17 @@ impl State {
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    let code =
-                        if let DialogState::Pending(code) = &mut *maybe_link_code_state {
-                            code
-                        } else {
-                            unreachable!();
-                        };
-                    ui.label(egui::RichText::new("Enter a link code that you and your opponent have decided on to connect to each other."));
-                    let response = ui.add(egui::TextEdit::singleline(code).hint_text("Link code"));
+                    let code = if let DialogState::Pending(code) = &mut *maybe_link_code_state {
+                        code
+                    } else {
+                        unreachable!();
+                    };
+                    ui.label(
+                        locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.description"),
+                    );
+                    let response = ui.add(egui::TextEdit::singleline(code).hint_text(
+                        locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.placeholder"),
+                    ));
                     *code = code.to_lowercase().trim().to_string();
                     let text_ok = response.lost_focus()
                         && ui.input().key_pressed(egui::Key::Enter)
@@ -369,8 +396,18 @@ impl State {
                     ui.separator();
                     let (button_ok, cancel) = ui
                         .horizontal(|ui| {
-                            let ok = ui.add(egui::Button::new("Connect")).clicked();
-                            let cancel = ui.add(egui::Button::new("Cancel")).clicked();
+                            let ok = ui
+                                .add(egui::Button::new(
+                                    locales::LOCALES
+                                        .lookup(&locales::SYSTEM_LOCALE, "link-code.confirm"),
+                                ))
+                                .clicked();
+                            let cancel = ui
+                                .add(egui::Button::new(
+                                    locales::LOCALES
+                                        .lookup(&locales::SYSTEM_LOCALE, "link-code.cancel"),
+                                ))
+                                .clicked();
                             (ok, cancel)
                         })
                         .inner;
@@ -393,7 +430,7 @@ impl State {
                 .load(std::sync::atomic::Ordering::Relaxed);
             let mut config = self.config.lock();
             let mut bound = false;
-            egui::Window::new("Keymapping")
+            egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping"))
                 .id(egui::Id::new("keymapping-window"))
                 .open(&mut show_keymapping_config)
                 .fixed_size(egui::vec2(150.0, 0.0))
@@ -402,61 +439,84 @@ impl State {
                     egui::Grid::new("keymapping-grid")
                         .num_columns(2)
                         .show(ui, |ui| {
-                            ui.label("up");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.up"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.up).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("down");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.down"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.down).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("left");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.left"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.left).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("right");
+                            ui.label(
+                                locales::LOCALES
+                                    .lookup(&locales::SYSTEM_LOCALE, "keymapping.right"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.right).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("A");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.a"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.a).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("B");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.b"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.b).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("L");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.l"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.l).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("R");
+                            ui.label(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.r"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.r).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("start");
+                            ui.label(
+                                locales::LOCALES
+                                    .lookup(&locales::SYSTEM_LOCALE, "keymapping.start"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.start).inner {
                                 bound = true;
                             }
                             ui.end_row();
 
-                            ui.label("select");
+                            ui.label(
+                                locales::LOCALES
+                                    .lookup(&locales::SYSTEM_LOCALE, "keymapping.select"),
+                            );
                             if keybinder(ui, &*current_input, &mut config.keymapping.select).inner {
                                 bound = true;
                             }
@@ -473,7 +533,7 @@ impl State {
         }
 
         let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::Relaxed);
-        egui::Window::new("Debug")
+        egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "debug"))
             .id(egui::Id::new("debug-window"))
             .open(&mut show_debug)
             .auto_sized()

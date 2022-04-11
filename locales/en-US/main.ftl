@@ -1,4 +1,4 @@
-select-rom = Select game
+select-game = Select game
     .description =
         Select a game to start below.
 

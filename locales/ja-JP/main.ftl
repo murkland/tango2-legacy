@@ -1,4 +1,4 @@
-select-rom = ゲーム選択
+select-game = ゲーム選択
     .description =
         下記より開始するゲームを選択してください。
 
