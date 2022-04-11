@@ -539,8 +539,6 @@ impl GameState {
                                             gui_state.open_link_code_dialog();
                                             match &*gui_state
                                                 .lock_link_code_status()
-                                                .as_ref()
-                                                .unwrap()
                                             {
                                                 gui::DialogStatus::Pending(_) => {
                                                     return;
@@ -576,6 +574,7 @@ impl GameState {
                                                 gui::DialogStatus::Cancelled => {
                                                     bn6.drop_matchmaking_from_comm_menu(core, 0);
                                                 }
+                                                gui::DialogStatus::Closed => { unreachable!(); }
                                             }
                                             gui_state.close_link_code_dialog();
                                         }
@@ -864,6 +863,49 @@ impl Game {
     }
 
     pub fn run(mut self: Self) {
+        let rom_list: Vec<gui::ROMInfo> = std::fs::read_dir("roms")
+            .expect("roms")
+            .flat_map(|dirent| {
+                let dirent = dirent.expect("dirent");
+                let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
+                let vf =
+                    match mgba::vfile::VFile::open(&dirent.path(), mgba::vfile::flags::O_RDONLY) {
+                        Ok(vf) => vf,
+                        Err(e) => {
+                            log::warn!(
+                                "failed to open {} for probing: {}",
+                                dirent.path().display(),
+                                e
+                            );
+                            return vec![];
+                        }
+                    };
+                if let Err(e) = core.as_mut().load_rom(vf) {
+                    log::warn!(
+                        "failed to load {} for probing: {}",
+                        dirent.path().display(),
+                        e
+                    );
+                    return vec![];
+                }
+
+                vec![gui::ROMInfo {
+                    path: dirent
+                        .path()
+                        .strip_prefix("roms")
+                        .expect("strip prefix")
+                        .to_owned(),
+                    title: core.as_ref().game_title(),
+                }]
+            })
+            .collect();
+        // Probe for ROMs.
+        {
+            let gui_state = self.gui.state();
+            gui_state.set_rom_list(rom_list.clone());
+            gui_state.open_rom_select_dialog();
+        }
+
         let handle = self.rt.handle().clone();
 
         let mut gui_handled = false;
@@ -955,6 +997,35 @@ impl Game {
                                     });
                                 }
                                 gui_handled = false;
+                            }
+
+                            {
+                                let gui_state = self.gui.state();
+
+                                let selected_rom = {
+                                    let mut selected_rom = None;
+                                    let rom_select_state = gui_state.lock_rom_select_status();
+                                    match &*rom_select_state {
+                                        gui::DialogStatus::Pending(_) => {}
+                                        gui::DialogStatus::Ok(None) => {
+                                            unreachable!();
+                                        }
+                                        gui::DialogStatus::Ok(Some(index)) => {
+                                            selected_rom = Some(&rom_list[*index]);
+                                        }
+                                        gui::DialogStatus::Cancelled => {
+                                            unreachable!();
+                                        }
+                                        gui::DialogStatus::Closed => {}
+                                    }
+                                    selected_rom
+                                };
+
+                                if let Some(selected_rom) = selected_rom {
+                                    log::info!("loading rom: {:?}", selected_rom);
+                                    self.load(&selected_rom.path).expect("load rom");
+                                    gui_state.close_rom_select_dialog();
+                                }
                             }
 
                             if current_input.key_actions.iter().any(|action| {

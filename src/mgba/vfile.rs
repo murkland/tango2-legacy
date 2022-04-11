@@ -16,12 +16,13 @@ pub mod flags {
 
 impl VFile {
     pub fn open(path: &std::path::Path, flags: u32) -> anyhow::Result<Self> {
+        let path = path.to_str().unwrap();
         let ptr = unsafe {
-            let path_cstr = CString::new(path.to_str().unwrap()).unwrap();
+            let path_cstr = CString::new(path).unwrap();
             c::VFileOpen(path_cstr.as_ptr(), flags as i32)
         };
         if ptr.is_null() {
-            anyhow::bail!("failed to open vfile")
+            anyhow::bail!("failed to open vfile at {}", path)
         }
         Ok(VFile(ptr))
     }
