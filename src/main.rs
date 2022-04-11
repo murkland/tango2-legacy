@@ -20,6 +20,11 @@ mod tps;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     mgba::log::init();
+    log::info!(
+        "welcome to tango v{}-{}!",
+        env!("CARGO_PKG_VERSION"),
+        git_version::git_version!()
+    );
     let config = match config::load_config() {
         Ok(config) => config,
         Err(e) => {
@@ -29,6 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             config
         }
     };
+    log::info!("current config: {:?}", config);
     let g = game::Game::new(config)?;
     g.run();
     Ok(())

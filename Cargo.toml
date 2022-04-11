@@ -35,6 +35,7 @@ toml = "0.5"
 fluent-templates = "0.7.1"
 unic-langid = "0.9"
 sys-locale = "0.2.0"
+git-version = "0.3.5"
 
 [build-dependencies]
 bindgen = "0.53.1"
