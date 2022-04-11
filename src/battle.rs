@@ -32,12 +32,19 @@ pub struct Match {
     r#impl: std::sync::Arc<MatchImpl>,
 }
 
+pub struct Settings {
+    pub matchmaking_connect_addr: String,
+    pub webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration,
+}
+
 struct MatchImpl {
     negotiation: tokio::sync::Mutex<Negotiation>,
     session_id: String,
     match_type: u16,
     game_title: String,
     game_crc32: u32,
+    input_delay: u32,
+    settings: Settings,
     battle_state: tokio::sync::Mutex<BattleState>,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
@@ -106,7 +113,7 @@ impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
-        let mut sc = signor::Client::new("http://localhost:12345").await?;
+        let mut sc = signor::Client::new(&self.settings.matchmaking_connect_addr).await?;
 
         let api = webrtc::api::APIBuilder::new().build();
         let (peer_conn, dc, side) = sc
@@ -348,7 +355,14 @@ impl Drop for Match {
 }
 
 impl Match {
-    pub fn new(session_id: String, match_type: u16, game_title: String, game_crc32: u32) -> Self {
+    pub fn new(
+        session_id: String,
+        match_type: u16,
+        game_title: String,
+        game_crc32: u32,
+        input_delay: u32,
+        settings: Settings,
+    ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
         let r#impl = std::sync::Arc::new(MatchImpl {
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
@@ -356,6 +370,8 @@ impl Match {
             match_type,
             game_title,
             game_crc32,
+            input_delay,
+            settings,
             battle_state: tokio::sync::Mutex::new(BattleState {
                 number: 0,
                 battle: None,
@@ -477,7 +493,7 @@ impl Match {
         );
         battle_state.battle = Some(Battle {
             local_player_index,
-            iq: input::PairQueue::new(60, 0),
+            iq: input::PairQueue::new(60, self.r#impl.input_delay),
             remote_delay: 0,
             is_accepting_input: false,
             last_committed_remote_input: input::Input {

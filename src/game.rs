@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::{audio, battle, bn6, fastforwarder, gui, input, mgba, tps};
+use crate::{audio, battle, bn6, config, fastforwarder, gui, input, mgba, tps};
 
 const EXPECTED_FPS: u32 = 60;
 enum MatchState {
@@ -26,6 +26,7 @@ pub struct Game {
     window: winit::window::Window,
     pixels: pixels::Pixels,
     gui: gui::Gui,
+    config: Arc<Mutex<config::Config>>,
     vbuf: Arc<Mutex<Vec<u8>>>,
     game_state: Option<Arc<GameState>>,
 }
@@ -33,6 +34,7 @@ pub struct Game {
 impl GameState {
     fn new(
         handle: tokio::runtime::Handle,
+        config: Arc<Mutex<config::Config>>,
         gui_state: std::sync::Weak<gui::State>,
         vbuf: std::sync::Weak<Mutex<Vec<u8>>>,
         emu_tps_counter: std::sync::Weak<Mutex<tps::Counter>>,
@@ -509,6 +511,7 @@ impl GameState {
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         let gui_state = gui_state.clone();
+                        let config = config.clone();
                         (
                             bn6.offsets
                                 .rom
@@ -536,11 +539,26 @@ impl GameState {
                                                     return;
                                                 }
                                                 gui::DialogStatus::Ok(code) => {
+                                                    let config = config.lock();
                                                     let m = battle::Match::new(
                                                         code.to_string(),
                                                         bn6.match_type(core),
                                                         core.as_ref().game_title(),
                                                         core.as_ref().crc32(),
+                                                        3,
+                                                        battle::Settings {
+                                                            matchmaking_connect_addr: config
+                                                                .matchmaking
+                                                                .connect_addr
+                                                                .clone(),
+                                                            webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration{
+                                                                ice_servers: config.webrtc.ice_servers.iter().map(|ice_server| webrtc::ice_transport::ice_server::RTCIceServer {
+                                                                    urls: ice_server.urls.clone(),
+                                                                    ..Default::default()
+                                                                }).collect(),
+                                                                ..Default::default()
+                                                            },
+                                                        },
                                                     );
                                                     *match_state = MatchState::Match(m);
                                                     match &*match_state {
@@ -714,6 +732,8 @@ impl Game {
                 .build(event_loop.as_ref().expect("event loop"))?
         };
 
+        let config = Arc::new(Mutex::new(config::Config::default()));
+
         let fps_counter = Arc::new(Mutex::new(tps::Counter::new(30)));
         let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
 
@@ -746,6 +766,7 @@ impl Game {
             let handle = handle.clone();
             Arc::new(GameState::new(
                 handle,
+                config.clone(),
                 Arc::downgrade(&gui_state),
                 Arc::downgrade(&vbuf),
                 Arc::downgrade(&emu_tps_counter),
@@ -797,6 +818,7 @@ impl Game {
 
         Ok(Game {
             rt,
+            config,
             fps_counter,
             event_loop,
             window,
@@ -842,36 +864,37 @@ impl Game {
                         if !gui_handled {
                             if let Some(game_state) = &self.game_state {
                                 let mut core = game_state.main_core.lock();
+                                let config = self.config.lock();
 
                                 let mut keys = 0u32;
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Left) {
+                                if input_helper.key_held(config.keymapping.left) {
                                     keys |= mgba::input::keys::LEFT;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Right) {
+                                if input_helper.key_held(config.keymapping.right) {
                                     keys |= mgba::input::keys::RIGHT;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Up) {
+                                if input_helper.key_held(config.keymapping.up) {
                                     keys |= mgba::input::keys::UP;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Down) {
+                                if input_helper.key_held(config.keymapping.down) {
                                     keys |= mgba::input::keys::DOWN;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Z) {
+                                if input_helper.key_held(config.keymapping.a) {
                                     keys |= mgba::input::keys::A;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::X) {
+                                if input_helper.key_held(config.keymapping.b) {
                                     keys |= mgba::input::keys::B;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::A) {
+                                if input_helper.key_held(config.keymapping.l) {
                                     keys |= mgba::input::keys::L;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::S) {
+                                if input_helper.key_held(config.keymapping.r) {
                                     keys |= mgba::input::keys::R;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Return) {
+                                if input_helper.key_held(config.keymapping.start) {
                                     keys |= mgba::input::keys::START;
                                 }
-                                if input_helper.key_held(winit::event::VirtualKeyCode::Back) {
+                                if input_helper.key_held(config.keymapping.select) {
                                     keys |= mgba::input::keys::SELECT;
                                 }
 
