@@ -1,13 +1,24 @@
+**tango2 is not ready for any kind of use yet. please use <https://github.com/murkland/tango> if you want to use a functional version of tango.**
+
+**tango2 はまだ使用できません。<https://github.com/murkland/tango> を使用してください。**
+
+---
+
 # tango2
 
-**tango2 is not ready for any kind of use yet. please use <https://github.com/murkland/tango> if you want to use a functional version of tango. tango2 はまだ使用できません。<https://github.com/murkland/tango> を使用してください。**
+![tango](logo.png)
 
-tango2 is a rewrite of <https://github.com/murkland/tango> in Rust.
+(logo courtesy of [pnw_ssbmars](https://twitter.com/pnw_ssbmars) / ロゴ提供：[pnw_ssbmars](https://twitter.com/pnw_ssbmars))
 
-## why?
+[![murkland](https://discordapp.com/api/guilds/936475149069336596/widget.png?style=shield)](https://discord.gg/zbQngJHwSg)
 
-https://github.com/murkland/tango/issues/50 shows that the cgo overhead of the trapping mechanism in tango1 causes a ~15% overhead, even when the hypercall does absolutely nothing: note this is also only captures the C → go direction of the call. the fastforwarder when not in a no-op state will additionally perform go → C calls to save state, which has even more overhead. the entirety of this overhead is due to cgo stack switching (the 2k go stack must be switched for a conventional C stack + some go scheduler overhead).
+netplay for mega man battle network games in the style of <https://github.com/ssbmars/BBN3-netcode>.
 
-rust has no such overhead as there is no stack switching required, and no-op hypercalls are expected to have almost zero cost beyond the hypercall into mgba.
+tango（タンゴ）はロックマンエグゼ６ネットプレイシステムです。
 
-in tango2's current state, it is unclear how much overhead will be saved, but a minimal implementation will be coming soon!
+## supported games / 対応ゲーム
+
+-   MEGAMAN6_FXX: Mega Man Battle Network 6: Cybeast Falzar
+-   MEGAMAN6_GXX: Mega Man Battle Network 6: Cybeast Gregar
+-   ROCKEXE6_RXX: ロックマンエグゼ 6 電脳獣ファルザー
+-   ROCKEXE6_GXX: ロックマンエグゼ 6 電脳獣グレイガ
