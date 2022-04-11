@@ -162,8 +162,9 @@ fn keybinder(
     ui: &mut egui::Ui,
     current_input: &current_input::CurrentInput,
     key: &mut winit::event::VirtualKeyCode,
-) -> egui::Response {
+) -> egui::InnerResponse<bool> {
     let response = ui.add(egui::TextEdit::singleline(&mut format!("{:?}", key)).lock_focus(true));
+    let mut bound = false;
     if response.has_focus() {
         if let Some(k) = current_input
             .key_actions
@@ -177,10 +178,11 @@ fn keybinder(
             })
             .next()
         {
+            bound = true;
             *key = *k;
         }
     }
-    response
+    egui::InnerResponse::new(bound, response)
 }
 
 impl State {
@@ -290,52 +292,78 @@ impl State {
                 .show_keymapping_config
                 .load(std::sync::atomic::Ordering::Relaxed);
             let mut config = self.config.lock();
+            let mut bound = false;
             egui::Window::new("Keymapping")
                 .open(&mut show_keymapping_config)
                 .collapsible(false)
                 .show(ctx, |ui| {
                     egui::Grid::new("debug_grid").num_columns(2).show(ui, |ui| {
                         ui.label("up");
-                        keybinder(ui, &*current_input, &mut config.keymapping.up);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.up).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("down");
-                        keybinder(ui, &*current_input, &mut config.keymapping.down);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.down).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("left");
-                        keybinder(ui, &*current_input, &mut config.keymapping.left);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.left).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("right");
-                        keybinder(ui, &*current_input, &mut config.keymapping.right);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.right).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("A");
-                        keybinder(ui, &*current_input, &mut config.keymapping.a);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.a).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("B");
-                        keybinder(ui, &*current_input, &mut config.keymapping.b);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.b).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("L");
-                        keybinder(ui, &*current_input, &mut config.keymapping.l);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.l).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("R");
-                        keybinder(ui, &*current_input, &mut config.keymapping.r);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.r).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("start");
-                        keybinder(ui, &*current_input, &mut config.keymapping.start);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.start).inner {
+                            bound = true;
+                        }
                         ui.end_row();
 
                         ui.label("select");
-                        keybinder(ui, &*current_input, &mut config.keymapping.select);
+                        if keybinder(ui, &*current_input, &mut config.keymapping.select).inner {
+                            bound = true;
+                        }
                         ui.end_row();
                     });
                 });
+            if bound {
+                if let Err(e) = config::save_config(&*config) {
+                    log::warn!("failed to save config: {}", e);
+                }
+            }
             self.show_keymapping_config
                 .store(show_keymapping_config, std::sync::atomic::Ordering::Relaxed);
         }
