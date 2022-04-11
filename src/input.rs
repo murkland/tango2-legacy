@@ -4,7 +4,7 @@ pub struct Input {
     pub remote_tick: u32,
     pub joyflags: u16,
     pub custom_screen_state: u8,
-    pub turn: Option<[u8; 0x100]>,
+    pub turn: Vec<u8>,
 }
 
 pub struct PairQueue<T>

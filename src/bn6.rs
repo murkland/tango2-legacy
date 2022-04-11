@@ -38,8 +38,11 @@ impl BN6 {
         core.raw_read_8(self.offsets.ewram.battle_state + 0x11, -1)
     }
 
-    pub fn local_marshaled_battle_state(&self, mut core: core::CoreMutRef) -> [u8; 0x100] {
-        core.raw_read_range(self.offsets.ewram.local_marshaled_battle_state, -1)
+    pub fn local_marshaled_battle_state(&self, mut core: core::CoreMutRef) -> Vec<u8> {
+        core.raw_read_range::<0x100>(self.offsets.ewram.local_marshaled_battle_state, -1)
+            .iter()
+            .cloned()
+            .collect()
     }
 
     pub fn set_player_input_state(
@@ -65,7 +68,7 @@ impl BN6 {
         &self,
         mut core: core::CoreMutRef,
         index: u32,
-        marshaled: &[u8; 0x100],
+        marshaled: &[u8],
     ) {
         core.raw_write_range(
             self.offsets.ewram.player_marshaled_state_arr + index * 0x100,

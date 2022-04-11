@@ -316,11 +316,7 @@ impl MatchImpl {
                             remote_tick: input.remote_tick,
                             joyflags: input.joyflags as u16,
                             custom_screen_state: input.custom_screen_state as u8,
-                            turn: if input.turn.is_empty() {
-                                None
-                            } else {
-                                Some(input.turn.as_slice().try_into().expect("remote turn"))
-                            },
+                            turn: input.turn,
                         })
                         .await;
                 }
@@ -398,7 +394,7 @@ impl Match {
         &self,
         battle_number: u32,
         input_delay: u32,
-        marshaled: &[u8; 0x100],
+        marshaled: &[u8],
     ) -> anyhow::Result<()> {
         let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
@@ -427,7 +423,7 @@ impl Match {
         remote_tick: u32,
         joyflags: u16,
         custom_screen_state: u8,
-        turn: &Option<[u8; 0x100]>,
+        turn: Vec<u8>,
     ) -> anyhow::Result<()> {
         let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
@@ -442,11 +438,7 @@ impl Match {
                     remote_tick,
                     joyflags: joyflags as u32,
                     custom_screen_state: custom_screen_state as u32,
-                    turn: if let Some(turn) = turn {
-                        turn.to_vec()
-                    } else {
-                        vec![]
-                    },
+                    turn,
                 })),
             }
             .encode_to_vec()
@@ -493,7 +485,7 @@ impl Match {
                 remote_tick: 0,
                 joyflags: 0xfc00,
                 custom_screen_state: 0,
-                turn: None,
+                turn: vec![],
             },
             last_input: None,
             state_committed_notify: tokio::sync::Notify::new(),
@@ -525,7 +517,7 @@ impl Match {
 }
 
 struct LocalPendingTurn {
-    marshaled: [u8; 0x100],
+    marshaled: Vec<u8>,
     ticks_left: u8,
 }
 
@@ -618,30 +610,27 @@ impl Battle {
         self.iq.add_remote_input(input).await;
     }
 
-    pub fn add_local_pending_turn(&mut self, marshaled: [u8; 0x100]) {
+    pub fn add_local_pending_turn(&mut self, marshaled: Vec<u8>) {
         self.local_pending_turn = Some(LocalPendingTurn {
             ticks_left: 64,
             marshaled,
         })
     }
 
-    pub fn take_local_pending_turn(&mut self) -> Option<[u8; 0x100]> {
+    pub fn take_local_pending_turn(&mut self) -> Vec<u8> {
         match &mut self.local_pending_turn {
             Some(lpt) => {
                 if lpt.ticks_left > 0 {
                     lpt.ticks_left -= 1;
                     if lpt.ticks_left != 0 {
-                        return None;
+                        return vec![];
                     }
-
-                    let t = lpt.marshaled;
-                    self.local_pending_turn = None;
-                    Some(t)
+                    self.local_pending_turn.take().unwrap().marshaled
                 } else {
-                    None
+                    vec![]
                 }
             }
-            None => None,
+            None => vec![],
         }
     }
 

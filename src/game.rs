@@ -144,7 +144,7 @@ impl GameState {
                                         let local_init = bn6.local_marshaled_battle_state(core);
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.expect("send init");
                                         log::info!("sent local init");
-                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &local_init);
+                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, local_init.as_slice());
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
@@ -154,7 +154,7 @@ impl GameState {
                                             }
                                         };
                                         log::info!("received remote init: {:?}", remote_init);
-                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &remote_init.marshaled.as_slice().try_into().expect("remote init"));
+                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, remote_init.marshaled.as_slice());
 
                                         battle.set_remote_delay(remote_init.input_delay);
                                         return;
@@ -231,7 +231,7 @@ impl GameState {
                                                             remote_tick: in_battle_time + i,
                                                             joyflags: 0xfc00,
                                                             custom_screen_state: 0,
-                                                            turn: None,
+                                                            turn: vec![],
                                                         },
                                                     )
                                                     .await;
@@ -244,7 +244,7 @@ impl GameState {
                                                             remote_tick: in_battle_time + i,
                                                             joyflags: 0xfc00,
                                                             custom_screen_state: 0,
-                                                            turn: None,
+                                                            turn: vec![],
                                                         },
                                                     )
                                                     .await;
@@ -273,7 +273,7 @@ impl GameState {
                                                     remote_tick,
                                                     joyflags,
                                                     custom_screen_state,
-                                                    turn,
+                                                    turn: turn.clone(),
                                                 },
                                             ),
                                         )
@@ -284,7 +284,7 @@ impl GameState {
                                             break 'abort;
                                         }
 
-                                        m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, &turn).await.expect("send input");
+                                        m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, turn).await.expect("send input");
 
                                         let (input_pairs, left) = battle.consume_and_peek_local().await;
                                         let mut fastforwarder = fastforwarder.lock();
@@ -346,8 +346,8 @@ impl GameState {
                                         ip.local.joyflags as u16,
                                         ip.local.custom_screen_state as u8,
                                     );
-                                    if let Some(turn) = ip.local.turn {
-                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, &turn);
+                                    if !ip.local.turn.is_empty() {
+                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, ip.local.turn.as_slice());
                                     }
                                     bn6.set_player_input_state(
                                         core,
@@ -355,8 +355,8 @@ impl GameState {
                                         ip.remote.joyflags as u16,
                                         ip.remote.custom_screen_state as u8,
                                     );
-                                    if let Some(turn) = ip.remote.turn {
-                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, &turn);
+                                    if !ip.remote.turn.is_empty() {
+                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, ip.remote.turn.as_slice());
                                     }
                                 });
                             }),

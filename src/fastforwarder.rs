@@ -145,11 +145,11 @@ impl Fastforwarder {
                                     ip.local.joyflags,
                                     ip.local.custom_screen_state,
                                 );
-                                if let Some(turn) = ip.local.turn {
+                                if !ip.local.turn.is_empty() {
                                     bn6.set_player_marshaled_battle_state(
                                         core,
                                         local_player_index as u32,
-                                        &turn,
+                                        ip.local.turn.as_slice(),
                                     );
                                     if in_battle_time < commit_time {
                                         log::info!("p1 turn committed at tick {}", in_battle_time);
@@ -162,11 +162,11 @@ impl Fastforwarder {
                                     ip.remote.joyflags,
                                     ip.remote.custom_screen_state,
                                 );
-                                if let Some(turn) = ip.remote.turn {
+                                if !ip.remote.turn.is_empty() {
                                     bn6.set_player_marshaled_battle_state(
                                         core,
                                         remote_player_index as u32,
-                                        &turn,
+                                        ip.remote.turn.as_slice(),
                                     );
                                     if in_battle_time < commit_time {
                                         log::info!("p2 turn committed at tick {}", in_battle_time);
@@ -282,7 +282,7 @@ impl Fastforwarder {
                             joyflags
                         },
                         custom_screen_state: last_committed_remote_input.custom_screen_state,
-                        turn: None,
+                        turn: vec![],
                     },
                 }
             }))
