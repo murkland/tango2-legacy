@@ -305,7 +305,7 @@ impl State {
                 .id(egui::Id::new("select-game-window"))
                 .collapsible(false)
                 .title_bar(false)
-                .fixed_size(egui::vec2(300.0, 0.0))
+                .fixed_size(egui::vec2(300.0, 200.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| {
