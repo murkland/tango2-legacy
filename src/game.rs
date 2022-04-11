@@ -705,7 +705,7 @@ impl GameState {
 }
 
 impl Game {
-    pub fn new() -> Result<Game, anyhow::Error> {
+    pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
@@ -732,7 +732,7 @@ impl Game {
                 .build(event_loop.as_ref().expect("event loop"))?
         };
 
-        let config = Arc::new(Mutex::new(config::Config::default()));
+        let config = Arc::new(Mutex::new(config));
 
         let fps_counter = Arc::new(Mutex::new(tps::Counter::new(30)));
         let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));

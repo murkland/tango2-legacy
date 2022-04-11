@@ -18,7 +18,16 @@ mod tps;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     mgba::log::init();
-    let g = game::Game::new()?;
+    let config = match config::load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            log::warn!("failed to load config, will load default instead: {}", e);
+            let config = config::Config::default();
+            config::save_config(&config)?;
+            config
+        }
+    };
+    let g = game::Game::new(config)?;
     g.run();
     Ok(())
 }
