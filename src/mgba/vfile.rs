@@ -16,8 +16,15 @@ pub mod flags {
 
 impl VFile {
     pub fn open(path: &std::path::Path, flags: u32) -> anyhow::Result<Self> {
-        let path = path.to_str().unwrap();
+        let path = match path.to_str() {
+            Some(path) => path,
+            None => {
+                anyhow::bail!("failed to decode path {:?}", path);
+            }
+        };
         let ptr = unsafe {
+            // On Windows, VFileOpenFD will call MultiByteToWideChar then _wopen, so we can just pass it a UTF-8 string.
+            // On every other platform, we just use UTF-8 strings directly because they're not silly like Windows.
             let path_cstr = CString::new(path).unwrap();
             c::VFileOpen(path_cstr.as_ptr(), flags as i32)
         };
