@@ -302,6 +302,7 @@ impl State {
             let mut bound = false;
             egui::Window::new("Keymapping")
                 .open(&mut show_keymapping_config)
+                .fixed_size(egui::vec2(150.0, 0.0))
                 .collapsible(false)
                 .show(ctx, |ui| {
                     egui::Grid::new("keymapping-grid")
@@ -385,7 +386,7 @@ impl State {
             .show(ctx, |ui| {
                 if let Some(debug_stats_getter) = &*self.debug_stats_getter.lock() {
                     if let Some(debug_stats) = debug_stats_getter() {
-                        egui::Grid::new("debug_grid").num_columns(2).show(ui, |ui| {
+                        egui::Grid::new("debug-grid").num_columns(2).show(ui, |ui| {
                             ui.label("FPS");
                             ui.label(format!("{:.0}", debug_stats.fps));
                             ui.end_row();
