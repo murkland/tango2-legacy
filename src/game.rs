@@ -538,12 +538,12 @@ impl GameState {
                                             let gui_state = gui_state.upgrade().expect("upgrade");
                                             gui_state.open_link_code_dialog();
                                             match &*gui_state
-                                                .lock_link_code_status()
+                                                .lock_link_code_state()
                                             {
-                                                gui::DialogStatus::Pending(_) => {
+                                                gui::DialogState::Pending(_) => {
                                                     return;
                                                 }
-                                                gui::DialogStatus::Ok(code) => {
+                                                gui::DialogState::Ok(code) => {
                                                     let config = config.lock();
                                                     let m = battle::Match::new(
                                                         code.to_string(),
@@ -571,10 +571,10 @@ impl GameState {
                                                         _ => unreachable!(),
                                                     }
                                                 }
-                                                gui::DialogStatus::Cancelled => {
+                                                gui::DialogState::Cancelled => {
                                                     bn6.drop_matchmaking_from_comm_menu(core, 0);
                                                 }
-                                                gui::DialogStatus::Closed => { unreachable!(); }
+                                                gui::DialogState::Closed => { unreachable!(); }
                                             }
                                             gui_state.close_link_code_dialog();
                                         }
@@ -1004,19 +1004,19 @@ impl Game {
 
                                 let selected_rom = {
                                     let mut selected_rom = None;
-                                    let rom_select_state = gui_state.lock_rom_select_status();
+                                    let rom_select_state = gui_state.lock_rom_select_state();
                                     match &*rom_select_state {
-                                        gui::DialogStatus::Pending(_) => {}
-                                        gui::DialogStatus::Ok(None) => {
+                                        gui::DialogState::Pending(_) => {}
+                                        gui::DialogState::Ok(None) => {
                                             unreachable!();
                                         }
-                                        gui::DialogStatus::Ok(Some(index)) => {
+                                        gui::DialogState::Ok(Some(index)) => {
                                             selected_rom = Some(&rom_list[*index]);
                                         }
-                                        gui::DialogStatus::Cancelled => {
+                                        gui::DialogState::Cancelled => {
                                             unreachable!();
                                         }
-                                        gui::DialogStatus::Closed => {}
+                                        gui::DialogState::Closed => {}
                                     }
                                     selected_rom
                                 };

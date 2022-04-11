@@ -149,7 +149,7 @@ impl Gui {
     }
 }
 
-pub enum DialogStatus<T> {
+pub enum DialogState<T> {
     Pending(T),
     Ok(T),
     Cancelled,
@@ -163,8 +163,8 @@ pub struct ROMInfo {
 }
 
 pub struct State {
-    link_code_state: parking_lot::Mutex<DialogStatus<String>>,
-    rom_select_state: parking_lot::Mutex<DialogStatus<Option<usize>>>,
+    link_code_state: parking_lot::Mutex<DialogState<String>>,
+    rom_select_state: parking_lot::Mutex<DialogState<Option<usize>>>,
     show_debug: std::sync::atomic::AtomicBool,
     show_menu: std::sync::atomic::AtomicBool,
     show_keymapping_config: std::sync::atomic::AtomicBool,
@@ -222,8 +222,8 @@ impl State {
         current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     ) -> Self {
         Self {
-            link_code_state: parking_lot::Mutex::new(DialogStatus::Closed),
-            rom_select_state: parking_lot::Mutex::new(DialogStatus::Closed),
+            link_code_state: parking_lot::Mutex::new(DialogState::Closed),
+            rom_select_state: parking_lot::Mutex::new(DialogState::Closed),
             show_debug: false.into(),
             show_menu: false.into(),
             show_keymapping_config: false.into(),
@@ -241,30 +241,30 @@ impl State {
 
     pub fn open_link_code_dialog(&self) {
         let mut link_code_state = self.link_code_state.lock();
-        *link_code_state = DialogStatus::Pending(String::new());
+        *link_code_state = DialogState::Pending(String::new());
     }
 
     pub fn close_link_code_dialog(&self) {
         let mut link_code_state = self.link_code_state.lock();
-        *link_code_state = DialogStatus::Closed;
+        *link_code_state = DialogState::Closed;
     }
 
-    pub fn lock_link_code_status(&self) -> parking_lot::MutexGuard<DialogStatus<String>> {
+    pub fn lock_link_code_state(&self) -> parking_lot::MutexGuard<DialogState<String>> {
         self.link_code_state.lock()
     }
 
-    pub fn lock_rom_select_status(&self) -> parking_lot::MutexGuard<DialogStatus<Option<usize>>> {
+    pub fn lock_rom_select_state(&self) -> parking_lot::MutexGuard<DialogState<Option<usize>>> {
         self.rom_select_state.lock()
     }
 
     pub fn open_rom_select_dialog(&self) {
         let mut rom_select_state = self.rom_select_state.lock();
-        *rom_select_state = DialogStatus::Pending(None);
+        *rom_select_state = DialogState::Pending(None);
     }
 
     pub fn close_rom_select_dialog(&self) {
         let mut rom_select_state = self.rom_select_state.lock();
-        *rom_select_state = DialogStatus::Closed;
+        *rom_select_state = DialogState::Closed;
     }
 
     pub fn set_debug_stats_getter(&self, getter: Option<Box<dyn Fn() -> Option<DebugStats>>>) {
@@ -295,7 +295,7 @@ impl State {
         {
             let mut maybe_rom_select_state = self.rom_select_state.lock();
 
-            let mut open = if let DialogStatus::Pending(_) = &*maybe_rom_select_state {
+            let mut open = if let DialogState::Pending(_) = &*maybe_rom_select_state {
                 true
             } else {
                 false
@@ -310,7 +310,7 @@ impl State {
                 .show(ctx, |ui| {
                     let rom_filenames = self.rom_list.lock();
 
-                    let selected_index = if let DialogStatus::Pending(selected_index) = &mut *maybe_rom_select_state {
+                    let selected_index = if let DialogState::Pending(selected_index) = &mut *maybe_rom_select_state {
                         selected_index
                     } else {
                         unreachable!();
@@ -330,7 +330,7 @@ impl State {
                     });
 
                     if selected_index.is_some() {
-                        *maybe_rom_select_state = DialogStatus::Ok(*selected_index);
+                        *maybe_rom_select_state = DialogState::Ok(*selected_index);
                     }
                 });
         }
@@ -338,7 +338,7 @@ impl State {
         {
             let mut maybe_link_code_state = self.link_code_state.lock();
 
-            let mut open = if let DialogStatus::Pending(_) = &*maybe_link_code_state {
+            let mut open = if let DialogState::Pending(_) = &*maybe_link_code_state {
                 true
             } else {
                 false
@@ -352,7 +352,7 @@ impl State {
                 .open(&mut open)
                 .show(ctx, |ui| {
                     let code =
-                        if let DialogStatus::Pending(code) = &mut *maybe_link_code_state {
+                        if let DialogState::Pending(code) = &mut *maybe_link_code_state {
                             code
                         } else {
                             unreachable!();
@@ -374,11 +374,11 @@ impl State {
                         .inner;
 
                     if text_ok || button_ok {
-                        *maybe_link_code_state = DialogStatus::Ok(code.to_string());
+                        *maybe_link_code_state = DialogState::Ok(code.to_string());
                     }
 
                     if cancel {
-                        *maybe_link_code_state = DialogStatus::Cancelled;
+                        *maybe_link_code_state = DialogState::Cancelled;
                     }
                 });
         }
