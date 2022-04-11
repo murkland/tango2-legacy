@@ -25,10 +25,10 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::InvalidHandshake => write!(f, "invalid handshake"),
-            Error::WebRTC(e) => write!(f, "WebRTC error: {}", e),
-            Error::TonicTransport(e) => write!(f, "tonic transport error: {}", e),
-            Error::TonicStatus(e) => write!(f, "tonic status: {}", e),
-            Error::Other(e) => write!(f, "other error: {}", e),
+            Error::WebRTC(e) => write!(f, "WebRTC error: {:?}", e),
+            Error::TonicTransport(e) => write!(f, "tonic transport error: {:?}", e),
+            Error::TonicStatus(e) => write!(f, "tonic status: {:?}", e),
+            Error::Other(e) => write!(f, "other error: {:?}", e),
         }
     }
 }
