@@ -29,7 +29,7 @@ pub struct Game {
     config: Arc<Mutex<config::Config>>,
     vbuf: Arc<Mutex<Vec<u8>>>,
     current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
-    game_state: Arc<Option<GameState>>,
+    game_state: Arc<Mutex<Option<GameState>>>,
 }
 
 impl GameState {
@@ -778,7 +778,7 @@ impl Game {
 
         let gui_state = gui.state();
 
-        let game_state = Arc::new(None);
+        let game_state = Arc::new(Mutex::new(None::<GameState>));
 
         {
             let game_state = Arc::downgrade(&game_state);
@@ -792,6 +792,7 @@ impl Game {
                     } else {
                         return None;
                     };
+                    let game_state = game_state.lock();
                     let game_state = if let Some(game_state) = &*game_state {
                         game_state
                     } else {
@@ -830,7 +831,7 @@ impl Game {
 
         let rom_filename = std::path::PathBuf::from("bn6f.gba");
         let save_filename = rom_filename.with_extension("sav");
-        *game_state = {
+        *game_state.lock() = {
             let handle = handle.clone();
             Some(GameState::new(
                 rom_filename,
@@ -896,7 +897,7 @@ impl Game {
                             let current_input = current_input.borrow();
 
                             if !gui_handled {
-                                if let Some(game_state) = &*self.game_state {
+                                if let Some(game_state) = &*self.game_state.lock() {
                                     let mut core = game_state.main_core.lock();
                                     let config = self.config.lock();
 
