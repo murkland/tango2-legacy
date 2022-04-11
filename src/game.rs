@@ -29,11 +29,13 @@ pub struct Game {
     config: Arc<Mutex<config::Config>>,
     vbuf: Arc<Mutex<Vec<u8>>>,
     current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
-    game_state: Option<Arc<GameState>>,
+    game_state: Arc<Option<GameState>>,
 }
 
 impl GameState {
     fn new(
+        rom_filename: std::path::PathBuf,
+        save_filename: std::path::PathBuf,
         handle: tokio::runtime::Handle,
         config: Arc<Mutex<config::Config>>,
         gui_state: std::sync::Weak<gui::State>,
@@ -43,10 +45,8 @@ impl GameState {
         let roms_path = std::path::Path::new("roms");
         let saves_path = std::path::Path::new("saves");
 
-        let rom_filename = std::path::Path::new("bn6f.gba");
-
-        let rom_path = roms_path.join(rom_filename);
-        let save_path = saves_path.join(rom_filename.with_extension("sav"));
+        let rom_path = roms_path.join(&rom_filename);
+        let save_path = saves_path.join(&save_filename);
 
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
@@ -777,15 +777,21 @@ impl Game {
         };
 
         let gui_state = gui.state();
+
+        let rom_filename = std::path::PathBuf::from("bn6f.gba");
+        let save_filename = rom_filename.with_extension("sav");
+
         let game_state = {
             let handle = handle.clone();
-            Arc::new(GameState::new(
+            Arc::new(Some(GameState::new(
+                rom_filename,
+                save_filename,
                 handle,
                 config.clone(),
                 Arc::downgrade(&gui_state),
                 Arc::downgrade(&vbuf),
                 Arc::downgrade(&emu_tps_counter),
-            )?)
+            )?))
         };
 
         {
@@ -796,6 +802,11 @@ impl Game {
             gui_state.set_debug_stats_getter(Some(Box::new(move || {
                 handle.block_on(async {
                     let game_state = if let Some(game_state) = game_state.upgrade() {
+                        game_state
+                    } else {
+                        return None;
+                    };
+                    let game_state = if let Some(game_state) = &*game_state {
                         game_state
                     } else {
                         return None;
@@ -841,7 +852,7 @@ impl Game {
             pixels,
             vbuf,
             gui,
-            game_state: Some(game_state),
+            game_state,
         })
     }
 
@@ -884,7 +895,7 @@ impl Game {
                             let current_input = current_input.borrow();
 
                             if !gui_handled {
-                                if let Some(game_state) = &self.game_state {
+                                if let Some(game_state) = &*self.game_state {
                                     let mut core = game_state.main_core.lock();
                                     let config = self.config.lock();
 
