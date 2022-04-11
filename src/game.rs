@@ -40,15 +40,20 @@ impl GameState {
         vbuf: std::sync::Weak<Mutex<Vec<u8>>>,
         emu_tps_counter: std::sync::Weak<Mutex<tps::Counter>>,
     ) -> Result<Self, anyhow::Error> {
-        let rom_path = std::path::Path::new("bn6f.gba");
-        let save_path = rom_path.with_extension("sav");
+        let roms_path = std::path::Path::new("roms");
+        let saves_path = std::path::Path::new("saves");
+
+        let rom_filename = std::path::Path::new("bn6f.gba");
+
+        let rom_path = roms_path.join(rom_filename);
+        let save_path = saves_path.join(rom_filename.with_extension("sav"));
 
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             core.enable_video_buffer();
             core.as_mut().set_audio_buffer_size(1024);
 
-            let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
+            let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.as_mut().load_rom(rom_vf)?;
 
             let save_vf = mgba::vfile::VFile::open(
@@ -198,7 +203,7 @@ impl GameState {
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
                         let fastforwarder = parking_lot::Mutex::new(
-                            fastforwarder::Fastforwarder::new(rom_path, bn6.clone())?,
+                            fastforwarder::Fastforwarder::new(&rom_path, bn6.clone())?,
                         );
                         (
                             bn6.offsets.rom.main_read_joyflags,
