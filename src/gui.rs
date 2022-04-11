@@ -254,26 +254,35 @@ impl State {
                 false
             };
 
-            egui::Window::new("Link Code")
+            egui::Window::new("Link code")
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    let code = if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state { code } else { unreachable!(); };
-                    ui.label(egui::RichText::new("お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。"));
+                    let code =
+                        if let Some(DialogStatus::Pending(code)) = &mut *maybe_link_code_state {
+                            code
+                        } else {
+                            unreachable!();
+                        };
+                    ui.label(egui::RichText::new("Enter a link code that you and your opponent have decided on to connect to each other:"));
                     ui.separator();
-                    let response = ui.add(egui::TextEdit::singleline( code).hint_text("リンクコード"));
+                    let response = ui.add(egui::TextEdit::singleline(code).hint_text("Link code"));
                     *code = code.to_lowercase().trim().to_string();
-                    let text_ok = response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) && !code.is_empty();
+                    let text_ok = response.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        && !code.is_empty();
                     response.request_focus();
                     ui.separator();
-                    let (button_ok, cancel) = ui.horizontal(|ui| {
-                        let ok = ui.add(egui::Button::new("接続")).clicked();
-                        let cancel = ui.add(egui::Button::new("キャンセル")).clicked();
-                        (ok, cancel)
-                    }).inner;
+                    let (button_ok, cancel) = ui
+                        .horizontal(|ui| {
+                            let ok = ui.add(egui::Button::new("Connect")).clicked();
+                            let cancel = ui.add(egui::Button::new("Cancel")).clicked();
+                            (ok, cancel)
+                        })
+                        .inner;
 
                     if text_ok || button_ok {
                         *maybe_link_code_state = Some(DialogStatus::Ok(code.to_string()));
