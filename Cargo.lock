@@ -3206,7 +3206,6 @@ dependencies = [
  "vsprintf",
  "webrtc",
  "winit",
- "winit_input_helper",
  "zstd",
 ]
 
@@ -4287,15 +4286,6 @@ dependencies = [
  "web-sys",
  "winapi",
  "x11-dl",
-]
-
-[[package]]
-name = "winit_input_helper"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "353281ce305e2d720d6af2ad9343abf9ed47c41b5f2aa011f83f41970179b414"
-dependencies = [
- "winit",
 ]
 
 [[package]]

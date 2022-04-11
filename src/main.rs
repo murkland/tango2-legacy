@@ -5,6 +5,7 @@ mod audio;
 mod battle;
 mod bn6;
 mod config;
+mod current_input;
 mod datachannel;
 mod fastforwarder;
 mod game;
