@@ -897,6 +897,10 @@ impl Game {
                             self.gui.state().toggle_debug();
                         }
 
+                        if input_helper.key_pressed(winit::event::VirtualKeyCode::Escape) {
+                            self.gui.state().toggle_menu();
+                        }
+
                         let vbuf = self.vbuf.lock().clone();
                         self.pixels.get_frame().copy_from_slice(&vbuf);
 

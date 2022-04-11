@@ -128,6 +128,7 @@ pub enum DialogStatus<T> {
 pub struct State {
     link_code_state: parking_lot::Mutex<Option<DialogStatus<String>>>,
     show_debug: std::sync::atomic::AtomicBool,
+    show_menu: std::sync::atomic::AtomicBool,
     debug_stats_getter: parking_lot::Mutex<Option<Box<dyn Fn() -> Option<DebugStats>>>>,
 }
 
@@ -151,6 +152,7 @@ impl State {
         Self {
             link_code_state: parking_lot::Mutex::new(None),
             show_debug: false.into(),
+            show_menu: false.into(),
             debug_stats_getter: parking_lot::Mutex::new(None),
         }
     }
@@ -181,7 +183,14 @@ impl State {
             .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
     }
 
+    pub fn toggle_menu(&self) {
+        self.show_menu
+            .fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
     fn layout(&self, ctx: &Context) {
+        if self.show_menu.load(std::sync::atomic::Ordering::Relaxed) {}
+
         {
             let mut maybe_link_code_state = self.link_code_state.lock();
 
