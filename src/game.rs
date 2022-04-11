@@ -778,21 +778,7 @@ impl Game {
 
         let gui_state = gui.state();
 
-        let rom_filename = std::path::PathBuf::from("bn6f.gba");
-        let save_filename = rom_filename.with_extension("sav");
-
-        let game_state = {
-            let handle = handle.clone();
-            Arc::new(Some(GameState::new(
-                rom_filename,
-                save_filename,
-                handle,
-                config.clone(),
-                Arc::downgrade(&gui_state),
-                Arc::downgrade(&vbuf),
-                Arc::downgrade(&emu_tps_counter),
-            )?))
-        };
+        let game_state = Arc::new(None);
 
         {
             let game_state = Arc::downgrade(&game_state);
@@ -840,6 +826,21 @@ impl Game {
                     })
                 })
             })));
+        };
+
+        let rom_filename = std::path::PathBuf::from("bn6f.gba");
+        let save_filename = rom_filename.with_extension("sav");
+        *game_state = {
+            let handle = handle.clone();
+            Some(GameState::new(
+                rom_filename,
+                save_filename,
+                handle,
+                config.clone(),
+                Arc::downgrade(&gui_state),
+                Arc::downgrade(&vbuf),
+                Arc::downgrade(&emu_tps_counter),
+            )?)
         };
 
         Ok(Game {
