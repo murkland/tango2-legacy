@@ -22,7 +22,7 @@ pub struct Fastforwarder {
 impl Fastforwarder {
     pub fn new(rom_path: &std::path::Path, bn6: bn6::BN6) -> anyhow::Result<Self> {
         let mut core = {
-            let mut core = mgba::core::Core::new_gba("tango", false)?;
+            let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.as_mut().load_rom(rom_vf)?;
             core

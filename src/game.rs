@@ -41,7 +41,8 @@ impl GameState {
         let save_path = rom_path.with_extension("sav");
 
         let main_core = Arc::new(Mutex::new({
-            let mut core = mgba::core::Core::new_gba("tango", true)?;
+            let mut core = mgba::core::Core::new_gba("tango")?;
+            core.enable_video_buffer();
             core.as_mut().set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;

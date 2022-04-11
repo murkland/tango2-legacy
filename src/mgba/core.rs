@@ -13,7 +13,7 @@ pub struct Core {
 unsafe impl Send for Core {}
 
 impl Core {
-    pub fn new_gba(config_name: &str, with_video_buffer: bool) -> anyhow::Result<Self> {
+    pub fn new_gba(config_name: &str) -> anyhow::Result<Self> {
         let ptr = unsafe { c::GBACoreCreate() };
         if ptr.is_null() {
             anyhow::bail!("failed to create core");
@@ -33,25 +33,23 @@ impl Core {
             c::mCoreConfigLoad(&mut ptr.as_mut().unwrap().config);
         }
 
-        let mut core = Core {
+        Ok(Core {
             ptr,
             video_buffer: None,
-        };
+        })
+    }
 
-        if with_video_buffer {
-            let (width, height) = core.as_ref().desired_video_dimensions();
-            let mut buffer = vec![0u8; (width * height * 4) as usize];
-            unsafe {
-                (*core.ptr).setVideoBuffer.unwrap()(
-                    core.ptr,
-                    buffer.as_mut_ptr() as *mut _ as *mut u32,
-                    width as u64,
-                );
-            }
-            core.video_buffer = Some(buffer);
+    pub fn enable_video_buffer(&mut self) {
+        let (width, height) = self.as_ref().desired_video_dimensions();
+        let mut buffer = vec![0u8; (width * height * 4) as usize];
+        unsafe {
+            (*self.ptr).setVideoBuffer.unwrap()(
+                self.ptr,
+                buffer.as_mut_ptr() as *mut _ as *mut u32,
+                width as u64,
+            );
         }
-
-        Ok(core)
+        self.video_buffer = Some(buffer);
     }
 
     pub fn as_ref(&self) -> CoreRef {
