@@ -339,7 +339,12 @@ impl GameState {
                                     core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                     let battle_state = &mut m.lock_battle_state().await;
-                                    let battle = battle_state.battle.as_mut().expect("attempted to get battle p2 information while no battle was active!");
+                                    let battle = if let Some(battle) = battle_state.battle.as_mut()
+                                    {
+                                        battle
+                                    } else {
+                                        return;
+                                    };
 
                                     if !battle.is_accepting_input() {
                                         battle.start_accepting_input();
@@ -356,7 +361,11 @@ impl GameState {
                                         ip.local.custom_screen_state as u8,
                                     );
                                     if !ip.local.turn.is_empty() {
-                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, ip.local.turn.as_slice());
+                                        bn6.set_player_marshaled_battle_state(
+                                            core,
+                                            battle.local_player_index() as u32,
+                                            ip.local.turn.as_slice(),
+                                        );
                                     }
                                     bn6.set_player_input_state(
                                         core,
@@ -365,7 +374,11 @@ impl GameState {
                                         ip.remote.custom_screen_state as u8,
                                     );
                                     if !ip.remote.turn.is_empty() {
-                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, ip.remote.turn.as_slice());
+                                        bn6.set_player_marshaled_battle_state(
+                                            core,
+                                            battle.remote_player_index() as u32,
+                                            ip.remote.turn.as_slice(),
+                                        );
                                     }
                                 });
                             }),
@@ -807,6 +820,11 @@ impl Game {
                         fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
                         emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
                         target_tps: core.as_ref().gba().sync().unwrap().fps_target(),
+                        match_state: match &*match_state {
+                            MatchState::NoMatch => "none",
+                            MatchState::Aborted => "aborted",
+                            MatchState::Match(_) => "active",
+                        },
                         battle_debug_stats: match &*match_state {
                             MatchState::NoMatch => None,
                             MatchState::Aborted => None,

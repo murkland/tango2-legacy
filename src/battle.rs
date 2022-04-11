@@ -619,10 +619,12 @@ impl Battle {
     }
 
     pub async fn add_local_input(&mut self, input: input::Input) {
+        log::debug!("local input: {:?}", input);
         self.iq.add_local_input(input).await;
     }
 
     pub async fn add_remote_input(&mut self, input: input::Input) {
+        log::debug!("remote input: {:?}", input);
         self.iq.add_remote_input(input).await;
     }
 

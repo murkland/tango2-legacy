@@ -187,6 +187,7 @@ pub struct DebugStats {
     pub fps: f32,
     pub emu_tps: f32,
     pub target_tps: f32,
+    pub match_state: &'static str,
     pub battle_debug_stats: Option<BattleDebugStats>,
 }
 
@@ -555,6 +556,10 @@ impl State {
                                 "{:.0} (target = {:.0})",
                                 debug_stats.emu_tps, debug_stats.target_tps
                             ));
+                            ui.end_row();
+
+                            ui.label("Match state");
+                            ui.label(debug_stats.match_state);
                             ui.end_row();
 
                             if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
