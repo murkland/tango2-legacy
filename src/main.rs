@@ -11,6 +11,7 @@ mod fastforwarder;
 mod game;
 mod gui;
 mod input;
+mod locales;
 mod mgba;
 mod protocol;
 mod signor;

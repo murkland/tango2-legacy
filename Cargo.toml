@@ -32,6 +32,7 @@ subtle = "2.4"
 rand_pcg = "0.3.1"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
+fluent-templates = "0.7.1"
 
 [build-dependencies]
 bindgen = "0.53.1"
