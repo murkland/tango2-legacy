@@ -585,13 +585,16 @@ impl GameState {
                                                 bn6.drop_matchmaking_from_comm_menu(
                                                     core, WRONG_MODE,
                                                 );
+                                                *match_state = MatchState::NoMatch;
                                             }
-                                            battle::NegotiationStatus::Failed => {
-                                                const CONNECTION_ERROR: u32 = 0x26;
+                                            battle::NegotiationStatus::Failed(e) => {
+                                                log::error!("negotiation failed: {}", e);
+                                                const CONNECTION_ERROR: u32 = 0x24;
                                                 bn6.drop_matchmaking_from_comm_menu(
                                                     core,
                                                     CONNECTION_ERROR,
                                                 );
+                                                *match_state = MatchState::NoMatch;
                                             }
                                         },
                                     };

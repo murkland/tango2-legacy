@@ -26,31 +26,53 @@ impl Gui {
         let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
         let ctx = Context::default();
-        ctx.set_visuals(egui::Visuals::light());
+
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "NotoSans".to_owned(),
-            egui::FontData::from_static(include_bytes!("fonts/NotoSans-Regular.ttf")).tweak(
-                egui::FontTweak {
-                    scale: 1.25,
-                    ..egui::FontTweak::default()
-                },
-            ),
+            egui::FontData::from_static(include_bytes!("fonts/NotoSans-Regular.ttf")),
         );
         fonts.font_data.insert(
             "NotoSansJP".to_owned(),
-            egui::FontData::from_static(include_bytes!("fonts/NotoSansJP-Regular.otf")).tweak(
-                egui::FontTweak {
-                    scale: 1.25,
-                    ..egui::FontTweak::default()
-                },
-            ),
+            egui::FontData::from_static(include_bytes!("fonts/NotoSansJP-Regular.otf")),
         );
         *fonts
             .families
             .get_mut(&egui::FontFamily::Proportional)
             .unwrap() = vec!["NotoSans".to_owned(), "NotoSansJP".to_owned()];
         ctx.set_fonts(fonts);
+
+        let mut style = egui::Style::default();
+        style.spacing.interact_size.y = 16.0;
+        *style
+            .text_styles
+            .get_mut(&egui::TextStyle::Heading)
+            .unwrap() = egui::FontId {
+            size: 16.0,
+            family: egui::FontFamily::Proportional,
+        };
+        *style.text_styles.get_mut(&egui::TextStyle::Body).unwrap() = egui::FontId {
+            size: 16.0,
+            family: egui::FontFamily::Proportional,
+        };
+        *style.text_styles.get_mut(&egui::TextStyle::Button).unwrap() = egui::FontId {
+            size: 16.0,
+            family: egui::FontFamily::Proportional,
+        };
+        *style
+            .text_styles
+            .get_mut(&egui::TextStyle::Monospace)
+            .unwrap() = egui::FontId {
+            size: 16.0,
+            family: egui::FontFamily::Monospace,
+        };
+        *style.text_styles.get_mut(&egui::TextStyle::Small).unwrap() = egui::FontId {
+            size: 14.0,
+            family: egui::FontFamily::Proportional,
+        };
+        ctx.set_style(style);
+
+        ctx.set_visuals(egui::Visuals::light());
 
         let winit_state = egui_winit::State::from_pixels_per_point(max_texture_size, scale_factor);
         let screen_descriptor = ScreenDescriptor {
@@ -229,7 +251,7 @@ impl State {
 
     fn layout(&self, ctx: &Context) {
         if self.show_menu.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::TopBottomPanel::top("menu-bar").show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     if ui.button("Keymapping").clicked() {
                         self.show_keymapping_config
@@ -265,8 +287,7 @@ impl State {
                         } else {
                             unreachable!();
                         };
-                    ui.label(egui::RichText::new("Enter a link code that you and your opponent have decided on to connect to each other:"));
-                    ui.separator();
+                    ui.label(egui::RichText::new("Enter a link code that you and your opponent have decided on to connect to each other."));
                     let response = ui.add(egui::TextEdit::singleline(code).hint_text("Link code"));
                     *code = code.to_lowercase().trim().to_string();
                     let text_ok = response.lost_focus()

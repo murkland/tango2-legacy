@@ -88,7 +88,7 @@ pub enum NegotiationStatus {
     NotReady,
     MatchTypeMismatch,
     GameMismatch,
-    Failed,
+    Failed(anyhow::Error),
 }
 
 impl From<webrtc::Error> for NegotiationError {
@@ -402,7 +402,7 @@ impl Match {
             Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
                 NegotiationStatus::MatchTypeMismatch
             }
-            _ => NegotiationStatus::Failed,
+            Negotiation::Err(e) => NegotiationStatus::Failed(anyhow::format_err!("{}", e)),
         }
     }
 
