@@ -474,6 +474,7 @@ impl State {
 
         let mut show_debug = self.show_debug.load(std::sync::atomic::Ordering::Relaxed);
         egui::Window::new("Debug")
+            .id(egui::Id::new("debug-window"))
             .open(&mut show_debug)
             .auto_sized()
             .collapsible(false)
