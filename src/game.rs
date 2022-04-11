@@ -30,12 +30,13 @@ pub struct Game {
     vbuf: Arc<Mutex<Vec<u8>>>,
     current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     game_state: Arc<Mutex<Option<GameState>>>,
+    emu_tps_counter: Arc<Mutex<tps::Counter>>,
 }
 
 impl GameState {
     fn new(
-        rom_filename: std::path::PathBuf,
-        save_filename: std::path::PathBuf,
+        rom_filename: &std::path::Path,
+        save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
         config: Arc<Mutex<config::Config>>,
         gui_state: std::sync::Weak<gui::State>,
@@ -829,22 +830,7 @@ impl Game {
             })));
         };
 
-        let rom_filename = std::path::PathBuf::from("bn6f.gba");
-        let save_filename = rom_filename.with_extension("sav");
-        *game_state.lock() = {
-            let handle = handle.clone();
-            Some(GameState::new(
-                rom_filename,
-                save_filename,
-                handle,
-                config.clone(),
-                Arc::downgrade(&gui_state),
-                Arc::downgrade(&vbuf),
-                Arc::downgrade(&emu_tps_counter),
-            )?)
-        };
-
-        Ok(Game {
+        let g = Game {
             rt,
             config,
             fps_counter,
@@ -855,7 +841,29 @@ impl Game {
             vbuf,
             gui,
             game_state,
-        })
+            emu_tps_counter,
+        };
+        g.load(std::path::Path::new("bn6f.gba"))?;
+
+        Ok(g)
+    }
+
+    pub fn load(&self, rom_filename: &std::path::Path) -> anyhow::Result<()> {
+        let save_filename = rom_filename.with_extension("sav");
+
+        *self.game_state.lock() = {
+            let handle = self.rt.handle().clone();
+            Some(GameState::new(
+                rom_filename,
+                &save_filename,
+                handle,
+                self.config.clone(),
+                Arc::downgrade(&self.gui.state()),
+                Arc::downgrade(&self.vbuf),
+                Arc::downgrade(&self.emu_tps_counter),
+            )?)
+        };
+        Ok(())
     }
 
     pub fn run(mut self: Self) {
