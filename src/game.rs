@@ -863,7 +863,7 @@ impl Game {
     }
 
     pub fn run(mut self: Self) {
-        let rom_list: Vec<gui::ROMInfo> = std::fs::read_dir("roms")
+        let mut rom_list: Vec<gui::ROMInfo> = std::fs::read_dir("roms")
             .expect("roms")
             .flat_map(|dirent| {
                 let dirent = dirent.expect("dirent");
@@ -889,16 +889,23 @@ impl Game {
                     return vec![];
                 }
 
+                let title = core.as_ref().game_title();
+                if bn6::BN6::new(&title).is_none() {
+                    return vec![];
+                }
+
                 vec![gui::ROMInfo {
                     path: dirent
                         .path()
                         .strip_prefix("roms")
                         .expect("strip prefix")
                         .to_owned(),
-                    title: core.as_ref().game_title(),
+                    title,
                 }]
             })
             .collect();
+        rom_list.sort_unstable_by(|x, y| x.path.cmp(&y.path));
+
         // Probe for ROMs.
         {
             let gui_state = self.gui.state();

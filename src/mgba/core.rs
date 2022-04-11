@@ -120,7 +120,7 @@ impl<'a> CoreRef<'a> {
                 std::ffi::CString::new(&err.into_vec()[0..nul_pos]).unwrap()
             }
         };
-        cstr.to_str().unwrap().to_string()
+        cstr.to_string_lossy().to_string()
     }
 
     pub fn game_code(&self) -> String {
@@ -135,7 +135,7 @@ impl<'a> CoreRef<'a> {
                 std::ffi::CString::new(&err.into_vec()[0..nul_pos]).unwrap()
             }
         };
-        cstr.to_str().unwrap().to_string()
+        cstr.to_string_lossy().to_string()
     }
 
     pub fn crc32(&self) -> u32 {
