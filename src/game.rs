@@ -757,6 +757,23 @@ impl Game {
             .enable_all()
             .build()?;
 
+        {
+            let bind_addr = config.matchmaking.bind_addr.to_string();
+            rt.spawn(async {
+                if let Err(e) = (move || async {
+                    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
+                    log::info!("bound local matchmaking server on {}", listener.local_addr()?);
+                    let mut server = tango::matchmaking::server::Server::new(listener);
+                    server.run().await;
+                    Result::<(), anyhow::Error>::Ok(())
+                })()
+                .await
+                {
+                    log::info!("failed to bind local matchmaking server, direct connect will not be available: {}", e)
+                }
+            });
+        }
+
         let handle = rt.handle().clone();
 
         let event_loop = Some(winit::event_loop::EventLoop::new());

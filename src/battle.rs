@@ -1,4 +1,3 @@
-use crate::config;
 use crate::datachannel;
 use crate::input;
 use crate::mgba;
