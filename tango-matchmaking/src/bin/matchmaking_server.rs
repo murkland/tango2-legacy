@@ -1,6 +1,5 @@
-extern crate tango;
 use envconfig::Envconfig;
-use tango::matchmaking::server;
+use tango_matchmaking::server;
 
 #[derive(Envconfig)]
 struct Config {
