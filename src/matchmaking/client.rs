@@ -1,6 +1,6 @@
 use super::protocol;
 use futures_util::SinkExt;
-use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum ConnectionSide {
@@ -52,9 +52,9 @@ where
     log::info!("negotiation start sent");
 
     match match stream
-        .next()
-        .await
-        .ok_or(anyhow::format_err!("stream ended early"))??
+        .try_next()
+        .await?
+        .ok_or(anyhow::format_err!("stream ended early"))?
     {
         tokio_tungstenite::tungstenite::Message::Binary(d) => protocol::Packet::deserialize(&d)?,
         _ => anyhow::bail!("unexpected message format"),

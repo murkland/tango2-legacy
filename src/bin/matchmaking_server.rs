@@ -22,6 +22,6 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::init_from_env().unwrap();
     let listener = tokio::net::TcpListener::bind(config.listen_addr).await?;
     let mut server = server::Server::new(listener);
-    server.listen().await;
+    server.run().await;
     Ok(())
 }
