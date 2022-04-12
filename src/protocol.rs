@@ -3,7 +3,7 @@ use bincode::Options;
 pub const VERSION: u8 = 0x0d;
 
 lazy_static! {
-    pub static ref BINCODE_OPTIONS: bincode::config::WithOtherIntEncoding<
+    static ref BINCODE_OPTIONS: bincode::config::WithOtherIntEncoding<
         bincode::config::DefaultOptions,
         bincode::config::FixintEncoding,
     > = bincode::DefaultOptions::new().with_fixint_encoding();
@@ -15,6 +15,16 @@ pub enum Packet {
     Hola(Hola),
     Init(Init),
     Input(Input),
+}
+
+impl Packet {
+    pub fn serialize(&self) -> bincode::Result<Vec<u8>> {
+        BINCODE_OPTIONS.serialize(self)
+    }
+
+    pub fn deserialize(d: &[u8]) -> bincode::Result<Self> {
+        BINCODE_OPTIONS.deserialize(d)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
