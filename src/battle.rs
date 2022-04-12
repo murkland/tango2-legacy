@@ -1,7 +1,6 @@
 use crate::config;
 use crate::datachannel;
 use crate::input;
-use crate::matchmaking;
 use crate::mgba;
 use crate::protocol;
 use crate::replay;
@@ -11,6 +10,7 @@ use sha3::digest::ExtendableOutput;
 use std::io::Read;
 use std::io::Write;
 use subtle::ConstantTimeEq;
+use tango::matchmaking;
 
 pub struct BattleState {
     pub number: u8,
