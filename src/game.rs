@@ -716,6 +716,7 @@ impl GameState {
             let vbuf = vbuf.clone();
             let emu_tps_counter = emu_tps_counter.clone();
             thread.set_frame_callback(Some(Box::new(move || {
+                // TODO: This sometimes causes segfaults when the game gets unloaded.
                 let core = core.lock();
                 let vbuf = match vbuf.upgrade() {
                     Some(vbuf) => vbuf,

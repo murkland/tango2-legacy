@@ -14,7 +14,7 @@ impl MGBAAudioSource {
     ) -> Self {
         let buf = {
             let mut core = core.as_ref().lock();
-            vec![0; (core.as_mut().audio_buffer_size() * 2) as usize]
+            vec![0; (core.as_mut().audio_buffer_size() * 2) as usize * 4]
         };
         Self {
             core,
@@ -29,13 +29,13 @@ impl MGBAAudioSource {
 
         let clock_rate = core.as_ref().frequency();
 
-        let n = core.as_mut().audio_buffer_size() as i32;
-
         let mut faux_clock = 1.0;
         if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
             faux_clock = gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
+
+        let n = ((core.as_mut().audio_buffer_size() as f64) / (faux_clock as f64)) as i32;
 
         let available = {
             let mut core = core.as_mut();
@@ -94,7 +94,8 @@ impl Iterator for MGBAAudioSource {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buf_offset >= self.buf.len() {
+        if self.buf_offset >= (self.core.as_ref().lock().as_mut().audio_buffer_size() * 2) as usize
+        {
             self.read_new_buf();
             self.buf_offset = 0;
         }
