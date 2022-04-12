@@ -1,3 +1,5 @@
+use tokio_stream::StreamExt;
+
 mod pb {
     tonic::include_proto!("signor");
 }
@@ -84,7 +86,18 @@ impl Client {
         >,
         F: Fn() -> Fut,
     {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        log::info!("negotiation started");
+
+        let negotiation = self
+            .client
+            .negotiate(tonic::Request::new(
+                tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|r| {
+                    log::info!("sending message: {:?}", r);
+                    r
+                }),
+            ))
+            .await?;
 
         let (mut peer_conn, mut r) = make_peer_conn().await?;
 
@@ -101,16 +114,8 @@ impl Client {
                     },
                 )),
             })
-            .await
             .expect("negotiation start sent");
-        log::info!("negotiation started");
 
-        let negotiation = self
-            .client
-            .negotiate(tonic::Request::new(
-                tokio_stream::wrappers::ReceiverStream::new(receiver),
-            ))
-            .await?;
         let mut inbound = negotiation.into_inner();
 
         let mut side = ConnectionSide::Polite;
@@ -147,7 +152,6 @@ impl Client {
                             },
                         )),
                     })
-                    .await
                     .expect("send Answer");
 
                 if let Some(pb::NegotiateResponse {

@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
-use parking_lot::Mutex;
-
 use crate::{audio, battle, bn6, config, current_input, fastforwarder, gui, input, mgba, tps};
+use cpal::traits::HostTrait;
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 const EXPECTED_FPS: u32 = 60;
 enum MatchState {
@@ -16,13 +15,14 @@ struct GameState {
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     _trapper: mgba::trapper::Trapper,
     _thread: mgba::thread::Thread,
-    _stream: rodio::OutputStream,
+    _stream: cpal::Stream,
 }
 
 pub struct Game {
     rt: tokio::runtime::Runtime,
     fps_counter: Arc<Mutex<tps::Counter>>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
+    audio_device: cpal::Device,
     window: winit::window::Window,
     pixels: pixels::Pixels,
     gui: gui::Gui,
@@ -38,6 +38,7 @@ impl GameState {
         rom_filename: &std::path::Path,
         save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
+        audio_device: &cpal::Device,
         config: Arc<Mutex<config::Config>>,
         gui_state: std::sync::Weak<gui::State>,
         vbuf: std::sync::Weak<Mutex<Vec<u8>>>,
@@ -81,13 +82,10 @@ impl GameState {
         };
         thread.start();
 
-        let (stream, stream_handle) =
-            rodio::OutputStream::try_default().expect("rodio OutputStream");
-        let audio_source = {
+        let stream = {
             let core = main_core.clone();
-            audio::MGBAAudioSource::new(core, 48000)
+            audio::open_mgba_audio_stream(core, audio_device, cpal::SampleRate(48000))?
         };
-        stream_handle.play_raw(audio_source)?;
 
         {
             let core = main_core.clone();
@@ -748,6 +746,10 @@ impl GameState {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
+        let audio_device = cpal::default_host()
+            .default_output_device()
+            .ok_or(anyhow::format_err!("could not open audio device"))?;
+
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
@@ -869,6 +871,7 @@ impl Game {
 
         Ok(Game {
             rt,
+            audio_device,
             config,
             fps_counter,
             current_input,
@@ -891,6 +894,7 @@ impl Game {
                 rom_filename,
                 &save_filename,
                 handle,
+                &self.audio_device,
                 self.config.clone(),
                 Arc::downgrade(&self.gui.state()),
                 Arc::downgrade(&self.vbuf),
