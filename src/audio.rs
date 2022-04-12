@@ -40,10 +40,7 @@ impl MGBAAudioSource {
         let available = {
             let mut core = core.as_mut();
             let mut left = core.audio_channel(0);
-            left.set_rates(
-                clock_rate as f64,
-                self.sample_rate as f64 * faux_clock as f64,
-            );
+            left.set_rates(clock_rate as f64, self.sample_rate as f64);
             let mut available = left.samples_avail();
             if available > n {
                 available = n;
@@ -55,10 +52,7 @@ impl MGBAAudioSource {
         {
             let mut core = core.as_mut();
             let mut right = core.audio_channel(1);
-            right.set_rates(
-                clock_rate as f64,
-                self.sample_rate as f64 * faux_clock as f64,
-            );
+            right.set_rates(clock_rate as f64, self.sample_rate as f64);
             right.read_samples(&mut self.buf[1..], available, true);
         }
 
