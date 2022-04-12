@@ -3,7 +3,7 @@ use tango_matchmaking::server;
 
 #[derive(Envconfig)]
 struct Config {
-    #[envconfig(from = "LISTEN_ADDR", default = "[::]:12345")]
+    #[envconfig(from = "LISTEN_ADDR", default = "[::]:1984")]
     pub listen_addr: String,
 }
 
