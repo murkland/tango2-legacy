@@ -1,3 +1,4 @@
+use crate::config;
 use crate::datachannel;
 use crate::input;
 use crate::mgba;
@@ -33,7 +34,7 @@ pub struct Match {
 }
 
 pub struct Settings {
-    pub matchmaking_connect_addr: String,
+    pub matchmaking: config::Matchmaking,
     pub webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration,
 }
 
@@ -113,7 +114,11 @@ impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
-        let mut sc = signor::Client::new(&self.settings.matchmaking_connect_addr).await?;
+        let mut sc = signor::Client::new(
+            &self.settings.matchmaking.connect_addr,
+            self.settings.matchmaking.insecure,
+        )
+        .await?;
 
         let api = webrtc::api::APIBuilder::new().build();
         let (peer_conn, dc, side) = sc

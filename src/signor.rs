@@ -52,10 +52,34 @@ impl From<anyhow::Error> for Error {
     }
 }
 
+lazy_static! {
+    static ref CERTS: Vec<rustls_native_certs::Certificate> =
+        rustls_native_certs::load_native_certs().expect("load_native_certs");
+    static ref GRPC_ROOT_CERTS: Vec<u8> = CERTS
+        .iter()
+        .flat_map(|raw| pem::encode(&pem::Pem {
+            tag: String::from("CERTIFICATE"),
+            contents: raw.0.clone(),
+        })
+        .as_bytes()
+        .to_vec())
+        .collect();
+}
+
 impl Client {
-    pub async fn new(addr: &str) -> Result<Client, Error> {
+    pub async fn new(addr: &str, insecure: bool) -> Result<Client, Error> {
         let env = std::sync::Arc::new(grpcio::Environment::new(1));
-        let channel = grpcio::ChannelBuilder::new(env).connect(addr);
+        let channel_builder = grpcio::ChannelBuilder::new(env);
+        let channel = if !insecure {
+            channel_builder.secure_connect(
+                addr,
+                grpcio::ChannelCredentialsBuilder::new()
+                    .root_cert(GRPC_ROOT_CERTS.clone())
+                    .build(),
+            )
+        } else {
+            channel_builder.connect(addr)
+        };
         let client = api::SessionServiceClient::new(channel);
         Ok(Client { client })
     }

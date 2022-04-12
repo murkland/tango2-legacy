@@ -582,9 +582,8 @@ impl GameState {
                                                         core.as_ref().crc32(),
                                                         s.input_delay,
                                                         battle::Settings {
-                                                            matchmaking_connect_addr: config
+                                                            matchmaking: config
                                                                 .matchmaking
-                                                                .connect_addr
                                                                 .clone(),
                                                             webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration{
                                                                 ice_servers: config.webrtc.ice_servers.iter().map(|ice_server| webrtc::ice_transport::ice_server::RTCIceServer {

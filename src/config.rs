@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Keymapping {
     pub up: winit::event::VirtualKeyCode,
     pub down: winit::event::VirtualKeyCode,
@@ -31,12 +31,12 @@ impl Default for Keymapping {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ICEServer {
     pub urls: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WebRTC {
     pub ice_servers: Vec<ICEServer>,
 }
@@ -65,20 +65,22 @@ impl Default for WebRTC {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Matchmaking {
     pub connect_addr: String,
+    pub insecure: bool,
 }
 
 impl Default for Matchmaking {
     fn default() -> Self {
         Self {
             connect_addr: "mm.tango.murk.land:443".to_owned(),
+            insecure: false,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
     pub keymapping: Keymapping,
     pub matchmaking: Matchmaking,

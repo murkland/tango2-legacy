@@ -41,6 +41,8 @@ prost = "0.9"
 byteorder = "1.4.3"
 time = { version = "0.3.9", features = ["formatting", "macros"] }
 futures-util = "0.3.21"
+rustls-native-certs = "0.6.1"
+pem = "1.0.2"
 
 [build-dependencies]
 bindgen = "0.59.2"
