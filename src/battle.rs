@@ -303,11 +303,29 @@ impl MatchImpl {
                         .expect("receive init");
                 }
                 protocol::packet::Which::Input(input) => {
-                    let mut battle_state = self.battle_state.lock().await;
-                    if input.battle_number != battle_state.number {
-                        log::info!("battle number mismatch, dropping input");
-                        continue;
+                    let state_committed_rx = {
+                        let mut battle_state = self.battle_state.lock().await;
+
+                        if input.battle_number != battle_state.number {
+                            log::info!("battle number mismatch, dropping input");
+                            continue;
+                        }
+
+                        let battle = match &mut battle_state.battle {
+                            None => {
+                                log::info!("no battle in progress, dropping input");
+                                continue;
+                            }
+                            Some(b) => b,
+                        };
+                        battle.state_committed_rx.take()
+                    };
+
+                    if let Some(state_committed_rx) = state_committed_rx {
+                        state_committed_rx.await.unwrap();
                     }
+
+                    let mut battle_state = self.battle_state.lock().await;
 
                     let battle = match &mut battle_state.battle {
                         None => {
@@ -316,8 +334,6 @@ impl MatchImpl {
                         }
                         Some(b) => b,
                     };
-
-                    battle.state_committed_notify.notified().await;
 
                     battle
                         .add_remote_input(input::Input {
@@ -493,6 +509,7 @@ impl Match {
             "starting battle: local_player_index = {}",
             local_player_index
         );
+        let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
             iq: input::PairQueue::new(60, self.r#impl.input_delay),
@@ -506,7 +523,8 @@ impl Match {
                 turn: vec![],
             },
             last_input: None,
-            state_committed_notify: tokio::sync::Notify::new(),
+            state_committed_tx: Some(tx),
+            state_committed_rx: Some(rx),
             committed_state: None,
             local_pending_turn: None,
             local_joyflags: 0xfc00,
@@ -546,7 +564,8 @@ pub struct Battle {
     is_accepting_input: bool,
     last_committed_remote_input: input::Input,
     last_input: Option<input::Pair<input::Input>>,
-    state_committed_notify: tokio::sync::Notify,
+    state_committed_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    state_committed_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     local_joyflags: u16,
@@ -563,7 +582,9 @@ impl Battle {
 
     pub fn set_committed_state(&mut self, state: mgba::state::State) {
         self.committed_state = Some(state);
-        self.state_committed_notify.notify_one();
+        if let Some(tx) = self.state_committed_tx.take() {
+            let _ = tx.send(());
+        }
     }
 
     pub fn set_last_input(&mut self, inp: input::Pair<input::Input>) {
