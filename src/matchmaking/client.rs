@@ -106,5 +106,7 @@ where
         }
     }
 
+    stream.close(None).await;
+
     Ok((peer_conn, r, side))
 }

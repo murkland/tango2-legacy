@@ -28,7 +28,7 @@ async fn handle_connection(
         >,
     >,
     raw_stream: tokio::net::TcpStream,
-    _addr: std::net::SocketAddr,
+    addr: std::net::SocketAddr,
 ) -> anyhow::Result<()> {
     let (tx, mut rx) = tokio_tungstenite::accept_async(raw_stream).await?.split();
     let mut tx = Some(tx);
@@ -41,7 +41,7 @@ async fn handle_connection(
         let session_id = session_id.clone();
         (move || async move {
             loop {
-                match match rx.try_next().await? {
+                let msg = match rx.try_next().await? {
                     Some(tokio_tungstenite::tungstenite::Message::Binary(d)) => {
                         protocol::Packet::deserialize(&d)?
                     }
@@ -51,7 +51,9 @@ async fn handle_connection(
                     None => {
                         break;
                     }
-                } {
+                };
+                log::debug!("received message from {}: {:?}", addr, msg);
+                match msg {
                     protocol::Packet::Start(start) => {
                         let mut sessions = sessions.lock().await;
                         session = Some(
@@ -67,7 +69,7 @@ async fn handle_connection(
                                 .clone(),
                         );
 
-                        let session = session.take().unwrap();
+                        let session = session.as_ref().unwrap();
                         let mut session = session.lock().await;
                         session.num_clients += 1;
                         *session_id.lock().await = Some(start.session_id.clone());
@@ -161,7 +163,12 @@ impl Server {
 
     pub async fn run(&mut self) {
         while let Ok((stream, addr)) = self.listener.accept().await {
-            tokio::spawn(handle_connection(self.sessions.clone(), stream, addr));
+            let sessions = self.sessions.clone();
+            tokio::spawn(async move {
+                if let Err(e) = handle_connection(sessions, stream, addr).await {
+                    log::warn!("client {} disconnected with error: {}", addr, e);
+                }
+            });
         }
     }
 }
