@@ -760,6 +760,7 @@ impl Game {
         {
             let bind_addr = config.matchmaking.bind_addr.to_string();
             rt.spawn(async {
+                let bind_addr2 = bind_addr.clone();
                 if let Err(e) = (move || async {
                     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
                     log::info!("bound local matchmaking server on {}", listener.local_addr()?);
@@ -769,7 +770,7 @@ impl Game {
                 })()
                 .await
                 {
-                    log::info!("failed to bind local matchmaking server, direct connect will not be available: {}", e)
+                    log::info!("failed to bind local matchmaking server to {}, direct connect will not be available: {}", bind_addr2, e)
                 }
             });
         }
