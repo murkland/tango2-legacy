@@ -1,5 +1,7 @@
 use bincode::Options;
 
+pub const VERSION: u8 = 0x0d;
+
 lazy_static! {
     static ref BINCODE_OPTIONS: bincode::config::WithOtherIntEncoding<
         bincode::config::DefaultOptions,
@@ -27,6 +29,7 @@ impl Packet {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Start {
+    pub protocol_version: u8,
     pub session_id: String,
     pub offer_sdp: String,
 }

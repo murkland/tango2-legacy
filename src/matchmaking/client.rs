@@ -42,6 +42,7 @@ where
     stream
         .send(tokio_tungstenite::tungstenite::Message::Binary(
             protocol::Packet::Start(protocol::Start {
+                protocol_version: protocol::VERSION,
                 session_id: session_id.to_string(),
                 offer_sdp: peer_conn.local_description().await.expect("local sdp").sdp,
             })
