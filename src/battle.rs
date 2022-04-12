@@ -2,6 +2,7 @@ use crate::datachannel;
 use crate::input;
 use crate::mgba;
 use crate::protocol;
+use crate::replay;
 use crate::signor;
 use rand::Rng;
 use rand::SeedableRng;
@@ -495,6 +496,20 @@ impl Match {
             "starting battle: local_player_index = {}",
             local_player_index
         );
+        let replay_filename = format!(
+            "{}_p{}.tangoreplay",
+            time::OffsetDateTime::from(std::time::SystemTime::now())
+                .format(time::macros::format_description!(
+                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
+                ))
+                .expect("format time"),
+            local_player_index + 1
+        );
+        let replay_file =
+            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
+                .expect("create replay file");
+        log::info!("opened replay: {}", replay_filename);
+
         let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
@@ -514,6 +529,10 @@ impl Match {
             committed_state: None,
             local_pending_turn: None,
             local_joyflags: 0xfc00,
+            replay_writer: std::sync::Arc::new(parking_lot::Mutex::new(
+                replay::Writer::new(Box::new(replay_file), local_player_index)
+                    .expect("new replay writer"),
+            )),
         });
     }
 
@@ -555,9 +574,14 @@ pub struct Battle {
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     local_joyflags: u16,
+    replay_writer: std::sync::Arc<parking_lot::Mutex<replay::Writer>>,
 }
 
 impl Battle {
+    pub fn replay_writer(&self) -> std::sync::Weak<parking_lot::Mutex<replay::Writer>> {
+        std::sync::Arc::downgrade(&self.replay_writer)
+    }
+
     pub fn local_player_index(&self) -> u8 {
         self.local_player_index
     }

@@ -150,10 +150,15 @@ impl GameState {
                                         let mut battle_state = m.lock_battle_state().await;
                                         let battle_number = battle_state.number;
                                         let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
+
+                                        let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
+                                        let mut replay_writer = replay_writer.lock();
+
                                         let local_init = bn6.local_marshaled_battle_state(core);
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.expect("send init");
                                         log::info!("sent local init");
                                         bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, local_init.as_slice());
+                                        replay_writer.write_init(battle.local_player_index(), local_init.as_slice()).expect("write local init");
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
@@ -164,8 +169,10 @@ impl GameState {
                                         };
                                         log::info!("received remote init: {:?}", remote_init);
                                         bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, remote_init.marshaled.as_slice());
+                                        replay_writer.write_init(battle.remote_player_index(), remote_init.marshaled.as_slice()).expect("write remote init");
 
                                         battle.set_remote_delay(remote_init.input_delay);
+
                                         return;
                                     }
                                     *match_state = MatchState::Aborted;
@@ -259,6 +266,11 @@ impl GameState {
                                                     .await;
                                             }
                                             let committed_state = core.save_state().expect("save committed state");
+
+                                            let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
+                                            let mut replay_writer = replay_writer.lock();
+                                            replay_writer.write_state(&committed_state).expect("write state");
+
                                             battle.set_committed_state(committed_state);
 
                                             log::info!("battle state committed");
@@ -297,7 +309,14 @@ impl GameState {
 
                                         let (input_pairs, left) = battle.consume_and_peek_local().await;
                                         let mut fastforwarder = fastforwarder.lock();
-                                        let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(battle.committed_state().as_ref().expect("committed state"), battle.local_player_index(), &input_pairs, battle.last_committed_remote_input(), &left).expect("fastforward");
+                                        let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(
+                                            battle.committed_state().as_ref().expect("committed state"),
+                                            battle.local_player_index(),
+                                            &input_pairs,
+                                            battle.last_committed_remote_input(),
+                                            &left,
+                                            battle.replay_writer()
+                                        ).expect("fastforward");
                                         battle.set_committed_state(committed_state);
                                         let last_joyflags = last_input.remote.joyflags;
                                         battle.set_last_input(last_input);

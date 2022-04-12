@@ -1,26 +1,30 @@
+use crate::input;
 use crate::mgba;
 use byteorder::WriteBytesExt;
 use std::io::Write;
 
-struct Writer {
-    encoder: zstd::stream::write::AutoFinishEncoder<'static, Box<dyn std::io::Write>>,
+pub struct Writer {
+    encoder: zstd::stream::write::AutoFinishEncoder<'static, Box<dyn std::io::Write + Send>>,
 }
 
 const HEADER: &[u8] = b"TOOT";
 const VERSION: u8 = 0x09;
 
 impl Writer {
-    pub fn new(writer: Box<dyn std::io::Write>, player_index: u8) -> std::io::Result<Self> {
+    pub fn new(
+        writer: Box<dyn std::io::Write + Send>,
+        local_player_index: u8,
+    ) -> std::io::Result<Self> {
         let mut encoder = zstd::Encoder::new(writer, 3)?.auto_finish();
         encoder.write(HEADER)?;
         encoder.write(&[VERSION])?;
-        encoder.write(&[player_index])?;
+        encoder.write(&[local_player_index])?;
         encoder.flush()?;
         Ok(Writer { encoder })
     }
 
-    pub fn write_init(&mut self, player_index: u8, init: &[u8]) -> std::io::Result<()> {
-        self.encoder.write_u8(player_index);
+    pub fn write_init(&mut self, local_player_index: u8, init: &[u8]) -> std::io::Result<()> {
+        self.encoder.write_u8(local_player_index)?;
         self.encoder
             .write_u32::<byteorder::LittleEndian>(init.len() as u32)?;
         self.encoder.write(init)?;
@@ -38,31 +42,30 @@ impl Writer {
 
     pub fn write_input(
         &mut self,
-        local_tick: u32,
-        remote_tick: u32,
-        p1_joyflags: u16,
-        p2_joyflags: u16,
-        p1_custom_state: u8,
-        p2_custom_state: u8,
-        p1_turn: &[u8],
-        p2_turn: &[u8],
+        local_player_index: u8,
+        ip: &input::Pair<input::Input>,
     ) -> std::io::Result<()> {
+        let (p1, p2) = if local_player_index == 0 {
+            (&ip.local, &ip.remote)
+        } else {
+            (&ip.remote, &ip.local)
+        };
         self.encoder
-            .write_u32::<byteorder::LittleEndian>(local_tick)?;
+            .write_u32::<byteorder::LittleEndian>(ip.local.local_tick)?;
         self.encoder
-            .write_u32::<byteorder::LittleEndian>(remote_tick)?;
+            .write_u32::<byteorder::LittleEndian>(ip.local.remote_tick)?;
         self.encoder
-            .write_u16::<byteorder::LittleEndian>(p1_joyflags)?;
-        self.encoder.write_u8(p1_custom_state)?;
+            .write_u16::<byteorder::LittleEndian>(p1.joyflags)?;
+        self.encoder.write_u8(p1.custom_screen_state)?;
         self.encoder
-            .write_u16::<byteorder::LittleEndian>(p2_joyflags)?;
-        self.encoder.write_u8(p2_custom_state)?;
+            .write_u16::<byteorder::LittleEndian>(p2.joyflags)?;
+        self.encoder.write_u8(p2.custom_screen_state)?;
         self.encoder
-            .write_u32::<byteorder::LittleEndian>(p1_turn.len() as u32)?;
-        self.encoder.write(p1_turn)?;
+            .write_u32::<byteorder::LittleEndian>(p1.turn.len() as u32)?;
+        self.encoder.write(&p1.turn)?;
         self.encoder
-            .write_u32::<byteorder::LittleEndian>(p2_turn.len() as u32)?;
-        self.encoder.write(p2_turn)?;
+            .write_u32::<byteorder::LittleEndian>(p2.turn.len() as u32)?;
+        self.encoder.write(&p2.turn)?;
         self.encoder.flush()?;
         Ok(())
     }
