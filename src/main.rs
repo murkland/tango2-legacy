@@ -14,6 +14,7 @@ mod input;
 mod locales;
 mod mgba;
 mod protocol;
+mod replay;
 mod signor;
 mod tps;
 

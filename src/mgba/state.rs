@@ -21,4 +21,27 @@ impl State {
     pub fn rom_crc32(&self) -> u32 {
         self.0.romCrc32
     }
+
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                &*self.0 as *const c::GBASerializedState as *const u8,
+                std::mem::size_of::<c::GBASerializedState>(),
+            )
+        }
+    }
+
+    pub fn from_slice(&self, slice: &[u8]) -> Self {
+        unsafe {
+            let layout = std::alloc::Layout::new::<c::GBASerializedState>();
+            let ptr = std::alloc::alloc(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            let slice2 =
+                std::slice::from_raw_parts_mut(ptr, std::mem::size_of::<c::GBASerializedState>());
+            slice2.copy_from_slice(slice);
+            Self(Box::from_raw(ptr as *mut _ as *mut c::GBASerializedState))
+        }
+    }
 }
