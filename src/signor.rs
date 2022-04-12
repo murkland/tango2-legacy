@@ -1,8 +1,7 @@
-use tokio_stream::StreamExt;
+#[allow(dead_code)]
+mod api;
 
-mod pb {
-    tonic::include_proto!("signor");
-}
+use futures_util::{sink::SinkExt, TryStreamExt};
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum ConnectionSide {
@@ -11,15 +10,14 @@ pub enum ConnectionSide {
 }
 
 pub struct Client {
-    client: pb::session_service_client::SessionServiceClient<tonic::transport::Channel>,
+    client: api::SessionServiceClient,
 }
 
 #[derive(Debug)]
 pub enum Error {
     InvalidHandshake,
     WebRTC(webrtc::Error),
-    TonicTransport(tonic::transport::Error),
-    TonicStatus(tonic::Status),
+    Grpc(grpcio::Error),
     Other(anyhow::Error),
 }
 
@@ -28,8 +26,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::InvalidHandshake => write!(f, "invalid handshake"),
             Error::WebRTC(e) => write!(f, "WebRTC error: {:?}", e),
-            Error::TonicTransport(e) => write!(f, "tonic transport error: {:?}", e),
-            Error::TonicStatus(e) => write!(f, "tonic status: {:?}", e),
+            Error::Grpc(e) => write!(f, "grpc: {:?}", e),
             Error::Other(e) => write!(f, "other error: {:?}", e),
         }
     }
@@ -43,15 +40,9 @@ impl From<webrtc::Error> for Error {
     }
 }
 
-impl From<tonic::transport::Error> for Error {
-    fn from(e: tonic::transport::Error) -> Self {
-        Error::TonicTransport(e)
-    }
-}
-
-impl From<tonic::Status> for Error {
-    fn from(e: tonic::Status) -> Self {
-        Error::TonicStatus(e)
+impl From<grpcio::Error> for Error {
+    fn from(e: grpcio::Error) -> Self {
+        Error::Grpc(e)
     }
 }
 
@@ -62,9 +53,10 @@ impl From<anyhow::Error> for Error {
 }
 
 impl Client {
-    pub async fn new(host: &str) -> Result<Client, Error> {
-        let client =
-            pb::session_service_client::SessionServiceClient::connect(host.to_string()).await?;
+    pub async fn new(addr: &str) -> Result<Client, Error> {
+        let env = std::sync::Arc::new(grpcio::Environment::new(1));
+        let channel = grpcio::ChannelBuilder::new(env).connect(addr);
+        let client = api::SessionServiceClient::new(channel);
         Ok(Client { client })
     }
 
@@ -86,18 +78,11 @@ impl Client {
         >,
         F: Fn() -> Fut,
     {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        log::info!("negotiation started");
+        let mut side = ConnectionSide::Polite;
 
-        let negotiation = self
-            .client
-            .negotiate(tonic::Request::new(
-                tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|r| {
-                    log::info!("sending message: {:?}", r);
-                    r
-                }),
-            ))
-            .await?;
+        let (mut sink, mut receiver) = self.client.negotiate()?;
+
+        log::info!("negotiation started");
 
         let (mut peer_conn, mut r) = make_peer_conn().await?;
 
@@ -105,27 +90,27 @@ impl Client {
         let offer = peer_conn.create_offer(None).await?;
         peer_conn.set_local_description(offer).await?;
         gather_complete.recv().await;
-        sender
-            .send(pb::NegotiateRequest {
-                which: Some(pb::negotiate_request::Which::Start(
-                    pb::negotiate_request::Start {
+        sink.send((
+            api::NegotiateRequest {
+                which: Some(api::negotiate_request::Which::Start(
+                    api::negotiate_request::Start {
                         session_id: session_id.to_string(),
                         offer_sdp: peer_conn.local_description().await.expect("local sdp").sdp,
                     },
                 )),
-            })
-            .expect("negotiation start sent");
+            },
+            grpcio::WriteFlags::default(),
+        ))
+        .await?;
 
-        let mut inbound = negotiation.into_inner();
-
-        let mut side = ConnectionSide::Polite;
-
-        match if let Some(pb::NegotiateResponse { which: Some(which) }) = inbound.message().await? {
+        match if let Some(api::NegotiateResponse { which: Some(which) }) =
+            receiver.try_next().await?
+        {
             which
         } else {
             return Err(Error::InvalidHandshake);
         } {
-            pb::negotiate_response::Which::Offer(offer) => {
+            api::negotiate_response::Which::Offer(offer) => {
                 log::info!("this is the polite side");
 
                 let (peer_conn2, r2) = make_peer_conn().await?;
@@ -144,28 +129,19 @@ impl Client {
                 peer_conn.set_local_description(offer).await?;
                 gather_complete.recv().await;
 
-                sender
-                    .send(pb::NegotiateRequest {
-                        which: Some(pb::negotiate_request::Which::Answer(
-                            pb::negotiate_request::Answer {
+                sink.send((
+                    api::NegotiateRequest {
+                        which: Some(api::negotiate_request::Which::Answer(
+                            api::negotiate_request::Answer {
                                 sdp: peer_conn.local_description().await.expect("remote sdp").sdp,
                             },
                         )),
-                    })
-                    .expect("send Answer");
-
-                if let Some(pb::NegotiateResponse {
-                    which:
-                        Some(pb::negotiate_response::Which::Answered(
-                            pb::negotiate_response::Answered {},
-                        )),
-                }) = inbound.message().await?
-                {
-                } else {
-                    return Err(Error::InvalidHandshake);
-                }
+                    },
+                    grpcio::WriteFlags::default(),
+                ))
+                .await?;
             }
-            pb::negotiate_response::Which::Answer(answer) => {
+            api::negotiate_response::Which::Answer(answer) => {
                 log::info!("this is the impolite side");
 
                 side = ConnectionSide::Impolite;
@@ -174,10 +150,7 @@ impl Client {
                 sdp.sdp = answer.sdp;
                 peer_conn.set_remote_description(sdp).await?;
             }
-            pb::negotiate_response::Which::IceCandidate(_) => {
-                return Err(Error::InvalidHandshake);
-            }
-            _ => {
+            api::negotiate_response::Which::IceCandidate(_) => {
                 return Err(Error::InvalidHandshake);
             }
         };
