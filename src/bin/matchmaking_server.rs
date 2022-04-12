@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
         .filter(Some("matchmaking_server"), log::LevelFilter::Info)
         .init();
     log::info!(
-        "welcome to tango matchmaking_server v{}-{}!",
+        "welcome to tango's matchmaking_server v{}-{}!",
         env!("CARGO_PKG_VERSION"),
         git_version::git_version!()
     );
