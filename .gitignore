@@ -1,4 +1,5 @@
 /target
-roms
-saves
+/roms
+/saves
+/replays
 tango.toml
