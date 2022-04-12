@@ -3,6 +3,7 @@ use crate::input;
 use crate::mgba;
 use crate::protocol;
 use crate::signor;
+use bincode::Options;
 use rand::Rng;
 use rand::SeedableRng;
 use sha3::digest::ExtendableOutput;
@@ -165,28 +166,30 @@ impl MatchImpl {
         log::info!("our nonce={:?}, commitment={:?}", nonce, commitment);
 
         dc.send(
-            bincode::serialize(&protocol::Packet::Hello(protocol::Hello {
-                protocol_version: protocol::VERSION,
-                game_title: self.game_title.clone(),
-                game_crc32: self.game_crc32,
-                match_type: self.match_type,
-                rng_commitment: commitment.to_vec(),
-            }))
-            .expect("serialize")
-            .as_slice(),
+            protocol::BINCODE_OPTIONS
+                .serialize(&protocol::Packet::Hello(protocol::Hello {
+                    protocol_version: protocol::VERSION,
+                    game_title: self.game_title.clone(),
+                    game_crc32: self.game_crc32,
+                    match_type: self.match_type,
+                    rng_commitment: commitment.to_vec(),
+                }))
+                .expect("serialize")
+                .as_slice(),
         )
         .await?;
 
-        let hello = match bincode::deserialize(
-            match dc.receive().await {
-                Some(d) => d,
-                None => {
-                    return Err(NegotiationError::ExpectedHello);
+        let hello = match protocol::BINCODE_OPTIONS
+            .deserialize(
+                match dc.receive().await {
+                    Some(d) => d,
+                    None => {
+                        return Err(NegotiationError::ExpectedHello);
+                    }
                 }
-            }
-            .as_slice(),
-        )
-        .map_err(|_| NegotiationError::ExpectedHello)?
+                .as_slice(),
+            )
+            .map_err(|_| NegotiationError::ExpectedHello)?
         {
             protocol::Packet::Hello(hello) => hello,
             _ => {
@@ -213,24 +216,26 @@ impl MatchImpl {
         }
 
         dc.send(
-            bincode::serialize(&protocol::Packet::Hola(protocol::Hola {
-                rng_nonce: nonce.to_vec(),
-            }))
-            .expect("serialize")
-            .as_slice(),
+            protocol::BINCODE_OPTIONS
+                .serialize(&protocol::Packet::Hola(protocol::Hola {
+                    rng_nonce: nonce.to_vec(),
+                }))
+                .expect("serialize")
+                .as_slice(),
         )
         .await?;
 
-        let hola = match bincode::deserialize(
-            match dc.receive().await {
-                Some(d) => d,
-                None => {
-                    return Err(NegotiationError::ExpectedHola);
+        let hola = match protocol::BINCODE_OPTIONS
+            .deserialize(
+                match dc.receive().await {
+                    Some(d) => d,
+                    None => {
+                        return Err(NegotiationError::ExpectedHola);
+                    }
                 }
-            }
-            .as_slice(),
-        )
-        .map_err(|_| NegotiationError::ExpectedHola)?
+                .as_slice(),
+            )
+            .map_err(|_| NegotiationError::ExpectedHola)?
         {
             protocol::Packet::Hola(hola) => hola,
             _ => {
@@ -275,7 +280,7 @@ impl MatchImpl {
         };
 
         loop {
-            match bincode::deserialize(
+            match protocol::BINCODE_OPTIONS.deserialize(
                 match dc.receive().await {
                     None => break,
                     Some(buf) => buf,
@@ -422,13 +427,14 @@ impl Match {
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
         dc.send(
-            bincode::serialize(&protocol::Packet::Init(protocol::Init {
-                battle_number,
-                input_delay,
-                marshaled: marshaled.to_vec(),
-            }))
-            .expect("serialize")
-            .as_slice(),
+            protocol::BINCODE_OPTIONS
+                .serialize(&protocol::Packet::Init(protocol::Init {
+                    battle_number,
+                    input_delay,
+                    marshaled: marshaled.to_vec(),
+                }))
+                .expect("serialize")
+                .as_slice(),
         )
         .await?;
         Ok(())
@@ -449,16 +455,17 @@ impl Match {
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
         dc.send(
-            bincode::serialize(&protocol::Packet::Input(protocol::Input {
-                battle_number,
-                local_tick,
-                remote_tick,
-                joyflags,
-                custom_screen_state,
-                turn,
-            }))
-            .expect("serialize")
-            .as_slice(),
+            protocol::BINCODE_OPTIONS
+                .serialize(&protocol::Packet::Input(protocol::Input {
+                    battle_number,
+                    local_tick,
+                    remote_tick,
+                    joyflags,
+                    custom_screen_state,
+                    turn,
+                }))
+                .expect("serialize")
+                .as_slice(),
         )
         .await?;
         Ok(())
