@@ -19,7 +19,9 @@ mod signor;
 mod tps;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .filter(Some("tango"), log::LevelFilter::Info)
+        .init();
     mgba::log::init();
     log::info!(
         "welcome to tango v{}-{}!",
