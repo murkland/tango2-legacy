@@ -19,7 +19,8 @@ keymapping = キーバインド設定
 debug = デバッグ
 
 link-code = リンクコード
-    .placeholder = リンクコード
+    .input-link-code = リンクコード
+    .input-input-delay = 入力遅延
     .description = お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。
     .confirm = 接続
     .cancel = キャンセル

@@ -570,19 +570,19 @@ impl GameState {
                                             let gui_state = gui_state.upgrade().expect("upgrade");
                                             gui_state.open_link_code_dialog();
                                             match &*gui_state
-                                                .lock_link_code_state()
+                                                .lock_connect_request_state()
                                             {
                                                 gui::DialogState::Pending(_) => {
                                                     return;
                                                 }
-                                                gui::DialogState::Ok(code) => {
+                                                gui::DialogState::Ok(s) => {
                                                     let config = config.lock();
                                                     let m = battle::Match::new(
-                                                        code.to_string(),
+                                                        s.code.to_string(),
                                                         bn6.match_type(core),
                                                         core.as_ref().game_title(),
                                                         core.as_ref().crc32(),
-                                                        3,
+                                                        s.input_delay,
                                                         battle::Settings {
                                                             matchmaking_connect_addr: config
                                                                 .matchmaking

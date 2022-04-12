@@ -19,7 +19,8 @@ keymapping = Keymapping
 debug = Debug
 
 link-code = Link code
-    .placeholder = Link code
+    .input-link-code = Link code
+    .input-input-delay = Input delay
     .description = Enter a link code that you and your opponent have decided on to connect to each other.
     .confirm = Connect
     .cancel = Cancel

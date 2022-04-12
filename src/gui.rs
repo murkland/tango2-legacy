@@ -158,13 +158,19 @@ pub enum DialogState<T> {
 }
 
 #[derive(Clone, Debug)]
+pub struct ConnectRequestState {
+    pub code: String,
+    pub input_delay: u32,
+}
+
+#[derive(Clone, Debug)]
 pub struct ROMInfo {
     pub path: std::path::PathBuf,
     pub title: String,
 }
 
 pub struct State {
-    link_code_state: parking_lot::Mutex<DialogState<String>>,
+    connect_request_state: parking_lot::Mutex<DialogState<ConnectRequestState>>,
     rom_select_state: parking_lot::Mutex<DialogState<Option<usize>>>,
     show_debug: std::sync::atomic::AtomicBool,
     show_menu: std::sync::atomic::AtomicBool,
@@ -224,7 +230,7 @@ impl State {
         current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     ) -> Self {
         Self {
-            link_code_state: parking_lot::Mutex::new(DialogState::Closed),
+            connect_request_state: parking_lot::Mutex::new(DialogState::Closed),
             rom_select_state: parking_lot::Mutex::new(DialogState::Closed),
             show_debug: false.into(),
             show_menu: false.into(),
@@ -242,19 +248,24 @@ impl State {
     }
 
     pub fn open_link_code_dialog(&self) {
-        let mut link_code_state = self.link_code_state.lock();
-        if let DialogState::Closed = &*link_code_state {
-            *link_code_state = DialogState::Pending(String::new());
+        let mut connect_request_state = self.connect_request_state.lock();
+        if let DialogState::Closed = &*connect_request_state {
+            *connect_request_state = DialogState::Pending(ConnectRequestState {
+                code: "".to_owned(),
+                input_delay: 3,
+            });
         }
     }
 
     pub fn close_link_code_dialog(&self) {
-        let mut link_code_state = self.link_code_state.lock();
-        *link_code_state = DialogState::Closed;
+        let mut connect_request_state = self.connect_request_state.lock();
+        *connect_request_state = DialogState::Closed;
     }
 
-    pub fn lock_link_code_state(&self) -> parking_lot::MutexGuard<DialogState<String>> {
-        self.link_code_state.lock()
+    pub fn lock_connect_request_state(
+        &self,
+    ) -> parking_lot::MutexGuard<DialogState<ConnectRequestState>> {
+        self.connect_request_state.lock()
     }
 
     pub fn lock_rom_select_state(&self) -> parking_lot::MutexGuard<DialogState<Option<usize>>> {
@@ -366,9 +377,9 @@ impl State {
         }
 
         {
-            let mut maybe_link_code_state = self.link_code_state.lock();
+            let mut maybe_connect_request_state = self.connect_request_state.lock();
 
-            let mut open = if let DialogState::Pending(_) = &*maybe_link_code_state {
+            let mut open = if let DialogState::Pending(_) = &*maybe_connect_request_state {
                 true
             } else {
                 false
@@ -382,22 +393,34 @@ impl State {
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    let code = if let DialogState::Pending(code) = &mut *maybe_link_code_state {
-                        code
+                    let s = if let DialogState::Pending(s) = &mut *maybe_connect_request_state {
+                        s
                     } else {
                         unreachable!();
                     };
                     ui.label(
                         locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.description"),
                     );
-                    let response = ui.add(egui::TextEdit::singleline(code).hint_text(
-                        locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.placeholder"),
-                    ));
-                    *code = code.to_lowercase().trim().to_string();
+
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut s.code).hint_text(
+                            locales::LOCALES
+                                .lookup(&locales::SYSTEM_LOCALE, "link-code.input-link-code"),
+                        ),
+                    );
+                    s.code = s.code.to_lowercase().trim().to_string();
                     let text_ok = response.lost_focus()
                         && ui.input().key_pressed(egui::Key::Enter)
-                        && !code.is_empty();
+                        && !s.code.is_empty();
                     response.request_focus();
+
+                    ui.add(
+                        egui::Slider::new(&mut s.input_delay, 3..=10).text(
+                            locales::LOCALES
+                                .lookup(&locales::SYSTEM_LOCALE, "link-code.input-input-delay"),
+                        ),
+                    );
+
                     ui.separator();
                     let (button_ok, cancel) = ui
                         .horizontal(|ui| {
@@ -418,11 +441,11 @@ impl State {
                         .inner;
 
                     if text_ok || button_ok {
-                        *maybe_link_code_state = DialogState::Ok(code.to_string());
+                        *maybe_connect_request_state = DialogState::Ok(s.clone());
                     }
 
                     if cancel {
-                        *maybe_link_code_state = DialogState::Cancelled;
+                        *maybe_connect_request_state = DialogState::Cancelled;
                     }
                 });
         }
