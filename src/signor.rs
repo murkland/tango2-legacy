@@ -84,14 +84,14 @@ impl Client {
         >,
         F: Fn() -> Fut,
     {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+
         let (mut peer_conn, mut r) = make_peer_conn().await?;
 
         let mut gather_complete = peer_conn.gathering_complete_promise().await;
         let offer = peer_conn.create_offer(None).await?;
         peer_conn.set_local_description(offer).await?;
         gather_complete.recv().await;
-
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         sender
             .send(pb::NegotiateRequest {
                 which: Some(pb::negotiate_request::Which::Start(
@@ -103,6 +103,7 @@ impl Client {
             })
             .await
             .expect("negotiation start sent");
+        log::info!("negotiation started");
 
         let negotiation = self
             .client
@@ -120,6 +121,8 @@ impl Client {
             return Err(Error::InvalidHandshake);
         } {
             pb::negotiate_response::Which::Offer(offer) => {
+                log::info!("this is the polite side");
+
                 let (peer_conn2, r2) = make_peer_conn().await?;
                 peer_conn = peer_conn2;
                 r = r2;
@@ -159,6 +162,8 @@ impl Client {
                 }
             }
             pb::negotiate_response::Which::Answer(answer) => {
+                log::info!("this is the impolite side");
+
                 side = ConnectionSide::Impolite;
                 let mut sdp = webrtc::peer_connection::sdp::session_description::RTCSessionDescription::default();
                 sdp.sdp_type = webrtc::peer_connection::sdp::sdp_type::RTCSdpType::Answer;
