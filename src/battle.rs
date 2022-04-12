@@ -251,7 +251,7 @@ impl MatchImpl {
         let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().expect("rng seed"));
 
         self.battle_state.lock().await.won_last_battle =
-            rng.gen::<bool>() == (side == matchmaking::client::ConnectionSide::Polite);
+            rng.gen::<bool>() == (side == tango_matchmaking::client::ConnectionSide::Polite);
         *self.negotiation.lock().await = Negotiation::Negotiated { dc, peer_conn, rng };
         Ok(())
     }
