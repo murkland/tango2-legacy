@@ -26,7 +26,7 @@ where
     >,
     F: Fn() -> Fut,
 {
-    let (mut stream, resp) = tokio_tungstenite::connect_async(addr).await?;
+    let (mut stream, _) = tokio_tungstenite::connect_async(addr).await?;
 
     let mut side = ConnectionSide::Polite;
 
@@ -48,7 +48,7 @@ where
             })
             .serialize()?,
         ))
-        .await;
+        .await?;
     log::info!("negotiation start sent");
 
     match match stream
