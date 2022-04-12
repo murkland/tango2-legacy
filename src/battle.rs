@@ -114,11 +114,10 @@ impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
-        let mut sc = signor::Client::new(
+        let sc = signor::Client::new(
             &self.settings.matchmaking.connect_addr,
             self.settings.matchmaking.insecure,
-        )
-        .await?;
+        )?;
 
         let api = webrtc::api::APIBuilder::new().build();
         let (peer_conn, dc, side) = sc

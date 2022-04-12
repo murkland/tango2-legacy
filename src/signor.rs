@@ -67,8 +67,8 @@ lazy_static! {
 }
 
 impl Client {
-    pub async fn new(addr: &str, insecure: bool) -> Result<Client, Error> {
-        let env = std::sync::Arc::new(grpcio::Environment::new(1));
+    pub fn new(addr: &str, insecure: bool) -> Result<Client, Error> {
+        let env = std::sync::Arc::new(grpcio::Environment::new(2));
         let channel_builder = grpcio::ChannelBuilder::new(env);
         let channel = if !insecure {
             channel_builder.secure_connect(
@@ -85,7 +85,7 @@ impl Client {
     }
 
     pub async fn connect<T, F, Fut>(
-        &mut self,
+        &self,
         make_peer_conn: F,
         session_id: &str,
     ) -> Result<
@@ -114,6 +114,7 @@ impl Client {
         let offer = peer_conn.create_offer(None).await?;
         peer_conn.set_local_description(offer).await?;
         gather_complete.recv().await;
+
         sink.send((
             api::NegotiateRequest {
                 which: Some(api::negotiate_request::Which::Start(
@@ -126,6 +127,7 @@ impl Client {
             grpcio::WriteFlags::default(),
         ))
         .await?;
+        log::info!("negotiation start sent");
 
         match if let Some(api::NegotiateResponse { which: Some(which) }) =
             receiver.try_next().await?
@@ -135,7 +137,7 @@ impl Client {
             return Err(Error::InvalidHandshake);
         } {
             api::negotiate_response::Which::Offer(offer) => {
-                log::info!("this is the polite side");
+                log::info!("received an offer, this is the polite side");
 
                 let (peer_conn2, r2) = make_peer_conn().await?;
                 peer_conn = peer_conn2;
@@ -164,9 +166,10 @@ impl Client {
                     grpcio::WriteFlags::default(),
                 ))
                 .await?;
+                log::info!("sent answer to impolite side");
             }
             api::negotiate_response::Which::Answer(answer) => {
-                log::info!("this is the impolite side");
+                log::info!("received an answer, this is the impolite side");
 
                 side = ConnectionSide::Impolite;
                 let mut sdp = webrtc::peer_connection::sdp::session_description::RTCSessionDescription::default();
@@ -178,6 +181,7 @@ impl Client {
                 return Err(Error::InvalidHandshake);
             }
         };
+        sink.close().await?;
         Ok((peer_conn, r, side))
     }
 }
