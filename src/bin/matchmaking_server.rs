@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION"),
         git_version::git_version!()
     );
-    let config = Config::init().unwrap();
+    let config = Config::init_from_env().unwrap();
     let listener = tokio::net::TcpListener::bind(config.listen_addr).await?;
     let mut server = server::Server::new(listener);
     server.listen().await;
