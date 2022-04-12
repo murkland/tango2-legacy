@@ -9,7 +9,6 @@ use sha3::digest::ExtendableOutput;
 use std::io::Read;
 use std::io::Write;
 use subtle::ConstantTimeEq;
-use tango::matchmaking;
 
 pub struct BattleState {
     pub number: u8,
@@ -110,7 +109,7 @@ impl MatchImpl {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
         let api = webrtc::api::APIBuilder::new().build();
-        let (peer_conn, dc, side) = matchmaking::client::connect(
+        let (peer_conn, dc, side) = tango_matchmaking::client::connect(
             &self.settings.matchmaking_connect_addr,
             || async {
                 let peer_conn = api

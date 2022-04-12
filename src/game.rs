@@ -764,7 +764,7 @@ impl Game {
                 if let Err(e) = (move || async {
                     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
                     log::info!("bound local matchmaking server on {}", listener.local_addr()?);
-                    let mut server = tango::matchmaking::server::Server::new(listener);
+                    let mut server = tango_matchmaking::server::Server::new(listener);
                     server.run().await;
                     Result::<(), anyhow::Error>::Ok(())
                 })()

@@ -1778,15 +1778,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35e70ee094dc02fd9c13fdad4940090f22dbd6ac7c9e7094a46cf0232a50bc7c"
 
 [[package]]
-name = "itertools"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2567,29 +2558,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9145ac0af1d93c638c98c40cf7d25665f427b2a44ad0a99b1dccf3e2f25bb987"
 
 [[package]]
-name = "prost"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
-dependencies = [
- "bytes",
- "prost-derive",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
-dependencies = [
- "anyhow",
- "itertools",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3205,7 +3173,6 @@ dependencies = [
  "log",
  "parking_lot 0.12.0",
  "pixels",
- "prost",
  "rand",
  "rand_pcg",
  "send_wrapper",
@@ -3213,10 +3180,10 @@ dependencies = [
  "sha3",
  "subtle",
  "sys-locale",
+ "tango-matchmaking",
  "time",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite",
  "tokio-util",
  "toml",
  "unic-langid",
@@ -3224,6 +3191,22 @@ dependencies = [
  "webrtc",
  "winit",
  "zstd",
+]
+
+[[package]]
+name = "tango-matchmaking"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "env_logger",
+ "futures-util",
+ "lazy_static",
+ "log",
+ "serde",
+ "tokio",
+ "tokio-tungstenite",
+ "webrtc",
 ]
 
 [[package]]
