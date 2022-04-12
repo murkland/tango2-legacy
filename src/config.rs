@@ -74,8 +74,8 @@ pub struct Matchmaking {
 impl Default for Matchmaking {
     fn default() -> Self {
         Self {
-            connect_addr: "mm.tango.murk.land:443".to_owned(),
-            insecure: false,
+            connect_addr: "mm.tango.murk.land:80".to_owned(),
+            insecure: true,
         }
     }
 }

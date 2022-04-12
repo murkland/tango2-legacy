@@ -54,7 +54,7 @@ impl From<anyhow::Error> for Error {
 
 lazy_static! {
     static ref CERTS: Vec<rustls_native_certs::Certificate> =
-        rustls_native_certs::load_native_certs().expect("load_native_certs");
+        rustls_native_certs::load_native_certs().unwrap_or(vec![]);
     static ref GRPC_ROOT_CERTS: Vec<u8> = CERTS
         .iter()
         .flat_map(|raw| pem::encode(&pem::Pem {
