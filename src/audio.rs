@@ -68,7 +68,7 @@ impl MGBAAudioSource {
 
 impl rodio::Source for MGBAAudioSource {
     fn current_frame_len(&self) -> Option<usize> {
-        None
+        Some(self.core.as_ref().lock().as_mut().audio_buffer_size() as usize)
     }
 
     fn channels(&self) -> u16 {
