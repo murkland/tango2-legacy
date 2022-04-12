@@ -3,7 +3,6 @@ use crate::input;
 use crate::mgba;
 use crate::protocol;
 use crate::signor;
-use bincode::Options;
 use rand::Rng;
 use rand::SeedableRng;
 use sha3::digest::ExtendableOutput;

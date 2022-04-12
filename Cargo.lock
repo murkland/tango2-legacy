@@ -3497,6 +3497,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "bindgen",
+ "byteorder",
  "bytes",
  "cmake",
  "const-zero",

@@ -36,6 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     log::info!("current config: {:?}", config);
+    let _ = std::fs::create_dir("roms");
+    let _ = std::fs::create_dir("saves");
+    let _ = std::fs::create_dir("replays");
     let g = game::Game::new(config)?;
     g.run();
     Ok(())
