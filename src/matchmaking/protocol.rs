@@ -3,10 +3,15 @@ use bincode::Options;
 pub const VERSION: u8 = 0x0d;
 
 lazy_static! {
-    static ref BINCODE_OPTIONS: bincode::config::WithOtherIntEncoding<
-        bincode::config::DefaultOptions,
-        bincode::config::FixintEncoding,
-    > = bincode::DefaultOptions::new().with_fixint_encoding();
+    static ref BINCODE_OPTIONS: bincode::config::WithOtherLimit<
+        bincode::config::WithOtherIntEncoding<
+            bincode::config::DefaultOptions,
+            bincode::config::FixintEncoding,
+        >,
+        bincode::config::Bounded,
+    > = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(128 * 1024);
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
