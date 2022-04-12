@@ -374,15 +374,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
-name = "boringssl-src"
-version = "0.5.1+b9232f9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13550d246f6517024ac7f53ae2f1016bb3ed3b238f1489f8564380b635071664"
-dependencies = [
- "cmake",
-]
-
-[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1604,11 +1595,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925586932dbbea927e913783da0be160ee74e0b0519d7b20cec35547a0a84631"
 dependencies = [
  "bindgen 0.59.2",
- "boringssl-src",
  "cc",
  "cmake",
  "libc",
  "libz-sys",
+ "openssl-sys",
  "pkg-config",
  "walkdir",
 ]
@@ -2382,6 +2373,29 @@ name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
+
+[[package]]
+name = "openssl-src"
+version = "111.18.0+1.1.1n"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.72"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e46109c383602735fa0a2e48dd2b7c892b048e1bf69e5c3b1d804b7d9c203cb"
+dependencies = [
+ "autocfg",
+ "cc",
+ "libc",
+ "openssl-src",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "owned_ttf_parser"

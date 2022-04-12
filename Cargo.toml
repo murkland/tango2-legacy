@@ -24,7 +24,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 parking_lot = "0.12.0"
 rand = "0.8.5"
 sha3 = "0.10.1"
-grpcio = { version = "0.10", default-features = false, features = ["prost-codec", "boringssl"] }
+grpcio = { version = "0.10", default-features = false, features = ["prost-codec", "openssl-vendored"] }
 tokio-util = "0.7.1"
 tokio-stream = "0.1.8"
 subtle = "2.4"
