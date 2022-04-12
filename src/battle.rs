@@ -1,10 +1,10 @@
 use crate::config;
 use crate::datachannel;
 use crate::input;
+use crate::matchmaking;
 use crate::mgba;
 use crate::protocol;
 use crate::replay;
-use crate::signor;
 use rand::Rng;
 use rand::SeedableRng;
 use sha3::digest::ExtendableOutput;
@@ -60,9 +60,25 @@ pub enum NegotiationError {
     MatchTypeMismatch,
     GameMismatch,
     InvalidCommitment,
-    WebRTC(webrtc::Error),
-    IO(std::io::Error),
-    Signor(signor::Error),
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for NegotiationError {
+    fn from(err: anyhow::Error) -> Self {
+        NegotiationError::Other(err)
+    }
+}
+
+impl From<webrtc::Error> for NegotiationError {
+    fn from(err: webrtc::Error) -> Self {
+        NegotiationError::Other(err.into())
+    }
+}
+
+impl From<std::io::Error> for NegotiationError {
+    fn from(err: std::io::Error) -> Self {
+        NegotiationError::Other(err.into())
+    }
 }
 
 impl std::fmt::Display for NegotiationError {
@@ -75,9 +91,7 @@ impl std::fmt::Display for NegotiationError {
             NegotiationError::MatchTypeMismatch => write!(f, "match type mismatch"),
             NegotiationError::GameMismatch => write!(f, "game mismatch"),
             NegotiationError::InvalidCommitment => write!(f, "invalid commitment"),
-            NegotiationError::WebRTC(e) => write!(f, "WebRTC error: {}", e),
-            NegotiationError::IO(e) => write!(f, "IO error: {}", e),
-            NegotiationError::Signor(e) => write!(f, "signor error: {}", e),
+            NegotiationError::Other(e) => write!(f, "other error: {}", e),
         }
     }
 }
@@ -92,62 +106,37 @@ pub enum NegotiationStatus {
     Failed(anyhow::Error),
 }
 
-impl From<webrtc::Error> for NegotiationError {
-    fn from(e: webrtc::Error) -> Self {
-        NegotiationError::WebRTC(e)
-    }
-}
-
-impl From<std::io::Error> for NegotiationError {
-    fn from(e: std::io::Error) -> Self {
-        NegotiationError::IO(e)
-    }
-}
-
-impl From<signor::Error> for NegotiationError {
-    fn from(e: signor::Error) -> Self {
-        NegotiationError::Signor(e)
-    }
-}
-
 impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
-        let sc = signor::Client::new(
-            &self.settings.matchmaking.connect_addr,
-            self.settings.matchmaking.insecure,
-        )?;
-
         let api = webrtc::api::APIBuilder::new().build();
-        let (peer_conn, dc, side) = sc
-            .connect(
-                || async {
-                    let peer_conn = api
-                        .new_peer_connection(
-                            webrtc::peer_connection::configuration::RTCConfiguration {
+        let (peer_conn, dc, side) = matchmaking::client::connect(
+            &self.settings.matchmaking.connect_addr,
+            || async {
+                let peer_conn = api
+                    .new_peer_connection(webrtc::peer_connection::configuration::RTCConfiguration {
+                        ..Default::default()
+                    })
+                    .await?;
+                let dc = peer_conn
+                    .create_data_channel(
+                        "tango",
+                        Some(
+                            webrtc::data_channel::data_channel_init::RTCDataChannelInit {
+                                id: Some(1),
+                                negotiated: Some(true),
+                                ordered: Some(true),
                                 ..Default::default()
                             },
-                        )
-                        .await?;
-                    let dc = peer_conn
-                        .create_data_channel(
-                            "tango",
-                            Some(
-                                webrtc::data_channel::data_channel_init::RTCDataChannelInit {
-                                    id: Some(1),
-                                    negotiated: Some(true),
-                                    ordered: Some(true),
-                                    ..Default::default()
-                                },
-                            ),
-                        )
-                        .await?;
-                    Ok((peer_conn, dc))
-                },
-                &self.session_id,
-            )
-            .await?;
+                        ),
+                    )
+                    .await?;
+                Ok((peer_conn, dc))
+            },
+            &self.session_id,
+        )
+        .await?;
         let dc = datachannel::DataChannel::new(dc).await;
 
         log::info!(
@@ -264,7 +253,7 @@ impl MatchImpl {
         let mut rng = rand_pcg::Mcg128Xsl64::from_seed(seed.try_into().expect("rng seed"));
 
         self.battle_state.lock().await.won_last_battle =
-            rng.gen::<bool>() == (side == signor::ConnectionSide::Polite);
+            rng.gen::<bool>() == (side == matchmaking::client::ConnectionSide::Polite);
         *self.negotiation.lock().await = Negotiation::Negotiated { dc, peer_conn, rng };
         Ok(())
     }

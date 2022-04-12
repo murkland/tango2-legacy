@@ -68,14 +68,12 @@ impl Default for WebRTC {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Matchmaking {
     pub connect_addr: String,
-    pub insecure: bool,
 }
 
 impl Default for Matchmaking {
     fn default() -> Self {
         Self {
-            connect_addr: "mm.tango.murk.land:80".to_owned(),
-            insecure: true,
+            connect_addr: "wss://mm.tango.murk.land".to_owned(),
         }
     }
 }

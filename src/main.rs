@@ -12,10 +12,10 @@ mod game;
 mod gui;
 mod input;
 mod locales;
+mod matchmaking;
 mod mgba;
 mod protocol;
 mod replay;
-mod signor;
 mod tps;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
