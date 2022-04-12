@@ -1,5 +1,4 @@
 use crate::mgba;
-use prost::Message;
 use std::io::Write;
 
 struct Writer {

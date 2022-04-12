@@ -1,78 +1,40 @@
-pub const VERSION: u32 = 0x1;
+pub const VERSION: u8 = 0x0d;
 
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Packet {
-    #[prost(oneof = "packet::Which", tags = "1, 2, 3, 4")]
-    pub which: Option<packet::Which>,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum Packet {
+    Hello(Hello),
+    Hola(Hola),
+    Init(Init),
+    Input(Input),
 }
 
-pub mod packet {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Which {
-        #[prost(message, tag = "1")]
-        Hello(super::Hello),
-        #[prost(message, tag = "2")]
-        Hola(super::Hola),
-        #[prost(message, tag = "3")]
-        Init(super::Init),
-        #[prost(message, tag = "4")]
-        Input(super::Input),
-    }
-}
-
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Hello {
-    #[prost(uint32, tag = "1")]
-    pub protocol_version: u32,
-
-    #[prost(string, tag = "2")]
+    pub protocol_version: u8,
     pub game_title: String,
-
-    #[prost(fixed32, tag = "3")]
     pub game_crc32: u32,
-
-    #[prost(uint32, tag = "4")]
-    pub match_type: u32,
-
-    #[prost(bytes, tag = "5")]
+    pub match_type: u16,
     pub rng_commitment: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Hola {
-    #[prost(bytes, tag = "1")]
     pub rng_nonce: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Init {
-    #[prost(uint32, tag = "1")]
-    pub battle_number: u32,
-
-    #[prost(uint32, tag = "2")]
+    pub battle_number: u8,
     pub input_delay: u32,
-
-    #[prost(bytes, tag = "3")]
     pub marshaled: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Input {
-    #[prost(uint32, tag = "1")]
-    pub battle_number: u32,
-
-    #[prost(uint32, tag = "2")]
+    pub battle_number: u8,
     pub local_tick: u32,
-
-    #[prost(uint32, tag = "3")]
     pub remote_tick: u32,
-
-    #[prost(uint32, tag = "4")]
-    pub joyflags: u32,
-
-    #[prost(uint32, tag = "5")]
-    pub custom_screen_state: u32,
-
-    #[prost(bytes, tag = "6")]
+    pub joyflags: u16,
+    pub custom_screen_state: u8,
     pub turn: Vec<u8>,
 }

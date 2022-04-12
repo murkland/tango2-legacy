@@ -3,7 +3,6 @@ use crate::input;
 use crate::mgba;
 use crate::protocol;
 use crate::signor;
-use prost::Message;
 use rand::Rng;
 use rand::SeedableRng;
 use sha3::digest::ExtendableOutput;
@@ -12,7 +11,7 @@ use std::io::Write;
 use subtle::ConstantTimeEq;
 
 pub struct BattleState {
-    pub number: u32,
+    pub number: u8,
     pub battle: Option<Battle>,
     pub won_last_battle: bool,
 }
@@ -166,21 +165,19 @@ impl MatchImpl {
         log::info!("our nonce={:?}, commitment={:?}", nonce, commitment);
 
         dc.send(
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Hello(protocol::Hello {
-                    protocol_version: protocol::VERSION,
-                    game_title: self.game_title.clone(),
-                    game_crc32: self.game_crc32,
-                    match_type: self.match_type as u32,
-                    rng_commitment: commitment.to_vec(),
-                })),
-            }
-            .encode_to_vec()
+            bincode::serialize(&protocol::Packet::Hello(protocol::Hello {
+                protocol_version: protocol::VERSION,
+                game_title: self.game_title.clone(),
+                game_crc32: self.game_crc32,
+                match_type: self.match_type,
+                rng_commitment: commitment.to_vec(),
+            }))
+            .expect("serialize")
             .as_slice(),
         )
         .await?;
 
-        let hello = match protocol::Packet::decode(
+        let hello = match bincode::deserialize(
             match dc.receive().await {
                 Some(d) => d,
                 None => {
@@ -191,9 +188,7 @@ impl MatchImpl {
         )
         .map_err(|_| NegotiationError::ExpectedHello)?
         {
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Hello(hello)),
-            } => hello,
+            protocol::Packet::Hello(hello) => hello,
             _ => {
                 return Err(NegotiationError::ExpectedHello);
             }
@@ -209,7 +204,7 @@ impl MatchImpl {
             return Err(NegotiationError::ProtocolVersionMismatch);
         }
 
-        if hello.match_type != self.match_type as u32 {
+        if hello.match_type != self.match_type {
             return Err(NegotiationError::MatchTypeMismatch);
         }
 
@@ -218,17 +213,15 @@ impl MatchImpl {
         }
 
         dc.send(
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Hola(protocol::Hola {
-                    rng_nonce: nonce.to_vec(),
-                })),
-            }
-            .encode_to_vec()
+            bincode::serialize(&protocol::Packet::Hola(protocol::Hola {
+                rng_nonce: nonce.to_vec(),
+            }))
+            .expect("serialize")
             .as_slice(),
         )
         .await?;
 
-        let hola = match protocol::Packet::decode(
+        let hola = match bincode::deserialize(
             match dc.receive().await {
                 Some(d) => d,
                 None => {
@@ -239,9 +232,7 @@ impl MatchImpl {
         )
         .map_err(|_| NegotiationError::ExpectedHola)?
         {
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Hola(hola)),
-            } => hola,
+            protocol::Packet::Hola(hola) => hola,
             _ => {
                 return Err(NegotiationError::ExpectedHola);
             }
@@ -284,25 +275,20 @@ impl MatchImpl {
         };
 
         loop {
-            match match protocol::Packet::decode(
+            match bincode::deserialize(
                 match dc.receive().await {
                     None => break,
                     Some(buf) => buf,
                 }
                 .as_slice(),
-            )?
-            .which
-            {
-                None => break,
-                Some(b) => b,
-            } {
-                protocol::packet::Which::Init(init) => {
+            )? {
+                protocol::Packet::Init(init) => {
                     self.remote_init_sender
                         .send(init)
                         .await
                         .expect("receive init");
                 }
-                protocol::packet::Which::Input(input) => {
+                protocol::Packet::Input(input) => {
                     let state_committed_rx = {
                         let mut battle_state = self.battle_state.lock().await;
 
@@ -426,7 +412,7 @@ impl Match {
 
     pub async fn send_init(
         &self,
-        battle_number: u32,
+        battle_number: u8,
         input_delay: u32,
         marshaled: &[u8],
     ) -> anyhow::Result<()> {
@@ -436,14 +422,12 @@ impl Match {
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
         dc.send(
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Init(protocol::Init {
-                    battle_number,
-                    input_delay,
-                    marshaled: marshaled.to_vec(),
-                })),
-            }
-            .encode_to_vec()
+            bincode::serialize(&protocol::Packet::Init(protocol::Init {
+                battle_number,
+                input_delay,
+                marshaled: marshaled.to_vec(),
+            }))
+            .expect("serialize")
             .as_slice(),
         )
         .await?;
@@ -452,7 +436,7 @@ impl Match {
 
     pub async fn send_input(
         &self,
-        battle_number: u32,
+        battle_number: u8,
         local_tick: u32,
         remote_tick: u32,
         joyflags: u16,
@@ -465,17 +449,15 @@ impl Match {
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
         dc.send(
-            protocol::Packet {
-                which: Some(protocol::packet::Which::Input(protocol::Input {
-                    battle_number,
-                    local_tick,
-                    remote_tick,
-                    joyflags: joyflags as u32,
-                    custom_screen_state: custom_screen_state as u32,
-                    turn,
-                })),
-            }
-            .encode_to_vec()
+            bincode::serialize(&protocol::Packet::Input(protocol::Input {
+                battle_number,
+                local_tick,
+                remote_tick,
+                joyflags,
+                custom_screen_state,
+                turn,
+            }))
+            .expect("serialize")
             .as_slice(),
         )
         .await?;

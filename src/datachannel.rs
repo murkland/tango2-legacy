@@ -65,9 +65,7 @@ impl DataChannel {
     }
 
     pub async fn send(&self, data: &[u8]) -> Result<usize, webrtc::Error> {
-        self.dc
-            .send(&prost::bytes::Bytes::copy_from_slice(data))
-            .await
+        self.dc.send(&bytes::Bytes::copy_from_slice(data)).await
     }
 
     pub async fn receive(&self) -> Option<Vec<u8>> {
