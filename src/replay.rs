@@ -23,11 +23,13 @@ impl Writer {
         Ok(Writer { encoder })
     }
 
-    pub fn write_init(&mut self, local_player_index: u8, init: &[u8]) -> std::io::Result<()> {
-        self.encoder.write_u8(local_player_index)?;
+    pub fn write_inits(&mut self, p1_init: &[u8], p2_init: &[u8]) -> std::io::Result<()> {
         self.encoder
-            .write_u32::<byteorder::LittleEndian>(init.len() as u32)?;
-        self.encoder.write_all(init)?;
+            .write_u32::<byteorder::LittleEndian>(p1_init.len() as u32)?;
+        self.encoder.write_all(p1_init)?;
+        self.encoder
+            .write_u32::<byteorder::LittleEndian>(p2_init.len() as u32)?;
+        self.encoder.write_all(p2_init)?;
         self.encoder.flush()?;
         Ok(())
     }

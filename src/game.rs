@@ -160,7 +160,6 @@ impl GameState {
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.expect("send init");
                                         log::info!("sent local init");
                                         bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, local_init.as_slice());
-                                        replay_writer.write_init(battle.local_player_index(), local_init.as_slice()).expect("write local init");
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
@@ -171,9 +170,15 @@ impl GameState {
                                         };
                                         log::info!("received remote init: {:?}", remote_init);
                                         bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, remote_init.marshaled.as_slice());
-                                        replay_writer.write_init(battle.remote_player_index(), remote_init.marshaled.as_slice()).expect("write remote init");
-
                                         battle.set_remote_delay(remote_init.input_delay);
+
+                                        let (p1_init, p2_init) = if battle.local_player_index() == 0 {
+                                            (local_init.as_slice(), remote_init.marshaled.as_slice())
+                                        } else {
+                                            (remote_init.marshaled.as_slice(), local_init.as_slice())
+                                        };
+
+                                        replay_writer.write_inits(p1_init, p2_init).expect("write init");
 
                                         return;
                                     }
