@@ -1,5 +1,5 @@
 use crate::{audio, battle, bn6, config, current_input, fastforwarder, gui, input, mgba, tps};
-use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -53,7 +53,6 @@ impl GameState {
         let main_core = Arc::new(Mutex::new({
             let mut core = mgba::core::Core::new_gba("tango")?;
             core.enable_video_buffer();
-            core.as_mut().set_audio_buffer_size(1024);
 
             let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.as_mut().load_rom(rom_vf)?;
@@ -84,8 +83,9 @@ impl GameState {
 
         let stream = {
             let core = main_core.clone();
-            audio::open_mgba_audio_stream(core, audio_device, cpal::SampleRate(48000))?
+            audio::open_mgba_audio_stream(core, audio_device)?
         };
+        stream.play()?;
 
         {
             let core = main_core.clone();
