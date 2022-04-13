@@ -3,7 +3,7 @@ use cpal::traits::DeviceTrait;
 fn fill_buf(
     buf: &mut Vec<i16>,
     n: usize,
-    core: std::sync::Arc<parking_lot::Mutex<crate::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
     channels: u16,
     sample_rate: cpal::SampleRate,
 ) -> usize {
@@ -51,8 +51,8 @@ fn fill_buf(
     available as usize * channels as usize
 }
 
-pub fn open_mgba_audio_stream(
-    core: std::sync::Arc<parking_lot::Mutex<crate::Core>>,
+pub fn open_stream(
+    core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
     let supported_config = device

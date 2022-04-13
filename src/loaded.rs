@@ -70,7 +70,7 @@ impl Loaded {
 
         let stream = {
             let core = core.clone();
-            mgba::open_mgba_audio_stream(core, audio_device)?
+            mgba::audio::open_stream(core, audio_device)?
         };
         stream.play()?;
 
