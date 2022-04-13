@@ -17,16 +17,49 @@ mod protocol;
 mod replay;
 mod tps;
 
+const TANGO_CHILD_ENV_VAR: &str = "TANGO_CHILD";
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_default_env()
         .filter(Some("tango"), log::LevelFilter::Info)
         .init();
-    mgba::log::init();
+    if std::env::var(TANGO_CHILD_ENV_VAR).unwrap_or_default() == "true" {
+        return child_main();
+    }
+
     log::info!(
         "welcome to tango v{}-{}!",
         env!("CARGO_PKG_VERSION"),
         git_version::git_version!()
     );
+
+    let log_filename = format!(
+        "{}.log",
+        time::OffsetDateTime::from(std::time::SystemTime::now())
+            .format(time::macros::format_description!(
+                "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
+            ))
+            .expect("format time"),
+    );
+
+    let _ = std::fs::create_dir("logs");
+    let log_path = std::path::Path::new("logs").join(log_filename);
+    log::info!("logging to: {}", log_path.display());
+
+    let log_file = std::fs::File::create(log_path)?;
+
+    std::process::Command::new(std::env::current_exe()?)
+        .args(std::env::args())
+        .env(TANGO_CHILD_ENV_VAR, "true")
+        .stderr(log_file)
+        .spawn()?
+        .wait()?;
+
+    Ok(())
+}
+
+fn child_main() -> Result<(), Box<dyn std::error::Error>> {
+    mgba::log::init();
     let config = match config::load_config() {
         Ok(config) => config,
         Err(e) => {
