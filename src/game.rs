@@ -1,5 +1,5 @@
 use crate::{audio, battle, bn6, config, current_input, fastforwarder, gui, input, mgba, tps};
-use cpal::traits::{HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -747,6 +747,10 @@ impl Game {
         let audio_device = cpal::default_host()
             .default_output_device()
             .ok_or(anyhow::format_err!("could not open audio device"))?;
+        log::info!(
+            "supported audio output configs: {:?}",
+            audio_device.supported_output_configs()?.collect::<Vec<_>>()
+        );
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

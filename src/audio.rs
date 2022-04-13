@@ -8,17 +8,13 @@ fn fill_buf(
     core: std::sync::Arc<parking_lot::Mutex<crate::mgba::core::Core>>,
     channels: u16,
     sample_rate: cpal::SampleRate,
-) {
+) -> usize {
     let mut core = core.as_ref().lock();
     let frame_count = (n / channels as usize) as u64;
 
     let back_buf_size = n * 4;
     if back_buf_size > buf.len() {
         *buf = vec![0i16; back_buf_size];
-    }
-
-    for i in &mut buf[..] {
-        *i = 0
     }
 
     let clock_rate = core.as_ref().frequency();
@@ -53,17 +49,14 @@ fn fill_buf(
     if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
         sync.consume_audio();
     }
+
+    available as usize * channels as usize
 }
 
 pub fn open_mgba_audio_stream(
     core: std::sync::Arc<parking_lot::Mutex<crate::mgba::core::Core>>,
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
-    log::info!(
-        "supported audio output configs: {:?}",
-        device.supported_output_configs()?.collect::<Vec<_>>()
-    );
-
     let supported_config = device
         .supported_output_configs()?
         .next()
@@ -71,6 +64,8 @@ pub fn open_mgba_audio_stream(
         .with_max_sample_rate();
 
     let config = supported_config.config();
+    log::info!("selected audio config: {:?}", config);
+
     let channels = config.channels;
     let sample_rate = config.sample_rate;
 
@@ -81,8 +76,8 @@ pub fn open_mgba_audio_stream(
                 let mut buf = vec![];
                 move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
                     let core = core.clone();
-                    fill_buf(&mut buf, data.len(), core, channels, sample_rate);
-                    for (x, y) in data.iter_mut().zip(buf.iter()) {
+                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y as u16 + 32768;
                     }
                 }
@@ -95,8 +90,8 @@ pub fn open_mgba_audio_stream(
                 let mut buf = vec![];
                 move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                     let core = core.clone();
-                    fill_buf(&mut buf, data.len(), core, channels, sample_rate);
-                    for (x, y) in data.iter_mut().zip(buf.iter()) {
+                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y;
                     }
                 }
@@ -109,8 +104,8 @@ pub fn open_mgba_audio_stream(
                 let mut buf = vec![];
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     let core = core.clone();
-                    fill_buf(&mut buf, data.len(), core, channels, sample_rate);
-                    for (x, y) in data.iter_mut().zip(buf.iter()) {
+                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y as f32 / 32768.0;
                     }
                 }
