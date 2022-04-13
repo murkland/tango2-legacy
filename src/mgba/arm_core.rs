@@ -28,7 +28,7 @@ impl<'a> ARMCoreMutRef<'a> {
         }
     }
 
-    pub unsafe fn components_mut(&self) -> &mut [*mut c::mCPUComponent] {
+    pub unsafe fn components_mut(&self) -> &[*mut c::mCPUComponent] {
         std::slice::from_raw_parts_mut(
             (*self.ptr).components,
             c::mCPUComponentType_CPU_COMPONENT_MAX as usize,

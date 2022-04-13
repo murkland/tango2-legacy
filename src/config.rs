@@ -98,21 +98,11 @@ impl Default for Matchmaking {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Config {
     pub keymapping: Keymapping,
     pub matchmaking: Matchmaking,
     pub webrtc: WebRTC,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            keymapping: Default::default(),
-            matchmaking: Default::default(),
-            webrtc: Default::default(),
-        }
-    }
 }
 
 const CONFIG_FILE: &str = "tango.toml";
