@@ -67,6 +67,8 @@ pub fn open_mgba_audio_stream(
     let channels = config.channels;
     let sample_rate = config.sample_rate;
 
+    let error_callback = |err| log::error!("audio stream error: {}", err);
+
     Ok(match supported_config.sample_format() {
         cpal::SampleFormat::U16 => device.build_output_stream(
             &config,
@@ -80,7 +82,7 @@ pub fn open_mgba_audio_stream(
                     }
                 }
             },
-            move |_err| {},
+            error_callback,
         ),
         cpal::SampleFormat::I16 => device.build_output_stream(
             &config,
@@ -94,7 +96,7 @@ pub fn open_mgba_audio_stream(
                     }
                 }
             },
-            move |_err| {},
+            error_callback,
         ),
         cpal::SampleFormat::F32 => device.build_output_stream(
             &config,
@@ -108,7 +110,7 @@ pub fn open_mgba_audio_stream(
                     }
                 }
             },
-            move |_err| {},
+            error_callback,
         ),
     }?)
 }
