@@ -12,7 +12,7 @@ jobs:
             matrix:
                 include:
                     - target: x86_64-pc-windows-gnu
-                      sysroot: /usr/x86_64-w64-mingw32/sys-root
+                      sysroot: /usr/x86_64-w64-mingw32/
         steps:
             - uses: actions/checkout@v2
               with:
