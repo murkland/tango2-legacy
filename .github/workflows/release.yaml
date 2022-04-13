@@ -18,7 +18,7 @@ jobs:
               with:
                   submodules: recursive
 
-            - run: sudo apt-get update && sudo apt-get install -y mingw-w64 cmake
+            - run: sudo apt-get update && sudo apt-get install -y mingw-w64 pandoc
 
             - uses: actions-rs/toolchain@v1
               with:
@@ -27,4 +27,11 @@ jobs:
 
             - run: BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${{ matrix.sysroot }}" cargo build --release --target ${{ matrix.target }}
 
+            - run: pandoc --standalone -o README.html README.md
+
+            - run: mkdir out && cd out && mkdir tango-${{ github.ref_name }} && mkdir tango-${{ github.ref_name }}/roms && mkdir tango-${{ github.ref_name }}/replays && mkdir tango-${{ github.ref_name }}/saves && cp ../README.html target/x86_64-pc-windows-gnu/release/tango.exe tango-${{ github.ref_name }} && zip -r tango-${{ github.ref_name }}-${{ matrix.target }}.zip tango-${{ github.ref_name }}
+
             - uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      tango-${{ github.ref_name }}-${{ matrix.target }}.zip
