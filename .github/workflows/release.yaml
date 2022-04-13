@@ -3,7 +3,7 @@ name: release
 on:
     push:
         tags:
-            - "v*"
+            - "v*.*.*"
 
 jobs:
     build:
@@ -18,13 +18,13 @@ jobs:
               with:
                   submodules: recursive
 
-            - run: sudo apt-get update && sudo apt-get install -y mingw-w64
+            - run: sudo apt-get update && sudo apt-get install -y mingw-w64 cmake
 
             - uses: actions-rs/toolchain@v1
               with:
                   toolchain: stable
                   target: ${{ matrix.target }}
 
-            - run: BINDGEN_EXTRA_CLANG_ARGS="${{ matrix.sysroot }}" cargo build --release --target ${{ matrix.target }}
+            - run: BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${{ matrix.sysroot }}" cargo build --release --target ${{ matrix.target }}
 
             - uses: softprops/action-gh-release@v1
