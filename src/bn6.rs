@@ -50,7 +50,7 @@ impl BN6 {
         custom_screen_state: u8,
     ) {
         let a_player_input = self.offsets.ewram.player_input_data_arr + index * 0x08;
-        let keys_held = core.raw_read_16(a_player_input + 0x02, -1);
+        let keys_held = core.raw_read_16(a_player_input + 0x02, -1) | 0xfc00;
         core.raw_write_16(a_player_input + 0x02, -1, keys_pressed);
         core.raw_write_16(a_player_input + 0x04, -1, !keys_held & keys_pressed);
         core.raw_write_16(a_player_input + 0x06, -1, keys_held & !keys_pressed);

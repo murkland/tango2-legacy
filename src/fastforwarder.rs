@@ -267,7 +267,7 @@ impl Fastforwarder {
                         local_tick,
                         remote_tick,
                         joyflags: {
-                            let mut joyflags = 0xfc00;
+                            let mut joyflags = 0;
                             if last_committed_remote_input.joyflags & mgba::input::keys::A as u16
                                 != 0
                             {

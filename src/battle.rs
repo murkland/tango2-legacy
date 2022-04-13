@@ -508,7 +508,7 @@ impl Match {
             last_committed_remote_input: input::Input {
                 local_tick: 0,
                 remote_tick: 0,
-                joyflags: 0xfc00,
+                joyflags: 0,
                 custom_screen_state: 0,
                 turn: vec![],
             },

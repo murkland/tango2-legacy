@@ -241,7 +241,7 @@ impl Loaded {
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
                                                             remote_tick: 0,
-                                                            joyflags: 0xfc00,
+                                                            joyflags: 0,
                                                             custom_screen_state: 0,
                                                             turn: vec![],
                                                         },
@@ -254,7 +254,7 @@ impl Loaded {
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
                                                             remote_tick: 0,
-                                                            joyflags: 0xfc00,
+                                                            joyflags: 0,
                                                             custom_screen_state: 0,
                                                             turn: vec![],
                                                         },
@@ -270,7 +270,7 @@ impl Loaded {
                                             log::info!("battle state committed");
                                         }
 
-                                        let joyflags: u16 = joyflags.load(std::sync::atomic::Ordering::Relaxed) as u16 | 0xfc00;
+                                        let joyflags: u16 = joyflags.load(std::sync::atomic::Ordering::Relaxed) as u16;
                                         let local_tick = in_battle_time + battle.local_delay();
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
