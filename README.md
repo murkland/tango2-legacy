@@ -1,10 +1,4 @@
-**tango2 is not ready for any kind of use yet. please use <https://github.com/murkland/tango> if you want to use a functional version of tango.**
-
-**tango2 はまだ使用できません。<https://github.com/murkland/tango> を使用してください。**
-
----
-
-# tango2
+# tango
 
 ![tango](logo.png)
 
