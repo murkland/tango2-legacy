@@ -584,12 +584,15 @@ impl GameState {
                                                         battle::Settings {
                                                             matchmaking_connect_addr: config
                                                                 .matchmaking.connect_addr.to_string(),
-                                                            webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration{
-                                                                ice_servers: config.webrtc.ice_servers.iter().map(|ice_server| webrtc::ice_transport::ice_server::RTCIceServer {
-                                                                    urls: ice_server.urls.clone(),
+                                                            make_webrtc_config: {
+                                                                let webrtc = config.webrtc.clone();
+                                                                Box::new(move || webrtc::peer_connection::configuration::RTCConfiguration{
+                                                                    ice_servers: webrtc.ice_servers.iter().map(|ice_server| webrtc::ice_transport::ice_server::RTCIceServer {
+                                                                        urls: ice_server.urls.clone(),
+                                                                        ..Default::default()
+                                                                    }).collect(),
                                                                     ..Default::default()
-                                                                }).collect(),
-                                                                ..Default::default()
+                                                                })
                                                             },
                                                         },
                                                     );

@@ -33,7 +33,8 @@ pub struct Match {
 
 pub struct Settings {
     pub matchmaking_connect_addr: String,
-    pub webrtc_config: webrtc::peer_connection::configuration::RTCConfiguration,
+    pub make_webrtc_config:
+        Box<dyn Fn() -> webrtc::peer_connection::configuration::RTCConfiguration + Send + Sync>,
 }
 
 struct MatchImpl {
@@ -113,9 +114,7 @@ impl MatchImpl {
             &self.settings.matchmaking_connect_addr,
             || async {
                 let peer_conn = api
-                    .new_peer_connection(webrtc::peer_connection::configuration::RTCConfiguration {
-                        ..Default::default()
-                    })
+                    .new_peer_connection((self.settings.make_webrtc_config)())
                     .await?;
                 let dc = peer_conn
                     .create_data_channel(
