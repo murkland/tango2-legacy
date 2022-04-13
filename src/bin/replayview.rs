@@ -1,0 +1,3 @@
+struct Replay {}
+
+fn main() {}

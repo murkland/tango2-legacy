@@ -1,5 +1,4 @@
 use crate::input;
-use crate::mgba;
 use byteorder::WriteBytesExt;
 use std::io::Write;
 

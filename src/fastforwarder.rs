@@ -1,6 +1,5 @@
 use crate::bn6;
 use crate::input;
-use crate::mgba;
 use crate::replay;
 
 struct State {

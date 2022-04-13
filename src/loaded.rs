@@ -1,4 +1,4 @@
-use crate::{audio, battle, bn6, config, fastforwarder, gui, input, mgba, tps};
+use crate::{audio, battle, bn6, config, fastforwarder, gui, input, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;

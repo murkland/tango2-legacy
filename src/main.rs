@@ -15,7 +15,6 @@ mod gui;
 mod input;
 mod loaded;
 mod locales;
-mod mgba;
 mod protocol;
 mod replay;
 mod tps;

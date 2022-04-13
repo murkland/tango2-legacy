@@ -1,6 +1,5 @@
 use crate::datachannel;
 use crate::input;
-use crate::mgba;
 use crate::protocol;
 use crate::replay;
 use rand::Rng;

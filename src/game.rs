@@ -1,4 +1,4 @@
-use crate::{bn6, config, current_input, gui, loaded, mgba, tps};
+use crate::{bn6, config, current_input, gui, loaded, tps};
 use cpal::traits::{DeviceTrait, HostTrait};
 use parking_lot::Mutex;
 use std::sync::Arc;
