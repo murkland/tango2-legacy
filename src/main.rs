@@ -51,7 +51,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let log_file = std::fs::File::create(log_path)?;
 
     std::process::Command::new(std::env::current_exe()?)
-        .args(std::env::args())
+        .args(
+            std::env::args_os()
+                .skip(1)
+                .collect::<Vec<std::ffi::OsString>>(),
+        )
         .env(TANGO_CHILD_ENV_VAR, "1")
         .stderr(log_file)
         .spawn()?
