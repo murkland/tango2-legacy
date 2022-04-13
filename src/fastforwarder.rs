@@ -191,8 +191,6 @@ impl Fastforwarder {
                                         log::info!("p2 turn committed at tick {}", in_battle_time);
                                     }
                                 }
-
-                                // TODO: replay writer
                             }),
                         )
                     },
