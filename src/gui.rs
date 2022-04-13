@@ -178,7 +178,7 @@ pub struct State {
     rom_list: parking_lot::Mutex<Vec<ROMInfo>>,
     debug_stats_getter: parking_lot::Mutex<Option<Box<dyn Fn() -> Option<DebugStats>>>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-    current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
+    unfiltered_current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
 }
 
 pub struct BattleDebugStats {
@@ -227,7 +227,7 @@ fn keybinder(
 impl State {
     pub fn new(
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-        current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
+        unfiltered_current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     ) -> Self {
         Self {
             connect_request_state: parking_lot::Mutex::new(DialogState::Closed),
@@ -238,7 +238,7 @@ impl State {
             rom_list: parking_lot::Mutex::new(vec![]),
             debug_stats_getter: parking_lot::Mutex::new(None),
             config,
-            current_input,
+            unfiltered_current_input,
         }
     }
 
@@ -443,8 +443,8 @@ impl State {
         }
 
         {
-            let current_input = self.current_input.clone();
-            let current_input = current_input.borrow();
+            let unfiltered_current_input = self.unfiltered_current_input.clone();
+            let unfiltered_current_input = unfiltered_current_input.borrow();
             let mut show_keymapping_config = self
                 .show_keymapping_config
                 .load(std::sync::atomic::Ordering::Relaxed);
@@ -462,7 +462,9 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.up"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.up).inner {
+                            if keybinder(ui, &*unfiltered_current_input, &mut config.keymapping.up)
+                                .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -470,7 +472,13 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.down"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.down).inner {
+                            if keybinder(
+                                ui,
+                                &*unfiltered_current_input,
+                                &mut config.keymapping.down,
+                            )
+                            .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -478,7 +486,13 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.left"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.left).inner {
+                            if keybinder(
+                                ui,
+                                &*unfiltered_current_input,
+                                &mut config.keymapping.left,
+                            )
+                            .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -487,7 +501,13 @@ impl State {
                                 locales::LOCALES
                                     .lookup(&locales::SYSTEM_LOCALE, "keymapping.right"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.right).inner {
+                            if keybinder(
+                                ui,
+                                &*unfiltered_current_input,
+                                &mut config.keymapping.right,
+                            )
+                            .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -495,7 +515,9 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.a"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.a).inner {
+                            if keybinder(ui, &*unfiltered_current_input, &mut config.keymapping.a)
+                                .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -503,7 +525,9 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.b"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.b).inner {
+                            if keybinder(ui, &*unfiltered_current_input, &mut config.keymapping.b)
+                                .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -511,7 +535,9 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.l"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.l).inner {
+                            if keybinder(ui, &*unfiltered_current_input, &mut config.keymapping.l)
+                                .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -519,7 +545,9 @@ impl State {
                             ui.label(
                                 locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "keymapping.r"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.r).inner {
+                            if keybinder(ui, &*unfiltered_current_input, &mut config.keymapping.r)
+                                .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -528,7 +556,13 @@ impl State {
                                 locales::LOCALES
                                     .lookup(&locales::SYSTEM_LOCALE, "keymapping.start"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.start).inner {
+                            if keybinder(
+                                ui,
+                                &*unfiltered_current_input,
+                                &mut config.keymapping.start,
+                            )
+                            .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();
@@ -537,7 +571,13 @@ impl State {
                                 locales::LOCALES
                                     .lookup(&locales::SYSTEM_LOCALE, "keymapping.select"),
                             );
-                            if keybinder(ui, &*current_input, &mut config.keymapping.select).inner {
+                            if keybinder(
+                                ui,
+                                &*unfiltered_current_input,
+                                &mut config.keymapping.select,
+                            )
+                            .inner
+                            {
                                 bound = true;
                             }
                             ui.end_row();

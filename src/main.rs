@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_default_env()
         .filter(Some("tango"), log::LevelFilter::Info)
         .init();
-    if std::env::var(TANGO_CHILD_ENV_VAR).unwrap_or_default() == "true" {
+    if std::env::var(TANGO_CHILD_ENV_VAR).unwrap_or_default() == "1" {
         return child_main();
     }
 
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::process::Command::new(std::env::current_exe()?)
         .args(std::env::args())
-        .env(TANGO_CHILD_ENV_VAR, "true")
+        .env(TANGO_CHILD_ENV_VAR, "1")
         .stderr(log_file)
         .spawn()?
         .wait()?;

@@ -19,7 +19,7 @@ vsprintf = "2.0.0"
 log = "0.4"
 egui = "0.17"
 egui_wgpu_backend = "0.17"
-egui-winit = { version = "0.17", default-features = false, features = ["links"] }
+egui-winit = { version = "0.17", default-features = false, features = ["links", "clipboard"] }
 tokio = { version = "1.15.0", features = ["full"] }
 parking_lot = "0.12.0"
 rand = "0.8.5"

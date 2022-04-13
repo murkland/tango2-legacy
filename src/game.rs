@@ -14,6 +14,7 @@ pub struct Game {
     config: Arc<Mutex<config::Config>>,
     vbuf: Arc<Mutex<Vec<u8>>>,
     current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
+    unfiltered_current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     loaded: Arc<Mutex<Option<loaded::Loaded>>>,
     emu_tps_counter: Arc<Mutex<tps::Counter>>,
 }
@@ -55,6 +56,8 @@ impl Game {
         let event_loop = Some(winit::event_loop::EventLoop::new());
 
         let current_input =
+            std::rc::Rc::new(std::cell::RefCell::new(current_input::CurrentInput::new()));
+        let unfiltered_current_input =
             std::rc::Rc::new(std::cell::RefCell::new(current_input::CurrentInput::new()));
 
         let vbuf = Arc::new(Mutex::new(vec![
@@ -98,7 +101,7 @@ impl Game {
             .build()?;
             let gui = gui::Gui::new(
                 config,
-                current_input.clone(),
+                unfiltered_current_input.clone(),
                 window_size.width,
                 window_size.height,
                 window.scale_factor() as f32,
@@ -167,6 +170,7 @@ impl Game {
             config,
             fps_counter,
             current_input,
+            unfiltered_current_input,
             event_loop,
             window,
             pixels,
@@ -247,9 +251,8 @@ impl Game {
             gui_state.open_rom_select_dialog();
         }
 
-        let mut gui_handled = false;
-
         let current_input = self.current_input.clone();
+        let unfiltered_current_input = self.unfiltered_current_input.clone();
 
         self.event_loop
             .take()
@@ -272,57 +275,56 @@ impl Game {
                             }
                             _ => {}
                         };
-                        {
+                        if !self.gui.handle_event(window_event) {
                             let mut current_input = current_input.borrow_mut();
                             current_input.handle_event(window_event);
                         }
-                        gui_handled = self.gui.handle_event(window_event);
+
+                        let mut unfiltered_current_input = unfiltered_current_input.borrow_mut();
+                        unfiltered_current_input.handle_event(window_event);
                     }
                     winit::event::Event::MainEventsCleared => {
                         {
                             let current_input = current_input.borrow();
 
-                            if !gui_handled {
-                                if let Some(loaded) = &*self.loaded.lock() {
-                                    let mut core = loaded.lock_core();
-                                    let config = self.config.lock();
+                            if let Some(loaded) = &*self.loaded.lock() {
+                                let mut core = loaded.lock_core();
+                                let config = self.config.lock();
 
-                                    let mut keys = 0u32;
-                                    if current_input.key_held[config.keymapping.left as usize] {
-                                        keys |= mgba::input::keys::LEFT;
-                                    }
-                                    if current_input.key_held[config.keymapping.right as usize] {
-                                        keys |= mgba::input::keys::RIGHT;
-                                    }
-                                    if current_input.key_held[config.keymapping.up as usize] {
-                                        keys |= mgba::input::keys::UP;
-                                    }
-                                    if current_input.key_held[config.keymapping.down as usize] {
-                                        keys |= mgba::input::keys::DOWN;
-                                    }
-                                    if current_input.key_held[config.keymapping.a as usize] {
-                                        keys |= mgba::input::keys::A;
-                                    }
-                                    if current_input.key_held[config.keymapping.b as usize] {
-                                        keys |= mgba::input::keys::B;
-                                    }
-                                    if current_input.key_held[config.keymapping.l as usize] {
-                                        keys |= mgba::input::keys::L;
-                                    }
-                                    if current_input.key_held[config.keymapping.r as usize] {
-                                        keys |= mgba::input::keys::R;
-                                    }
-                                    if current_input.key_held[config.keymapping.start as usize] {
-                                        keys |= mgba::input::keys::START;
-                                    }
-                                    if current_input.key_held[config.keymapping.select as usize] {
-                                        keys |= mgba::input::keys::SELECT;
-                                    }
-
-                                    core.as_mut().set_keys(keys);
-                                    loaded.set_joyflags(keys);
+                                let mut keys = 0u32;
+                                if current_input.key_held[config.keymapping.left as usize] {
+                                    keys |= mgba::input::keys::LEFT;
                                 }
-                                gui_handled = false;
+                                if current_input.key_held[config.keymapping.right as usize] {
+                                    keys |= mgba::input::keys::RIGHT;
+                                }
+                                if current_input.key_held[config.keymapping.up as usize] {
+                                    keys |= mgba::input::keys::UP;
+                                }
+                                if current_input.key_held[config.keymapping.down as usize] {
+                                    keys |= mgba::input::keys::DOWN;
+                                }
+                                if current_input.key_held[config.keymapping.a as usize] {
+                                    keys |= mgba::input::keys::A;
+                                }
+                                if current_input.key_held[config.keymapping.b as usize] {
+                                    keys |= mgba::input::keys::B;
+                                }
+                                if current_input.key_held[config.keymapping.l as usize] {
+                                    keys |= mgba::input::keys::L;
+                                }
+                                if current_input.key_held[config.keymapping.r as usize] {
+                                    keys |= mgba::input::keys::R;
+                                }
+                                if current_input.key_held[config.keymapping.start as usize] {
+                                    keys |= mgba::input::keys::START;
+                                }
+                                if current_input.key_held[config.keymapping.select as usize] {
+                                    keys |= mgba::input::keys::SELECT;
+                                }
+
+                                core.as_mut().set_keys(keys);
+                                loaded.set_joyflags(keys);
                             }
 
                             {
@@ -354,7 +356,8 @@ impl Game {
                                 }
                             }
 
-                            if current_input.key_actions.iter().any(|action| {
+                            let unfiltered_current_input = unfiltered_current_input.borrow();
+                            if unfiltered_current_input.key_actions.iter().any(|action| {
                                 matches!(
                                     action,
                                     current_input::KeyAction::Pressed(
@@ -382,6 +385,12 @@ impl Game {
                         {
                             let mut current_input = current_input.borrow_mut();
                             current_input.step();
+                        }
+
+                        {
+                            let mut unfiltered_current_input =
+                                unfiltered_current_input.borrow_mut();
+                            unfiltered_current_input.step();
                         }
                     }
                     _ => {}
