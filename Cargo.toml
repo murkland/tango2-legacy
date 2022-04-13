@@ -42,5 +42,5 @@ futures-util = "0.3.21"
 tango-matchmaking = { path = "tango-matchmaking" }
 
 [build-dependencies]
-bindgen = "0.59.2"
+bindgen = "0.57"
 cmake = "0.1"
