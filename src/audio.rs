@@ -35,7 +35,7 @@ fn fill_buf(
         if available > n {
             available = n;
         }
-        left.read_samples(buf.as_mut_slice(), available, channels == 2);
+        left.read_samples(buf, available, channels == 2);
         available
     };
 
@@ -43,7 +43,7 @@ fn fill_buf(
         let mut core = core.as_mut();
         let mut right = core.audio_channel(1);
         right.set_rates(clock_rate as f64, sample_rate.0 as f64);
-        right.read_samples(&mut buf.as_mut_slice()[1..], available, channels == 2);
+        right.read_samples(&mut buf[1..], available, channels == 2);
     }
 
     if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
