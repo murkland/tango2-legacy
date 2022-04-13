@@ -13,6 +13,7 @@ enum MatchState {
 struct GameState {
     main_core: Arc<Mutex<mgba::core::Core>>,
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
+    joyflags: Arc<std::sync::atomic::AtomicU32>,
     _trapper: mgba::trapper::Trapper,
     _thread: mgba::thread::Thread,
     _stream: cpal::Stream,
@@ -98,11 +99,14 @@ impl GameState {
                 .set_fps_target(60.0);
         }
 
+        let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
         let trapper = {
+            // TODO: Should these be weak?
             let core = main_core.clone();
             let mut core = core.lock();
+            let joyflags = joyflags.clone();
             let bn6 = bn6;
-            let handle = handle;
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
@@ -274,7 +278,7 @@ impl GameState {
                                             log::info!("battle state committed");
                                         }
 
-                                        let joyflags: u16 = battle.local_joyflags();
+                                        let joyflags: u16 = joyflags.load(std::sync::atomic::Ordering::Relaxed) as u16 | 0xfc00;
                                         let local_tick = in_battle_time + battle.local_delay();
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
@@ -736,6 +740,7 @@ impl GameState {
         Ok(GameState {
             main_core,
             match_state,
+            joyflags,
             _trapper: trapper,
             _thread: thread,
             _stream: stream,
@@ -972,8 +977,6 @@ impl Game {
             gui_state.open_rom_select_dialog();
         }
 
-        let handle = self.rt.handle().clone();
-
         let mut gui_handled = false;
 
         let current_input = self.current_input.clone();
@@ -1046,21 +1049,10 @@ impl Game {
                                         keys |= mgba::input::keys::SELECT;
                                     }
 
-                                    handle.block_on(async {
-                                        match &*game_state.match_state.lock().await {
-                                            MatchState::Match(m) => {
-                                                let mut battle_state = m.lock_battle_state().await;
-                                                if let Some(b) = &mut battle_state.battle {
-                                                    b.set_local_joyflags(keys as u16 | 0xfc00);
-                                                } else {
-                                                    core.as_mut().set_keys(keys);
-                                                }
-                                            }
-                                            _ => {
-                                                core.as_mut().set_keys(keys);
-                                            }
-                                        }
-                                    });
+                                    core.as_mut().set_keys(keys);
+                                    game_state
+                                        .joyflags
+                                        .store(keys, std::sync::atomic::Ordering::Relaxed);
                                 }
                                 gui_handled = false;
                             }

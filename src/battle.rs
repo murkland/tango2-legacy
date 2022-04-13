@@ -518,7 +518,6 @@ impl Match {
             state_committed_rx: Some(rx),
             committed_state: None,
             local_pending_turn: None,
-            local_joyflags: 0xfc00,
             replay_writer: std::sync::Arc::new(parking_lot::Mutex::new(
                 replay::Writer::new(Box::new(replay_file), local_player_index)
                     .expect("new replay writer"),
@@ -563,7 +562,6 @@ pub struct Battle {
     state_committed_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
-    local_joyflags: u16,
     replay_writer: std::sync::Arc<parking_lot::Mutex<replay::Writer>>,
 }
 
@@ -673,13 +671,5 @@ impl Battle {
             }
             None => vec![],
         }
-    }
-
-    pub fn set_local_joyflags(&mut self, joyflags: u16) {
-        self.local_joyflags = joyflags;
-    }
-
-    pub fn local_joyflags(&self) -> u16 {
-        self.local_joyflags
     }
 }
