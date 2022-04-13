@@ -1,4 +1,4 @@
-use crate::{audio, battle, bn6, config, fastforwarder, gui, input, tps};
+use crate::{battle, bn6, config, fastforwarder, gui, input, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -70,7 +70,7 @@ impl Loaded {
 
         let stream = {
             let core = core.clone();
-            audio::open_mgba_audio_stream(core, audio_device)?
+            mgba::open_mgba_audio_stream(core, audio_device)?
         };
         stream.play()?;
 

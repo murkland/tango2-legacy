@@ -3,7 +3,7 @@ use cpal::traits::DeviceTrait;
 fn fill_buf(
     buf: &mut Vec<i16>,
     n: usize,
-    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<crate::Core>>,
     channels: u16,
     sample_rate: cpal::SampleRate,
 ) -> usize {
@@ -20,7 +20,7 @@ fn fill_buf(
     let mut faux_clock = 1.0;
     if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
         sync.lock_audio();
-        faux_clock = mgba::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
+        faux_clock = crate::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
     }
 
     let n = (frame_count as f64 / faux_clock as f64) as i32;
@@ -52,7 +52,7 @@ fn fill_buf(
 }
 
 pub fn open_mgba_audio_stream(
-    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<crate::Core>>,
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
     let supported_config = device

@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-mod audio;
 mod battle;
 mod bn6;
 mod config;
