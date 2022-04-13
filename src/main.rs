@@ -13,6 +13,7 @@ mod fastforwarder;
 mod game;
 mod gui;
 mod input;
+mod loaded;
 mod locales;
 mod mgba;
 mod protocol;
