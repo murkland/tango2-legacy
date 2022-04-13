@@ -107,11 +107,60 @@ impl Replay {
 }
 
 fn main() -> Result<(), anyhow::Error> {
+    env_logger::Builder::from_default_env()
+        .filter(Some("tango"), log::LevelFilter::Info)
+        .filter(Some("replayview"), log::LevelFilter::Info)
+        .init();
+
     let mut f = zstd::stream::read::Decoder::new(std::fs::File::open(
         std::env::args_os().nth(1).unwrap(),
     )?)?;
 
     let replay = Replay::decode(&mut f)?;
+
+    let rom_path = std::fs::read_dir("roms")?
+        .flat_map(|dirent| {
+            let dirent = dirent.as_ref().expect("dirent");
+            let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
+            let vf = match mgba::vfile::VFile::open(&dirent.path(), mgba::vfile::flags::O_RDONLY) {
+                Ok(vf) => vf,
+                Err(e) => {
+                    log::warn!(
+                        "failed to open {} for probing: {}",
+                        dirent.path().display(),
+                        e
+                    );
+                    return vec![];
+                }
+            };
+
+            if let Err(e) = core.as_mut().load_rom(vf) {
+                log::warn!(
+                    "failed to load {} for probing: {}",
+                    dirent.path().display(),
+                    e
+                );
+                return vec![];
+            }
+
+            if core.as_ref().game_title() != replay.state.rom_title() {
+                return vec![];
+            }
+
+            if core.as_ref().crc32() != replay.state.rom_crc32() {
+                return vec![];
+            }
+
+            return vec![dirent.path().clone()];
+        })
+        .next()
+        .ok_or_else(|| anyhow::format_err!("could not find eligible rom"))?;
+
+    log::info!("found rom: {}", rom_path.display());
+
+    let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
+    let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY).expect("vf");
+    core.as_mut().load_rom(vf).expect("load_rom");
 
     Ok(())
 }
