@@ -567,9 +567,7 @@ impl GameState {
                                         MatchState::NoMatch => {
                                             let gui_state = gui_state.upgrade().expect("upgrade");
                                             gui_state.open_link_code_dialog();
-                                            match &*gui_state
-                                                .lock_connect_request_state()
-                                            {
+                                            match &*gui_state.lock_connect_request_state() {
                                                 gui::DialogState::Pending(_) => {
                                                     return;
                                                 }
@@ -583,15 +581,13 @@ impl GameState {
                                                         s.input_delay,
                                                         battle::Settings {
                                                             matchmaking_connect_addr: config
-                                                                .matchmaking.connect_addr.to_string(),
+                                                                .matchmaking
+                                                                .connect_addr
+                                                                .to_string(),
                                                             make_webrtc_config: {
                                                                 let webrtc = config.webrtc.clone();
-                                                                Box::new(move || webrtc::peer_connection::configuration::RTCConfiguration{
-                                                                    ice_servers: webrtc.ice_servers.iter().map(|ice_server| webrtc::ice_transport::ice_server::RTCIceServer {
-                                                                        urls: ice_server.urls.clone(),
-                                                                        ..Default::default()
-                                                                    }).collect(),
-                                                                    ..Default::default()
+                                                                Box::new(move || {
+                                                                    webrtc.make_webrtc_config()
                                                                 })
                                                             },
                                                         },
@@ -605,7 +601,9 @@ impl GameState {
                                                 gui::DialogState::Cancelled => {
                                                     bn6.drop_matchmaking_from_comm_menu(core, 0);
                                                 }
-                                                gui::DialogState::Closed => { unreachable!(); }
+                                                gui::DialogState::Closed => {
+                                                    unreachable!();
+                                                }
                                             }
                                             gui_state.close_link_code_dialog();
                                         }

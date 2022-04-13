@@ -65,6 +65,24 @@ impl Default for WebRTC {
     }
 }
 
+impl WebRTC {
+    pub fn make_webrtc_config(&self) -> webrtc::peer_connection::configuration::RTCConfiguration {
+        webrtc::peer_connection::configuration::RTCConfiguration {
+            ice_servers: self
+                .ice_servers
+                .iter()
+                .map(
+                    |ice_server| webrtc::ice_transport::ice_server::RTCIceServer {
+                        urls: ice_server.urls.clone(),
+                        ..Default::default()
+                    },
+                )
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Matchmaking {
     pub connect_addr: String,
