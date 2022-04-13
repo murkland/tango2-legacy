@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#[allow(clippy::all)]
 pub mod arm_core;
 pub mod blip;
 mod c;
