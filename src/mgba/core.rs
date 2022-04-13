@@ -67,7 +67,7 @@ impl Core {
     }
 
     pub fn video_buffer(&self) -> Option<&[u8]> {
-        self.video_buffer.as_ref().map(|v| v.as_slice())
+        self.video_buffer.as_deref()
     }
 }
 

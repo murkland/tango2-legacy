@@ -16,9 +16,9 @@ impl Writer {
         local_player_index: u8,
     ) -> std::io::Result<Self> {
         let mut encoder = zstd::Encoder::new(writer, 3)?.auto_finish();
-        encoder.write(HEADER)?;
-        encoder.write(&[VERSION])?;
-        encoder.write(&[local_player_index])?;
+        encoder.write_all(HEADER)?;
+        encoder.write_all(&[VERSION])?;
+        encoder.write_all(&[local_player_index])?;
         encoder.flush()?;
         Ok(Writer { encoder })
     }
@@ -27,7 +27,7 @@ impl Writer {
         self.encoder.write_u8(local_player_index)?;
         self.encoder
             .write_u32::<byteorder::LittleEndian>(init.len() as u32)?;
-        self.encoder.write(init)?;
+        self.encoder.write_all(init)?;
         self.encoder.flush()?;
         Ok(())
     }
@@ -35,7 +35,7 @@ impl Writer {
     pub fn write_state(&mut self, state: &mgba::state::State) -> std::io::Result<()> {
         self.encoder
             .write_u32::<byteorder::LittleEndian>(state.as_slice().len() as u32)?;
-        self.encoder.write(state.as_slice())?;
+        self.encoder.write_all(state.as_slice())?;
         self.encoder.flush()?;
         Ok(())
     }
@@ -62,10 +62,10 @@ impl Writer {
         self.encoder.write_u8(p2.custom_screen_state)?;
         self.encoder
             .write_u32::<byteorder::LittleEndian>(p1.turn.len() as u32)?;
-        self.encoder.write(&p1.turn)?;
+        self.encoder.write_all(&p1.turn)?;
         self.encoder
             .write_u32::<byteorder::LittleEndian>(p2.turn.len() as u32)?;
-        self.encoder.write(&p2.turn)?;
+        self.encoder.write_all(&p2.turn)?;
         self.encoder.flush()?;
         Ok(())
     }

@@ -40,9 +40,7 @@ impl BN6 {
 
     pub fn local_marshaled_battle_state(&self, mut core: core::CoreMutRef) -> Vec<u8> {
         core.raw_read_range::<0x100>(self.offsets.ewram.local_marshaled_battle_state, -1)
-            .iter()
-            .cloned()
-            .collect()
+            .to_vec()
     }
 
     pub fn set_player_input_state(

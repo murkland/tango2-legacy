@@ -14,7 +14,7 @@ lazy_static! {
             log: Some(c_log),
             filter: &mut *MLOG_FILTER.lock(),
         }));
-    static ref LOG_FUNC: send_wrapper::SendWrapper<parking_lot::Mutex<Box<dyn Fn(i32, u32, String) -> ()>>> =
+    static ref LOG_FUNC: send_wrapper::SendWrapper<parking_lot::Mutex<Box<dyn Fn(i32, u32, String)>>> =
         send_wrapper::SendWrapper::new(parking_lot::Mutex::new(Box::new(
             &|category, _level, message| {
                 let category_name =

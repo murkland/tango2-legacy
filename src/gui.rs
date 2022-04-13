@@ -318,11 +318,7 @@ impl State {
         {
             let mut maybe_rom_select_state = self.rom_select_state.lock();
 
-            let mut open = if let DialogState::Pending(_) = &*maybe_rom_select_state {
-                true
-            } else {
-                false
-            };
+            let mut open = matches!(&*maybe_rom_select_state, DialogState::Pending(_));
 
             egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "select-game"))
                 .id(egui::Id::new("select-game-window"))
@@ -379,11 +375,7 @@ impl State {
         {
             let mut maybe_connect_request_state = self.connect_request_state.lock();
 
-            let mut open = if let DialogState::Pending(_) = &*maybe_connect_request_state {
-                true
-            } else {
-                false
-            };
+            let mut open = matches!(&*maybe_connect_request_state, DialogState::Pending(_));
 
             egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code"))
                 .id(egui::Id::new("link-code-window"))

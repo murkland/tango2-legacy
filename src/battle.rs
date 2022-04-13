@@ -335,7 +335,7 @@ impl MatchImpl {
 fn make_rng_commitment(nonce: &[u8]) -> std::io::Result<[u8; 32]> {
     let mut shake128 = sha3::Shake128::default();
     shake128.write_all(b"syncrand:nonce:")?;
-    shake128.write_all(&nonce)?;
+    shake128.write_all(nonce)?;
 
     let mut commitment = [0u8; 32];
     shake128

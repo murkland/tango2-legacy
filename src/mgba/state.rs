@@ -31,7 +31,7 @@ impl State {
         }
     }
 
-    pub fn from_slice(&self, slice: &[u8]) -> Self {
+    pub fn from_slice(slice: &[u8]) -> Self {
         unsafe {
             let layout = std::alloc::Layout::new::<c::GBASerializedState>();
             let ptr = std::alloc::alloc(layout);

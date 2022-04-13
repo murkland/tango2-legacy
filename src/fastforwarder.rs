@@ -136,7 +136,7 @@ impl Fastforwarder {
                                     .pop_front()
                                     .expect("first input pair");
 
-                                if ip.local.local_tick != ip.local.local_tick {
+                                if ip.local.local_tick != ip.remote.local_tick {
                                     state.as_mut().expect("state").result = Err(anyhow::anyhow!(
                                         "p1 tick != p2 tick (in battle tick = {}): {} != {}",
                                         in_battle_time,
@@ -286,8 +286,8 @@ impl Fastforwarder {
                 input::Pair {
                     local,
                     remote: input::Input {
-                        local_tick: local_tick,
-                        remote_tick: remote_tick,
+                        local_tick,
+                        remote_tick,
                         joyflags: {
                             let mut joyflags = 0xfc00;
                             if last_committed_remote_input.joyflags & mgba::input::keys::A as u16

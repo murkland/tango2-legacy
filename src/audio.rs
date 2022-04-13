@@ -60,7 +60,7 @@ pub fn open_mgba_audio_stream(
     let supported_config = device
         .supported_output_configs()?
         .next()
-        .ok_or(anyhow::format_err!("found no supported configs"))?
+        .ok_or_else(|| anyhow::format_err!("found no supported configs"))?
         .with_max_sample_rate();
 
     let config = supported_config.config();

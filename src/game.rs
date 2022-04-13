@@ -101,8 +101,8 @@ impl GameState {
         let trapper = {
             let core = main_core.clone();
             let mut core = core.lock();
-            let bn6 = bn6.clone();
-            let handle = handle.clone();
+            let bn6 = bn6;
+            let handle = handle;
             mgba::trapper::Trapper::new(
                 &mut core,
                 vec![
@@ -236,7 +236,7 @@ impl GameState {
                                         }
 
                                         let in_battle_time = bn6.in_battle_time(core);
-                                        if let None = battle.committed_state() {
+                                        if battle.committed_state().is_none() {
                                             for i in 0..battle.local_delay() {
                                                 battle
                                                     .add_local_input(
@@ -284,7 +284,7 @@ impl GameState {
 
                                         const TIMEOUT: std::time::Duration =
                                             std::time::Duration::from_secs(5);
-                                        if let Err(_) = tokio::time::timeout(
+                                        if (tokio::time::timeout(
                                             TIMEOUT,
                                             battle.add_local_input(
                                                 input::Input {
@@ -296,7 +296,7 @@ impl GameState {
                                                 },
                                             ),
                                         )
-                                        .await
+                                        .await).is_err()
                                         {
                                             log::error!("could not queue local input within {:?}, dropping connection", TIMEOUT);
                                             core.gba_mut().sync_mut().expect("sync").set_fps_target(EXPECTED_FPS as f32);
@@ -547,8 +547,8 @@ impl GameState {
                         let match_state = match_state.clone();
                         let bn6 = bn6.clone();
                         let handle = handle.clone();
-                        let gui_state = gui_state.clone();
-                        let config = config.clone();
+                        let gui_state = gui_state;
+                        let config = config;
                         (
                             bn6.offsets
                                 .rom
@@ -681,7 +681,7 @@ impl GameState {
                     },
                     {
                         let match_state = match_state.clone();
-                        let handle = handle.clone();
+                        let handle = handle;
                         (
                             bn6.offsets.rom.comm_menu_end_battle_entry,
                             Box::new(move |_core| {
@@ -710,8 +710,8 @@ impl GameState {
 
         {
             let core = main_core.clone();
-            let vbuf = vbuf.clone();
-            let emu_tps_counter = emu_tps_counter.clone();
+            let vbuf = vbuf;
+            let emu_tps_counter = emu_tps_counter;
             thread.set_frame_callback(Some(Box::new(move || {
                 // TODO: This sometimes causes segfaults when the game gets unloaded.
                 let core = core.lock();
@@ -747,7 +747,7 @@ impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
         let audio_device = cpal::default_host()
             .default_output_device()
-            .ok_or(anyhow::format_err!("could not open audio device"))?;
+            .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;
         log::info!(
             "supported audio output configs: {:?}",
             audio_device.supported_output_configs()?.collect::<Vec<_>>()
@@ -840,14 +840,10 @@ impl Game {
             let game_state = Arc::downgrade(&game_state);
             let fps_counter = fps_counter.clone();
             let emu_tps_counter = emu_tps_counter.clone();
-            let handle = handle.clone();
+            let handle = handle;
             gui_state.set_debug_stats_getter(Some(Box::new(move || {
                 handle.block_on(async {
-                    let game_state = if let Some(game_state) = game_state.upgrade() {
-                        game_state
-                    } else {
-                        return None;
-                    };
+                    let game_state = game_state.upgrade()?;
                     let game_state = game_state.lock();
                     let game_state = if let Some(game_state) = &*game_state {
                         game_state
@@ -925,7 +921,7 @@ impl Game {
         Ok(())
     }
 
-    pub fn run(mut self: Self) {
+    pub fn run(mut self) {
         let mut rom_list: Vec<gui::ROMInfo> = std::fs::read_dir("roms")
             .expect("roms")
             .flat_map(|dirent| {
@@ -1005,9 +1001,9 @@ impl Game {
                         };
                         {
                             let mut current_input = current_input.borrow_mut();
-                            current_input.handle_event(&window_event);
+                            current_input.handle_event(window_event);
                         }
-                        gui_handled = self.gui.handle_event(&window_event);
+                        gui_handled = self.gui.handle_event(window_event);
                     }
                     winit::event::Event::MainEventsCleared => {
                         {
@@ -1099,14 +1095,12 @@ impl Game {
                             }
 
                             if current_input.key_actions.iter().any(|action| {
-                                if let current_input::KeyAction::Pressed(
-                                    winit::event::VirtualKeyCode::Escape,
-                                ) = action
-                                {
-                                    true
-                                } else {
-                                    false
-                                }
+                                matches!(
+                                    action,
+                                    current_input::KeyAction::Pressed(
+                                        winit::event::VirtualKeyCode::Escape,
+                                    )
+                                )
                             }) {
                                 self.gui.state().toggle_menu();
                             }

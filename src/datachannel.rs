@@ -53,7 +53,7 @@ impl DataChannel {
             let notify = notify.clone();
             dc2.dc
                 .on_open(Box::new(move || {
-                    let notify = notify.clone();
+                    let notify = notify;
                     Box::pin(async move {
                         notify.notify_one();
                     })
