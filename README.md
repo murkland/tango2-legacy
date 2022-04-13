@@ -8,7 +8,7 @@
 
 netplay for mega man battle network games in the style of <https://github.com/ssbmars/BBN3-netcode>.
 
-tango（タンゴ）はロックマンエグゼ６ネットプレイシステムです。
+tango（タンゴ）はロックマンエグゼネットプレイシステムです。
 
 ## supported games / 対応ゲーム
 
