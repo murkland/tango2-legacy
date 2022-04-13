@@ -16,8 +16,8 @@ impl Writer {
     ) -> std::io::Result<Self> {
         let mut encoder = zstd::Encoder::new(writer, 3)?.auto_finish();
         encoder.write_all(HEADER)?;
-        encoder.write_all(&[VERSION])?;
-        encoder.write_all(&[local_player_index])?;
+        encoder.write_u8(VERSION)?;
+        encoder.write_u8(local_player_index)?;
         encoder.flush()?;
         Ok(Writer { encoder })
     }
@@ -55,12 +55,15 @@ impl Writer {
             .write_u32::<byteorder::LittleEndian>(ip.local.local_tick)?;
         self.encoder
             .write_u32::<byteorder::LittleEndian>(ip.local.remote_tick)?;
+
         self.encoder
             .write_u16::<byteorder::LittleEndian>(p1.joyflags)?;
-        self.encoder.write_u8(p1.custom_screen_state)?;
         self.encoder
             .write_u16::<byteorder::LittleEndian>(p2.joyflags)?;
+
+        self.encoder.write_u8(p1.custom_screen_state)?;
         self.encoder.write_u8(p2.custom_screen_state)?;
+
         self.encoder
             .write_u32::<byteorder::LittleEndian>(p1.turn.len() as u32)?;
         self.encoder.write_all(&p1.turn)?;

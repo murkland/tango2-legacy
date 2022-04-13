@@ -237,7 +237,7 @@ impl Loaded {
                                                     .add_local_input(
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
-                                                            remote_tick: in_battle_time + i,
+                                                            remote_tick: 0,
                                                             joyflags: 0xfc00,
                                                             custom_screen_state: 0,
                                                             turn: vec![],
@@ -250,7 +250,7 @@ impl Loaded {
                                                     .add_remote_input(
                                                         input::Input {
                                                             local_tick: in_battle_time + i,
-                                                            remote_tick: in_battle_time + i,
+                                                            remote_tick: 0,
                                                             joyflags: 0xfc00,
                                                             custom_screen_state: 0,
                                                             turn: vec![],
