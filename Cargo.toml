@@ -40,6 +40,7 @@ byteorder = "1.4.3"
 time = { version = "0.3.9", features = ["formatting", "macros"] }
 futures-util = "0.3.21"
 tango-matchmaking = { path = "tango-matchmaking" }
+webrtc-util = { git = "https://github.com/webrtc-rs/util", rev = "2d193c0fd146e4d48ce63d07dbd085702b60aac2" }
 
 [build-dependencies]
 bindgen = "0.57"
