@@ -1,10 +1,11 @@
 extern crate bindgen;
+extern crate winres;
 
 use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    let target_os = env::var("CARGO_CFG_TARGET_OS");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
     let mgba_dst = cmake::Config::new("external/mgba")
         .define("LIBMGBA_ONLY", "on")
@@ -15,11 +16,11 @@ fn main() {
         mgba_dst.display()
     );
     println!("cargo:rustc-link-lib=static=mgba");
-    match target_os.as_ref().map(|x| &**x) {
-        Ok("macos") => {
+    match target_os.as_str() {
+        "macos" => {
             println!("cargo:rustc-link-lib=framework=Cocoa");
         }
-        Ok("windows") => {
+        "windows" => {
             println!("cargo:rustc-link-lib=shlwapi");
             println!("cargo:rustc-link-lib=ole32");
             println!("cargo:rustc-link-lib=uuid");
@@ -37,4 +38,13 @@ fn main() {
     bindings
         .write_to_file(out_path.join("mgba_bindings.rs"))
         .expect("Couldn't write bindings!");
+
+    if target_os == "windows" {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("tango.ico")
+            .set_ar_path("x86_64-w64-mingw32-ar")
+            .set_windres_path("x86_64-w64-mingw32-windres")
+            .compile()
+            .unwrap();
+    }
 }

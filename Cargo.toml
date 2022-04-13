@@ -47,3 +47,4 @@ webrtc-util = { git = "https://github.com/webrtc-rs/util", rev = "2d193c0fd146e4
 [build-dependencies]
 bindgen = "0.57"
 cmake = "0.1"
+winres = "0.1"
