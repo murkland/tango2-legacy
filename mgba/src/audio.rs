@@ -55,6 +55,7 @@ pub fn open_stream(
     core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
+    // TODO: Perform smarter config selection, this can choose really low bitrate configs by default.
     let supported_config = device
         .supported_output_configs()?
         .next()
