@@ -230,6 +230,9 @@ impl Loaded {
                                             return;
                                         }
 
+                                        let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
+                                        let mut replay_writer = replay_writer.lock();
+
                                         let in_battle_time = bn6.in_battle_time(core);
                                         if battle.committed_state().is_none() {
                                             for i in 0..battle.local_delay() {
@@ -260,8 +263,6 @@ impl Loaded {
                                             }
                                             let committed_state = core.save_state().expect("save committed state");
 
-                                            let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
-                                            let mut replay_writer = replay_writer.lock();
                                             replay_writer.write_state(&committed_state).expect("write state");
 
                                             battle.set_committed_state(committed_state);
@@ -301,6 +302,11 @@ impl Loaded {
                                         m.send_input(battle_number, local_tick, remote_tick, joyflags, custom_screen_state, turn).await.expect("send input");
 
                                         let (input_pairs, left) = battle.consume_and_peek_local().await;
+
+                                        for ip in &input_pairs {
+                                            replay_writer.write_input(battle.local_player_index(), &ip,).expect("write input");
+                                        }
+
                                         let mut fastforwarder = fastforwarder.lock();
                                         let (committed_state, dirty_state, last_input) = fastforwarder.fastforward(
                                             battle.committed_state().as_ref().expect("committed state"),
@@ -308,7 +314,6 @@ impl Loaded {
                                             &input_pairs,
                                             battle.last_committed_remote_input(),
                                             &left,
-                                            battle.replay_writer()
                                         ).expect("fastforward");
                                         battle.set_committed_state(committed_state);
                                         let last_joyflags = last_input.remote.joyflags;

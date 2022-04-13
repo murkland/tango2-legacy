@@ -1,6 +1,5 @@
 use crate::bn6;
 use crate::input;
-use crate::replay;
 
 struct State {
     local_player_index: u8,
@@ -9,7 +8,6 @@ struct State {
     committed_state: Option<mgba::state::State>,
     dirty_time: u32,
     dirty_state: Option<mgba::state::State>,
-    replay_writer: std::sync::Weak<parking_lot::Mutex<replay::Writer>>,
     result: anyhow::Result<()>,
 }
 
@@ -85,22 +83,6 @@ impl Fastforwarder {
                                         in_battle_time,
                                     ));
                                     return;
-                                }
-
-                                if in_battle_time < commit_time {
-                                    let replay_writer = state
-                                        .as_ref()
-                                        .expect("state")
-                                        .replay_writer
-                                        .upgrade()
-                                        .expect("upgrade");
-                                    let mut replay_writer = replay_writer.lock();
-                                    replay_writer
-                                        .write_input(
-                                            state.as_ref().expect("state").local_player_index,
-                                            &ip,
-                                        )
-                                        .expect("write input");
                                 }
 
                                 core.gba_mut()
@@ -264,7 +246,6 @@ impl Fastforwarder {
         commit_pairs: &[input::Pair<input::Input>],
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
-        replay_writer: std::sync::Weak<parking_lot::Mutex<replay::Writer>>,
     ) -> anyhow::Result<(
         mgba::state::State,
         mgba::state::State,
@@ -322,7 +303,6 @@ impl Fastforwarder {
             committed_state: None,
             dirty_time,
             dirty_state: None,
-            replay_writer,
             result: Ok(()),
         });
 
