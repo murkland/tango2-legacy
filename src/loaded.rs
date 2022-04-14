@@ -98,7 +98,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
         for ip in &input_pairs {
             battle
                 .replay_writer()
-                .write_input(local_player_index, &ip)
+                .write_input(local_player_index, ip)
                 .expect("write input");
         }
 
@@ -192,7 +192,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .transport()
             .await
             .expect("no transport")
-            .send_init(self.guard.number, local_delay, &init)
+            .send_init(self.guard.number, local_delay, init)
             .await
             .expect("send init");
         log::info!("sent local init: {:?}", init);
@@ -341,8 +341,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
         };
         let guard = m.lock_battle_state().await;
         BattleStateFacadeGuard {
-            m: &m,
-            guard: guard,
+            m,
+            guard,
             fastforwarder: self.fastforwarder.clone(),
         }
     }
@@ -503,13 +503,13 @@ impl Loaded {
             ));
 
             bn6.install_main_hooks(
-                config.clone(),
+                config,
                 core.as_mut(),
-                handle.clone(),
+                handle,
                 Facade(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
                     match_state: match_state.clone(),
                     joyflags: joyflags.clone(),
-                    gui_state: gui_state.clone(),
+                    gui_state,
                     fastforwarder,
                 }))),
             )

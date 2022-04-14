@@ -12,7 +12,7 @@ pub struct BN6 {
 impl BN6 {
     pub fn new(title: &str) -> Option<BN6> {
         let offsets = match offsets::offsets(title) {
-            Some(o) => o.clone(),
+            Some(o) => o,
             None => return None,
         };
         Some(BN6 {
@@ -540,7 +540,6 @@ impl hooks::Hooks for BN6 {
                     )
                 },
                 {
-                    let mut facade = facade.clone();
                     let handle = handle;
                     (
                         self.offsets.rom.comm_menu_end_battle_entry,
@@ -711,7 +710,6 @@ impl hooks::Hooks for BN6 {
                     )
                 },
                 {
-                    let ff_state = ff_state.clone();
                     (
                         self.offsets.rom.link_is_p2_ret,
                         Box::new(move |mut core| {

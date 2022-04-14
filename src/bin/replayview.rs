@@ -78,7 +78,7 @@ impl Replay {
                     if e.kind() == std::io::ErrorKind::UnexpectedEof {
                         break;
                     }
-                    return Err(e.into());
+                    return Err(e);
                 }
             };
             let remote_tick = r.read_u32::<byteorder::LittleEndian>()?;
@@ -166,7 +166,7 @@ fn main() -> Result<(), anyhow::Error> {
                 return vec![];
             }
 
-            return vec![dirent.path().clone()];
+            return vec![dirent.path()];
         })
         .next()
         .ok_or_else(|| anyhow::format_err!("could not find eligible rom"))?;
