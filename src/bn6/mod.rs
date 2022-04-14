@@ -46,7 +46,7 @@ impl hooks::Hooks for BN6 {
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
         core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
-        facade: loaded::Facade,
+        mut facade: loaded::Facade,
     ) -> mgba::trapper::Trapper {
         mgba::trapper::Trapper::new(
             core,
