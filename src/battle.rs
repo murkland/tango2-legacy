@@ -105,7 +105,7 @@ pub enum NegotiationStatus {
     Failed(anyhow::Error),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NegotiationProgress {
     NotStarted,
     Signalling,

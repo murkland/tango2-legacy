@@ -1,4 +1,4 @@
-use crate::{config, current_input, locales};
+use crate::{battle, config, current_input, locales};
 use egui::{ClippedMesh, Context, TexturesDelta};
 use egui_wgpu_backend::{BackendError, RenderPass, ScreenDescriptor};
 use fluent_templates::Loader;
@@ -151,6 +151,14 @@ impl Gui {
 }
 
 #[derive(Clone, Debug)]
+pub enum ConnectState {
+    PendingInput(ConnectRequest),
+    InputComplete(ConnectRequest),
+    Negotiating(battle::NegotiationProgress),
+    None,
+}
+
+#[derive(Clone, Debug)]
 
 pub enum DialogState<T> {
     Pending(T),
@@ -159,7 +167,7 @@ pub enum DialogState<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ConnectRequestState {
+pub struct ConnectRequest {
     pub code: String,
     pub input_delay: u32,
 }
@@ -171,7 +179,7 @@ pub struct ROMInfo {
 }
 
 pub struct State {
-    connect_request_state: parking_lot::Mutex<DialogState<ConnectRequestState>>,
+    connect_state: parking_lot::Mutex<ConnectState>,
     rom_select_state: parking_lot::Mutex<DialogState<Option<usize>>>,
     show_debug: std::sync::atomic::AtomicBool,
     show_menu: std::sync::atomic::AtomicBool,
@@ -231,7 +239,7 @@ impl State {
         unfiltered_current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     ) -> Self {
         Self {
-            connect_request_state: parking_lot::Mutex::new(DialogState::Closed),
+            connect_state: parking_lot::Mutex::new(ConnectState::None),
             rom_select_state: parking_lot::Mutex::new(DialogState::Closed),
             show_debug: false.into(),
             show_menu: false.into(),
@@ -248,19 +256,19 @@ impl State {
         *rom_list = rom_filenames;
     }
 
-    pub fn request_link_code(&self) -> DialogState<ConnectRequestState> {
-        let mut connect_request_state = self.connect_request_state.lock();
-        if let DialogState::Closed = &*connect_request_state {
-            *connect_request_state = DialogState::Pending(ConnectRequestState {
+    pub fn request_connect(&self) -> ConnectState {
+        let mut connect_state = self.connect_state.lock();
+        if let ConnectState::None = &*connect_state {
+            *connect_state = ConnectState::PendingInput(ConnectRequest {
                 code: "".to_owned(),
                 input_delay: 3,
             });
         }
-        let state = connect_request_state.clone();
-        match *connect_request_state {
-            DialogState::Pending(_) | DialogState::Closed => {}
-            DialogState::Ok(_) => {
-                *connect_request_state = DialogState::Closed;
+        let state = connect_state.clone();
+        match *connect_state {
+            ConnectState::Negotiating(_) | ConnectState::PendingInput(_) | ConnectState::None => {}
+            ConnectState::InputComplete(_) => {
+                *connect_state = ConnectState::Negotiating(battle::NegotiationProgress::NotStarted);
             }
         }
         state
@@ -370,9 +378,9 @@ impl State {
         }
 
         {
-            let mut maybe_connect_request_state = self.connect_request_state.lock();
+            let mut maybe_connect_state = self.connect_state.lock();
 
-            let mut open = matches!(&*maybe_connect_request_state, DialogState::Pending(_));
+            let mut open = !matches!(&*maybe_connect_state, ConnectState::None);
 
             egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code"))
                 .id(egui::Id::new("link-code-window"))
@@ -382,7 +390,7 @@ impl State {
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    let s = if let DialogState::Pending(s) = &mut *maybe_connect_request_state {
+                    let s = if let ConnectState::PendingInput(s) = &mut *maybe_connect_state {
                         s
                     } else {
                         return;
@@ -431,11 +439,11 @@ impl State {
                         .inner;
 
                     if text_ok || button_ok {
-                        *maybe_connect_request_state = DialogState::Ok(s.clone());
+                        *maybe_connect_state = ConnectState::InputComplete(s.clone());
                     }
 
                     if cancel {
-                        *maybe_connect_request_state = DialogState::Closed;
+                        *maybe_connect_state = ConnectState::None;
                     }
                 });
         }

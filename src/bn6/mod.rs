@@ -410,7 +410,6 @@ impl hooks::Hooks for BN6 {
                     let mut facade = facade.clone();
                     let munger = self.munger.clone();
                     let handle = handle.clone();
-                    let gui_state = facade.gui_state();
                     (
                         self.offsets
                             .rom
@@ -429,23 +428,15 @@ impl hooks::Hooks for BN6 {
                                 }
 
                                 if !match_state.is_active() {
-                                    match gui_state.request_link_code() {
-                                        gui::DialogState::Pending(_) => {
-                                            return;
-                                        }
-                                        gui::DialogState::Ok(s) => {
+                                    match facade.request_connect() {
+                                        loaded::ConnectRequestStatus::InputComplete(s) => {
                                             let match_type = munger.match_type(core);
-                                            match_state.start(
-                                                core,
-                                                handle2,
-                                                match_type,
-                                                s,
-                                                gui_state.clone(),
-                                            );
+                                            match_state.start(core, handle2, match_type, s);
                                         }
-                                        gui::DialogState::Closed => {
+                                        loaded::ConnectRequestStatus::None => {
                                             munger.drop_matchmaking_from_comm_menu(core);
                                         }
+                                        loaded::ConnectRequestStatus::Pending => {}
                                     }
                                     return;
                                 }

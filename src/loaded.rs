@@ -318,8 +318,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
         core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
         match_type: u16,
-        s: gui::ConnectRequestState,
-        gui_state: std::sync::Arc<gui::State>,
+        s: gui::ConnectRequest,
     ) {
         let config = self.config.lock();
         let m = battle::Match::new(
@@ -426,6 +425,12 @@ struct InnerFacade {
 #[derive(Clone)]
 pub struct Facade(std::rc::Rc<std::cell::RefCell<InnerFacade>>);
 
+pub enum ConnectRequestStatus {
+    Pending,
+    None,
+    InputComplete(gui::ConnectRequest),
+}
+
 impl Facade {
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
@@ -442,8 +447,12 @@ impl Facade {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn gui_state(&self) -> std::sync::Arc<gui::State> {
-        self.0.borrow().gui_state.clone()
+    pub fn request_connect(&self) -> ConnectRequestStatus {
+        match self.0.borrow().gui_state.request_connect() {
+            gui::ConnectState::PendingInput(_) => ConnectRequestStatus::Pending,
+            gui::ConnectState::InputComplete(s) => ConnectRequestStatus::InputComplete(s),
+            gui::ConnectState::Negotiating(_) | gui::ConnectState::None => ConnectRequestStatus::None,
+        }
     }
 }
 
