@@ -1,4 +1,4 @@
-use crate::{facade, fastforwarder, hooks, loaded};
+use crate::{facade, fastforwarder, hooks};
 
 mod munger;
 mod offsets;
@@ -98,10 +98,6 @@ impl hooks::Hooks for BN6 {
                                     let remote_init = match battle_state.receive_init().await {
                                         Some(remote_init) => remote_init,
                                         None => {
-                                            core.gba_mut()
-                                                .sync_mut()
-                                                .expect("sync")
-                                                .set_fps_target(loaded::EXPECTED_FPS as f32);
                                             break 'abort;
                                         }
                                     };
@@ -112,7 +108,7 @@ impl hooks::Hooks for BN6 {
                                     );
                                     return;
                                 }
-                                match_state.abort();
+                                match_state.abort(core);
                             });
                         }),
                     )
@@ -189,21 +185,18 @@ impl hooks::Hooks for BN6 {
                                         (committed_state, dirty_state, last_input)
                                     } else {
                                         log::error!("could not queue local input within {:?}, dropping connection", TIMEOUT);
-                                        core.gba_mut().sync_mut().expect("sync").set_fps_target(loaded::EXPECTED_FPS as f32);
                                         break 'abort;
                                     };
 
                                     battle_state.set_committed_state(committed_state);
                                     let last_joyflags = last_input.local.joyflags;
-                                    battle_state.set_last_input(last_input);
-
-                                    core.gba_mut().sync_mut().expect("sync").set_fps_target((loaded::EXPECTED_FPS as i32 + battle_state.tps_adjustment()) as f32);
+                                    battle_state.set_last_input(last_input, core);
 
                                     core.load_state(&dirty_state).expect("load dirty state");
                                     core.gba_mut().cpu_mut().set_gpr(4, last_joyflags as i32);
                                     return;
                                 }
-                                match_state.abort();
+                                match_state.abort(core);
                             });
                         }),
                     )
@@ -319,11 +312,11 @@ impl hooks::Hooks for BN6 {
                     let handle = handle.clone();
                     (
                         self.offsets.rom.battle_ending_ret,
-                        Box::new(move |_core| {
+                        Box::new(move |core| {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let match_state = match_state.lock().await;
-                                match_state.end_battle().await;
+                                match_state.end_battle(core).await;
                             });
                         }),
                     )

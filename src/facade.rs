@@ -94,13 +94,21 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .expect("fastforward")
     }
 
-    pub fn set_last_input(&mut self, input: input::Pair<input::Input>) {
+    pub fn set_last_input(
+        &mut self,
+        input: input::Pair<input::Input>,
+        mut core: mgba::core::CoreMutRef,
+    ) {
         let battle = self
             .guard
             .battle
             .as_mut()
             .expect("attempted to get battle information while no battle was active!");
-        battle.set_last_input(input)
+        battle.set_last_input(input);
+        core.gba_mut()
+            .sync_mut()
+            .expect("sync")
+            .set_fps_target((loaded::EXPECTED_FPS as i32 + battle.tps_adjustment()) as f32);
     }
 
     pub fn set_committed_state(&mut self, state: mgba::state::State) {
@@ -239,14 +247,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
     pub fn set_won_last_battle(&mut self, did_win: bool) {
         self.guard.won_last_battle = did_win;
     }
-
-    pub fn tps_adjustment(&self) -> i32 {
-        self.guard
-            .battle
-            .as_ref()
-            .expect("attempted to get battle information while no battle was active!")
-            .tps_adjustment()
-    }
 }
 
 pub struct MatchStateFacadeGuard<'a> {
@@ -319,7 +319,11 @@ impl<'a> MatchStateFacadeGuard<'a> {
         *self.guard = loaded::MatchState::Match(m);
     }
 
-    pub fn abort(&mut self) {
+    pub fn abort(&mut self, mut core: mgba::core::CoreMutRef) {
+        core.gba_mut()
+            .sync_mut()
+            .expect("sync")
+            .set_fps_target(loaded::EXPECTED_FPS as f32);
         *self.guard = loaded::MatchState::Aborted;
     }
 
@@ -346,12 +350,16 @@ impl<'a> MatchStateFacadeGuard<'a> {
         m.start_battle().await;
     }
 
-    pub async fn end_battle(&self) {
+    pub async fn end_battle(&self, mut core: mgba::core::CoreMutRef<'_>) {
         let m = if let loaded::MatchState::Match(m) = &*self.guard {
             m
         } else {
             unreachable!();
         };
+        core.gba_mut()
+            .sync_mut()
+            .expect("sync")
+            .set_fps_target(loaded::EXPECTED_FPS as f32);
         m.end_battle().await;
     }
 
