@@ -154,7 +154,10 @@ impl Gui {
 pub enum ConnectState {
     PendingInput(ConnectRequest),
     InputComplete(ConnectRequest),
-    Negotiating(battle::NegotiationProgress),
+    Negotiating {
+        cancellation_token: tokio_util::sync::CancellationToken,
+        progress: battle::NegotiationProgress,
+    },
     None,
 }
 
@@ -266,9 +269,14 @@ impl State {
         }
         let state = connect_state.clone();
         match *connect_state {
-            ConnectState::Negotiating(_) | ConnectState::PendingInput(_) | ConnectState::None => {}
+            ConnectState::Negotiating { .. }
+            | ConnectState::PendingInput(_)
+            | ConnectState::None => {}
             ConnectState::InputComplete(_) => {
-                *connect_state = ConnectState::Negotiating(battle::NegotiationProgress::NotStarted);
+                *connect_state = ConnectState::Negotiating {
+                    cancellation_token: tokio_util::sync::CancellationToken::new(),
+                    progress: battle::NegotiationProgress::NotStarted,
+                };
             }
         }
         state

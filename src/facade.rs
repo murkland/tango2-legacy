@@ -454,7 +454,7 @@ impl Facade {
         match self.0.borrow().gui_state.request_connect() {
             gui::ConnectState::PendingInput(_) => ConnectRequestStatus::Pending,
             gui::ConnectState::InputComplete(s) => ConnectRequestStatus::InputComplete(s),
-            gui::ConnectState::Negotiating(_) | gui::ConnectState::None => {
+            gui::ConnectState::Negotiating { .. } | gui::ConnectState::None => {
                 ConnectRequestStatus::None
             }
         }
