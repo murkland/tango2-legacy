@@ -27,8 +27,6 @@ struct Input {
 
 struct Replay {
     local_player_index: u8,
-    p1_init: Vec<u8>,
-    p2_init: Vec<u8>,
     state: mgba::state::State,
     input_pairs: Vec<InputPair>,
 }
@@ -55,15 +53,6 @@ impl Replay {
         }
 
         let local_player_index = r.read_u8()?;
-
-        let mut inits = [vec![], vec![]];
-        for _ in 0..2 {
-            let player_index = r.read_u8()?;
-            let mut init = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-            r.read_exact(&mut init)?;
-            inits[player_index as usize] = init;
-        }
-        let [p1_init, p2_init] = inits;
 
         let mut state = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
         r.read_exact(&mut state)?;
@@ -113,8 +102,6 @@ impl Replay {
 
         Ok(Replay {
             local_player_index,
-            p1_init,
-            p2_init,
             state,
             input_pairs,
         })

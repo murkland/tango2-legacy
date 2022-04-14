@@ -751,9 +751,4 @@ impl hooks::Hooks for BN6 {
     fn current_tick(&self, core: mgba::core::CoreMutRef) -> u32 {
         self.munger.current_tick(core)
     }
-
-    fn set_init(&self, core: mgba::core::CoreMutRef, player_index: u8, init: &[u8]) {
-        self.munger
-            .set_player_marshaled_battle_state(core, player_index as u32, init);
-    }
 }

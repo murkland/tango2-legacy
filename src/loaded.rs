@@ -176,18 +176,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .expect("attempted to get battle information while no battle was active!")
             .local_delay();
 
-        let local_player_index = self.local_player_index();
-
-        let replay_writer = self
-            .guard
-            .battle
-            .as_mut()
-            .expect("attempted to get battle information while no battle was active!")
-            .replay_writer();
-        replay_writer
-            .write_init(local_player_index, init)
-            .expect("write init");
-
         self.m
             .transport()
             .await
@@ -199,8 +187,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
     }
 
     pub async fn receive_init(&mut self) -> Option<Vec<u8>> {
-        let remote_player_index = self.remote_player_index();
-
         let init = match self.m.receive_remote_init().await {
             Some(init) => init,
             None => {
@@ -214,17 +200,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .as_mut()
             .expect("attempted to get battle information while no battle was active!")
             .set_remote_delay(init.input_delay);
-
-        let replay_writer = self
-            .guard
-            .battle
-            .as_mut()
-            .expect("attempted to get battle information while no battle was active!")
-            .replay_writer();
-
-        replay_writer
-            .write_init(remote_player_index, &init.marshaled)
-            .expect("write init");
 
         Some(init.marshaled)
     }

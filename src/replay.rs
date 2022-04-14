@@ -22,15 +22,6 @@ impl Writer {
         Ok(Writer { encoder })
     }
 
-    pub fn write_init(&mut self, player_index: u8, init: &[u8]) -> std::io::Result<()> {
-        self.encoder.write_u8(player_index)?;
-        self.encoder
-            .write_u32::<byteorder::LittleEndian>(init.len() as u32)?;
-        self.encoder.write_all(init)?;
-        self.encoder.flush()?;
-        Ok(())
-    }
-
     pub fn write_state(&mut self, state: &mgba::state::State) -> std::io::Result<()> {
         self.encoder
             .write_u32::<byteorder::LittleEndian>(state.as_slice().len() as u32)?;

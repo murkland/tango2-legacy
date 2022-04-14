@@ -15,8 +15,6 @@ pub trait Hooks {
         facade: loaded::Facade,
     ) -> mgba::trapper::Trapper;
 
-    fn set_init(&self, core: mgba::core::CoreMutRef, player_index: u8, init: &[u8]);
-
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);
 
     fn current_tick(&self, core: mgba::core::CoreMutRef) -> u32;
