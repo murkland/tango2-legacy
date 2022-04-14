@@ -1,4 +1,4 @@
-use crate::input;
+use crate::{config, fastforwarder, gui, input, loaded};
 
 pub trait FastforwarderState
 where
@@ -38,6 +38,16 @@ pub trait Hooks {
         &self,
         core: mgba::core::CoreMutRef,
         ff_state: Box<dyn FastforwarderState>,
+    ) -> mgba::trapper::Trapper;
+    fn install_main_hooks(
+        &self,
+        config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
+        core: mgba::core::CoreMutRef,
+        handle: tokio::runtime::Handle,
+        match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+        joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
+        gui_state: std::sync::Weak<gui::State>,
+        fastforwarder: fastforwarder::Fastforwarder,
     ) -> mgba::trapper::Trapper;
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);
     fn in_battle_time(&self, core: mgba::core::CoreMutRef) -> u32;

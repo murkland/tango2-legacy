@@ -1,64 +1,58 @@
-#[derive(Copy, Clone)]
-pub struct EWRAMOffsets {
-    pub player_input_data_arr: u32,
-    pub battle_state: u32,
-    pub joypad: u32,
-    pub local_marshaled_battle_state: u32,
-    pub player_marshaled_state_arr: u32,
-    pub menu_control: u32,
-    pub rng2: u32,
+#[derive(Clone)]
+pub(super) struct EWRAMOffsets {
+    pub(super) player_input_data_arr: u32,
+    pub(super) battle_state: u32,
+    pub(super) local_marshaled_battle_state: u32,
+    pub(super) player_marshaled_state_arr: u32,
+    pub(super) menu_control: u32,
 }
 
-#[derive(Copy, Clone)]
-pub struct ROMOffsets {
-    pub main_read_joyflags: u32,
-    pub get_copy_data_input_state_ret: u32,
-    pub battle_init_call_battle_copy_input_data: u32,
-    pub battle_update_call_battle_copy_input_data: u32,
-    pub battle_run_unpaused_step_cmp_retval: u32,
-    pub battle_copy_input_data_entry: u32,
-    pub battle_init_marshal_ret: u32,
-    pub battle_turn_marshal_ret: u32,
-    pub battle_ending_ret: u32,
-    pub battle_start_ret: u32,
-    pub battle_is_p2_tst: u32,
-    pub link_is_p2_ret: u32,
-    pub comm_menu_run_chatbox_script_entry: u32,
-    pub comm_menu_init_battle_entry: u32,
-    pub comm_menu_handle_link_cable_input_entry: u32,
-    pub comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input: u32,
-    pub comm_menu_wait_for_friend_ret_cancel: u32,
-    pub comm_menu_in_battle_call_comm_menu_handle_link_cable_input: u32,
-    pub comm_menu_end_battle_entry: u32,
+#[derive(Clone)]
+pub(super) struct ROMOffsets {
+    pub(super) main_read_joyflags: u32,
+    pub(super) get_copy_data_input_state_ret: u32,
+    pub(super) battle_init_call_battle_copy_input_data: u32,
+    pub(super) battle_update_call_battle_copy_input_data: u32,
+    pub(super) battle_run_unpaused_step_cmp_retval: u32,
+    pub(super) battle_init_marshal_ret: u32,
+    pub(super) battle_turn_marshal_ret: u32,
+    pub(super) battle_ending_ret: u32,
+    pub(super) battle_start_ret: u32,
+    pub(super) battle_is_p2_tst: u32,
+    pub(super) link_is_p2_ret: u32,
+    pub(super) comm_menu_run_chatbox_script_entry: u32,
+    pub(super) comm_menu_init_battle_entry: u32,
+    pub(super) comm_menu_handle_link_cable_input_entry: u32,
+    pub(super) comm_menu_wait_for_friend_call_comm_menu_handle_link_cable_input: u32,
+    pub(super) comm_menu_wait_for_friend_ret_cancel: u32,
+    pub(super) comm_menu_in_battle_call_comm_menu_handle_link_cable_input: u32,
+    pub(super) comm_menu_end_battle_entry: u32,
 }
 
 static EWRAM_OFFSETS: EWRAMOffsets = EWRAMOffsets {
     player_input_data_arr: 0x02036820,
     battle_state: 0x02034880,
-    joypad: 0x0200a270,
     local_marshaled_battle_state: 0x0203cbe0,
     player_marshaled_state_arr: 0x0203f4a0,
     menu_control: 0x02009a30,
-    rng2: 0x020013f0,
 };
 
-#[derive(Copy, Clone)]
-pub struct Offsets {
-    pub rom: ROMOffsets,
-    pub ewram: EWRAMOffsets,
+#[derive(Clone)]
+pub(super) struct Offsets {
+    pub(super) rom: ROMOffsets,
+    pub(super) ewram: EWRAMOffsets,
 }
 
-pub fn offsets(title: &str) -> Option<Offsets> {
+pub(super) fn offsets(title: &str) -> Option<Offsets> {
     match title {
         "MEGAMAN6_FXX" => Some(Offsets {
-            ewram: EWRAM_OFFSETS,
+            ewram: EWRAM_OFFSETS.clone(),
             rom: ROMOffsets {
                 main_read_joyflags: 0x080003fa,
                 get_copy_data_input_state_ret: 0x0801feec,
                 battle_init_call_battle_copy_input_data: 0x08007902,
                 battle_update_call_battle_copy_input_data: 0x08007a6e,
                 battle_run_unpaused_step_cmp_retval: 0x08008102,
-                battle_copy_input_data_entry: 0x0801feee,
                 battle_init_marshal_ret: 0x0800b2b8,
                 battle_turn_marshal_ret: 0x0800b3d6,
                 battle_start_ret: 0x08007304,
@@ -75,14 +69,13 @@ pub fn offsets(title: &str) -> Option<Offsets> {
             },
         }),
         "MEGAMAN6_GXX" => Some(Offsets {
-            ewram: EWRAM_OFFSETS,
+            ewram: EWRAM_OFFSETS.clone(),
             rom: ROMOffsets {
                 main_read_joyflags: 0x080003fa,
                 get_copy_data_input_state_ret: 0x0801feec,
                 battle_init_call_battle_copy_input_data: 0x08007902,
                 battle_update_call_battle_copy_input_data: 0x08007a6e,
                 battle_run_unpaused_step_cmp_retval: 0x08008102,
-                battle_copy_input_data_entry: 0x0801feee,
                 battle_init_marshal_ret: 0x0800b2b8,
                 battle_turn_marshal_ret: 0x0800b3d6,
                 battle_start_ret: 0x08007304,
@@ -99,14 +92,13 @@ pub fn offsets(title: &str) -> Option<Offsets> {
             },
         }),
         "ROCKEXE6_RXX" => Some(Offsets {
-            ewram: EWRAM_OFFSETS,
+            ewram: EWRAM_OFFSETS.clone(),
             rom: ROMOffsets {
                 main_read_joyflags: 0x080003fa,
                 get_copy_data_input_state_ret: 0x08020300,
                 battle_init_call_battle_copy_input_data: 0x080078ee,
                 battle_update_call_battle_copy_input_data: 0x08007a6a,
                 battle_run_unpaused_step_cmp_retval: 0x0800811a,
-                battle_copy_input_data_entry: 0x08020302,
                 battle_init_marshal_ret: 0x0800b8a0,
                 battle_turn_marshal_ret: 0x0800b9be,
                 battle_start_ret: 0x080072f8,
@@ -123,14 +115,13 @@ pub fn offsets(title: &str) -> Option<Offsets> {
             },
         }),
         "ROCKEXE6_GXX" => Some(Offsets {
-            ewram: EWRAM_OFFSETS,
+            ewram: EWRAM_OFFSETS.clone(),
             rom: ROMOffsets {
                 main_read_joyflags: 0x080003fa,
                 get_copy_data_input_state_ret: 0x08020300,
                 battle_init_call_battle_copy_input_data: 0x080078ee,
                 battle_update_call_battle_copy_input_data: 0x08007a6a,
                 battle_run_unpaused_step_cmp_retval: 0x0800811a,
-                battle_copy_input_data_entry: 0x08020302,
                 battle_init_marshal_ret: 0x0800b8a0,
                 battle_turn_marshal_ret: 0x0800b9be,
                 battle_start_ret: 0x080072f8,

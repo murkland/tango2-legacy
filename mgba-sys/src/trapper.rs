@@ -13,7 +13,7 @@ struct TrapperCStruct {
 }
 
 struct Trap {
-    handler: Box<dyn Fn(core::CoreMutRef)>,
+    handler: Box<dyn FnMut(core::CoreMutRef)>,
     original: u16,
 }
 
@@ -42,9 +42,9 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
     let trapper = components[c::mCPUComponentType_CPU_COMPONENT_MISC_1 as usize] as *mut _
         as *mut TrapperCStruct;
     if imm == TRAPPER_IMM {
-        let r#impl = &(*trapper).r#impl;
+        let r#impl = &mut (*trapper).r#impl;
         let caller = arm_core.as_ref().gpr(15) as u32 - c::WordSize_WORD_SIZE_THUMB * 2;
-        let trap = r#impl.traps.get(&caller).unwrap();
+        let trap = r#impl.traps.get_mut(&caller).unwrap();
         c::ARMRunFake(arm_core.ptr, trap.original as u32);
         (trap.handler)(core::CoreMutRef {
             ptr: r#impl.core_ptr,
@@ -57,7 +57,7 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
 impl Trapper {
     pub fn new(
         mut core: core::CoreMutRef,
-        handlers: Vec<(u32, Box<dyn Fn(core::CoreMutRef)>)>,
+        handlers: Vec<(u32, Box<dyn FnMut(core::CoreMutRef)>)>,
     ) -> Self {
         let mut cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
         cpu_component.init = Some(c_trapper_init);
