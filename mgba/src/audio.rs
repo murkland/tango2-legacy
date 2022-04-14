@@ -56,10 +56,8 @@ pub fn open_stream(
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
     // TODO: Perform smarter config selection, this can choose really low bitrate configs by default.
-    let supported_configs_range = device.supported_output_configs()?;
-
     let mut supported_config = None;
-    while let Some(f) = supported_configs_range.next() {
+    while let Some(f) = device.supported_output_configs()?.next() {
         if f.max_sample_rate().0 > 44100 && f.channels() == 2 {
             supported_config = Some(f.with_sample_rate(cpal::SampleRate(44100)));
         }
