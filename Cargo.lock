@@ -2041,20 +2041,10 @@ name = "mgba"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cpal",
- "log",
- "mgba-sys",
- "parking_lot 0.12.0",
-]
-
-[[package]]
-name = "mgba-sys"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "bindgen 0.57.0",
  "cmake",
  "const-zero",
+ "cpal",
  "lazy_static",
  "log",
  "parking_lot 0.12.0",
