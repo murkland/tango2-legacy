@@ -1,5 +1,16 @@
 use byteorder::ReadBytesExt;
+use clap::Parser;
 
+#[derive(clap::Parser)]
+struct Cli {
+    #[clap(long)]
+    dump: bool,
+
+    #[clap(parse(from_os_str))]
+    path: std::path::PathBuf,
+}
+
+#[derive(Debug)]
 struct InputPair {
     local_tick: u32,
     remote_tick: u32,
@@ -7,6 +18,7 @@ struct InputPair {
     p2_input: Input,
 }
 
+#[derive(Debug)]
 struct Input {
     joyflags: u16,
     custom_screen_state: u8,
@@ -112,9 +124,9 @@ fn main() -> Result<(), anyhow::Error> {
         .filter(Some("replayview"), log::LevelFilter::Info)
         .init();
 
-    let mut f = zstd::stream::read::Decoder::new(std::fs::File::open(
-        std::env::args_os().nth(1).unwrap(),
-    )?)?;
+    let args = Cli::parse();
+
+    let mut f = zstd::stream::read::Decoder::new(std::fs::File::open(args.path)?)?;
 
     let replay = Replay::decode(&mut f)?;
 
@@ -161,6 +173,12 @@ fn main() -> Result<(), anyhow::Error> {
     let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
     let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY).expect("vf");
     core.as_mut().load_rom(vf).expect("load_rom");
+
+    if args.dump {
+        for ip in &replay.input_pairs {
+            println!("{:?}", ip);
+        }
+    }
 
     Ok(())
 }
