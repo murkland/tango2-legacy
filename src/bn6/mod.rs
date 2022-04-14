@@ -471,7 +471,7 @@ impl hooks::Hooks for BN6 {
                                 }
 
                                 match match_state.poll_for_ready().await {
-                                    battle::NegotiationStatus::NotReady => {}
+                                    battle::NegotiationStatus::NotReady(_) => {}
                                     battle::NegotiationStatus::Ready => {
                                         munger.start_battle_from_comm_menu(core);
                                         log::info!("match started");

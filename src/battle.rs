@@ -17,7 +17,7 @@ pub struct BattleState {
 }
 
 enum Negotiation {
-    NotReady,
+    NotReady(NegotiationProgress),
     Negotiated {
         peer_conn: webrtc::peer_connection::RTCPeerConnection,
         dc: std::sync::Arc<datachannel::DataChannel>,
@@ -99,16 +99,24 @@ impl std::error::Error for NegotiationError {}
 
 pub enum NegotiationStatus {
     Ready,
-    NotReady,
+    NotReady(NegotiationProgress),
     MatchTypeMismatch,
     GameMismatch,
     Failed(anyhow::Error),
+}
+
+#[derive(Clone)]
+pub enum NegotiationProgress {
+    NotStarted,
+    Signalling,
+    Handshaking,
 }
 
 impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
+        *self.negotiation.lock().await = Negotiation::NotReady(NegotiationProgress::Signalling);
         let api = webrtc::api::APIBuilder::new().build();
         let (peer_conn, dc, side) = tango_matchmaking::client::connect(
             &self.settings.matchmaking_connect_addr,
@@ -155,6 +163,7 @@ impl MatchImpl {
 
         log::info!("our nonce={:?}, commitment={:?}", nonce, commitment);
 
+        *self.negotiation.lock().await = Negotiation::NotReady(NegotiationProgress::Handshaking);
         dc.send(
             protocol::Packet::Hello(protocol::Hello {
                 protocol_version: protocol::VERSION,
@@ -362,7 +371,9 @@ impl Match {
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
         let r#impl = std::sync::Arc::new(MatchImpl {
-            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady),
+            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
+                NegotiationProgress::NotStarted,
+            )),
             session_id,
             match_type,
             game_title,
@@ -394,7 +405,7 @@ impl Match {
     pub async fn poll_for_ready(&self) -> NegotiationStatus {
         match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
-            Negotiation::NotReady => NegotiationStatus::NotReady,
+            Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
             Negotiation::Err(NegotiationError::GameMismatch) => NegotiationStatus::GameMismatch,
             Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
                 NegotiationStatus::MatchTypeMismatch
@@ -406,7 +417,7 @@ impl Match {
     pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
         let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
-            Negotiation::NotReady => anyhow::bail!("not ready"),
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
         Ok(transport::Transport::new(dc))
@@ -423,7 +434,7 @@ impl Match {
                     _ => unreachable!(),
                 }))
             }
-            Negotiation::NotReady => anyhow::bail!("not ready"),
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         }
     }
