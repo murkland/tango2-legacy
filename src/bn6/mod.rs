@@ -845,4 +845,9 @@ impl hooks::Hooks for BN6 {
     fn in_battle_time(&self, core: mgba::core::CoreMutRef) -> u32 {
         self.munger.in_battle_time(core)
     }
+
+    fn set_init(&self, core: mgba::core::CoreMutRef, player_index: u8, init: &[u8]) {
+        self.munger
+            .set_player_marshaled_battle_state(core, player_index as u32, init);
+    }
 }
