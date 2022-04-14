@@ -129,10 +129,12 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .battle
             .as_mut()
             .expect("attempted to get battle information while no battle was active!");
-        battle
-            .replay_writer()
-            .write_state(&state)
-            .expect("write state");
+        if battle.committed_state().is_none() {
+            battle
+                .replay_writer()
+                .write_state(&state)
+                .expect("write state");
+        }
         battle.set_committed_state(state);
     }
 
