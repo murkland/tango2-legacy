@@ -150,10 +150,11 @@ impl Gui {
     }
 }
 
+#[derive(Clone, Debug)]
+
 pub enum DialogState<T> {
     Pending(T),
     Ok(T),
-    Cancelled,
     Closed,
 }
 
@@ -247,7 +248,7 @@ impl State {
         *rom_list = rom_filenames;
     }
 
-    pub fn open_link_code_dialog(&self) {
+    pub fn request_link_code(&self) -> DialogState<ConnectRequestState> {
         let mut connect_request_state = self.connect_request_state.lock();
         if let DialogState::Closed = &*connect_request_state {
             *connect_request_state = DialogState::Pending(ConnectRequestState {
@@ -255,17 +256,14 @@ impl State {
                 input_delay: 3,
             });
         }
-    }
-
-    pub fn close_link_code_dialog(&self) {
-        let mut connect_request_state = self.connect_request_state.lock();
-        *connect_request_state = DialogState::Closed;
-    }
-
-    pub fn lock_connect_request_state(
-        &self,
-    ) -> parking_lot::MutexGuard<DialogState<ConnectRequestState>> {
-        self.connect_request_state.lock()
+        let state = connect_request_state.clone();
+        match *connect_request_state {
+            DialogState::Pending(_) => {}
+            DialogState::Ok(_) | DialogState::Closed => {
+                *connect_request_state = DialogState::Closed;
+            }
+        }
+        state
     }
 
     pub fn lock_rom_select_state(&self) -> parking_lot::MutexGuard<DialogState<Option<usize>>> {
@@ -437,7 +435,7 @@ impl State {
                     }
 
                     if cancel {
-                        *maybe_connect_request_state = DialogState::Cancelled;
+                        *maybe_connect_request_state = DialogState::Closed;
                     }
                 });
         }

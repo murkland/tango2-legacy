@@ -11,20 +11,11 @@ impl Munger {
         core.raw_write_8(self.offsets.ewram.menu_control + 0x3, -1, 0x00);
     }
 
-    pub(super) fn drop_matchmaking_from_comm_menu(
-        &self,
-        mut core: mgba::core::CoreMutRef,
-        typ: u32,
-    ) {
+    pub(super) fn drop_matchmaking_from_comm_menu(&self, mut core: mgba::core::CoreMutRef) {
         core.raw_write_8(self.offsets.ewram.menu_control + 0x0, -1, 0x18);
         core.raw_write_8(self.offsets.ewram.menu_control + 0x1, -1, 0x3c);
         core.raw_write_8(self.offsets.ewram.menu_control + 0x2, -1, 0x04);
         core.raw_write_8(self.offsets.ewram.menu_control + 0x3, -1, 0x04);
-        if typ != 0 {
-            let cpu = core.gba_mut().cpu_mut();
-            cpu.set_gpr(0, typ as i32);
-            cpu.set_pc(self.offsets.rom.comm_menu_run_chatbox_script_entry);
-        }
     }
 
     pub(super) fn local_custom_screen_state(&self, mut core: mgba::core::CoreMutRef) -> u8 {

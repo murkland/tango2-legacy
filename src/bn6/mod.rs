@@ -430,65 +430,35 @@ impl hooks::Hooks for BN6 {
                                 }
 
                                 if !match_state.is_active() {
-                                    gui_state.open_link_code_dialog();
-                                    match &*gui_state.lock_connect_request_state() {
+                                    match gui_state.request_link_code() {
                                         gui::DialogState::Pending(_) => {
                                             return;
                                         }
                                         gui::DialogState::Ok(s) => {
-                                            let config = config.lock();
-                                            let m = battle::Match::new(
-                                                s.code.to_string(),
-                                                munger.match_type(core),
-                                                core.as_ref().game_title(),
-                                                core.as_ref().crc32(),
-                                                s.input_delay,
-                                                battle::Settings {
-                                                    matchmaking_connect_addr: config
-                                                        .matchmaking
-                                                        .connect_addr
-                                                        .to_string(),
-                                                    make_webrtc_config: {
-                                                        let webrtc = config.webrtc.clone();
-                                                        Box::new(move || {
-                                                            webrtc.make_webrtc_config()
-                                                        })
-                                                    },
-                                                },
+                                            let match_type = munger.match_type(core);
+                                            match_state.start(
+                                                core,
+                                                handle2,
+                                                match_type,
+                                                s,
+                                                gui_state.clone(),
                                             );
-                                            m.start(handle2);
-                                            match_state.set_match(m);
-                                        }
-                                        gui::DialogState::Cancelled => {
-                                            munger.drop_matchmaking_from_comm_menu(core, 0);
                                         }
                                         gui::DialogState::Closed => {
-                                            unreachable!();
+                                            munger.drop_matchmaking_from_comm_menu(core);
                                         }
                                     }
-                                    gui_state.close_link_code_dialog();
                                     return;
                                 }
 
                                 match match_state.poll_for_ready().await {
-                                    battle::NegotiationStatus::NotReady(_) => {}
-                                    battle::NegotiationStatus::Ready => {
+                                    loaded::MatchReadyStatus::NotReady => {}
+                                    loaded::MatchReadyStatus::Ready => {
                                         munger.start_battle_from_comm_menu(core);
                                         log::info!("match started");
                                     }
-                                    battle::NegotiationStatus::MatchTypeMismatch
-                                    | battle::NegotiationStatus::GameMismatch => {
-                                        const WRONG_MODE: u32 = 0x25;
-                                        munger.drop_matchmaking_from_comm_menu(core, WRONG_MODE);
-                                        match_state.end();
-                                    }
-                                    battle::NegotiationStatus::Failed(e) => {
-                                        log::error!("negotiation failed: {}", e);
-                                        const CONNECTION_ERROR: u32 = 0x24;
-                                        munger.drop_matchmaking_from_comm_menu(
-                                            core,
-                                            CONNECTION_ERROR,
-                                        );
+                                    loaded::MatchReadyStatus::Failed => {
+                                        munger.drop_matchmaking_from_comm_menu(core);
                                         match_state.end();
                                     }
                                 }

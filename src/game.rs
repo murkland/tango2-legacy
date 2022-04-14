@@ -336,9 +336,6 @@ impl Game {
                                         gui::DialogState::Ok(Some(index)) => {
                                             selected_rom = Some(&rom_list[*index]);
                                         }
-                                        gui::DialogState::Cancelled => {
-                                            unreachable!();
-                                        }
                                         gui::DialogState::Closed => {}
                                     }
                                     selected_rom

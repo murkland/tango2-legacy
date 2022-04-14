@@ -272,6 +272,13 @@ impl<'a> BattleStateFacadeGuard<'a> {
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, MatchState>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
+    config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
+}
+
+pub enum MatchReadyStatus {
+    Ready,
+    NotReady,
+    Failed,
 }
 
 impl<'a> MatchStateFacadeGuard<'a> {
@@ -291,13 +298,46 @@ impl<'a> MatchStateFacadeGuard<'a> {
         }
     }
 
-    pub async fn poll_for_ready(&self) -> battle::NegotiationStatus {
+    pub async fn poll_for_ready(&self) -> MatchReadyStatus {
         let m = if let MatchState::Match(m) = &*self.guard {
             m
         } else {
             unreachable!();
         };
-        m.poll_for_ready().await
+        match m.poll_for_ready().await {
+            battle::NegotiationStatus::Ready => MatchReadyStatus::Ready,
+            battle::NegotiationStatus::NotReady(_) => MatchReadyStatus::NotReady,
+            battle::NegotiationStatus::MatchTypeMismatch => MatchReadyStatus::Failed,
+            battle::NegotiationStatus::GameMismatch => MatchReadyStatus::Failed,
+            battle::NegotiationStatus::Failed(_) => MatchReadyStatus::Failed,
+        }
+    }
+
+    pub fn start(
+        &mut self,
+        core: mgba::core::CoreMutRef,
+        handle: tokio::runtime::Handle,
+        match_type: u16,
+        s: gui::ConnectRequestState,
+        gui_state: std::sync::Arc<gui::State>,
+    ) {
+        let config = self.config.lock();
+        let m = battle::Match::new(
+            s.code.to_string(),
+            match_type,
+            core.as_ref().game_title(),
+            core.as_ref().crc32(),
+            s.input_delay,
+            battle::Settings {
+                matchmaking_connect_addr: config.matchmaking.connect_addr.to_string(),
+                make_webrtc_config: {
+                    let webrtc = config.webrtc.clone();
+                    Box::new(move || webrtc.make_webrtc_config())
+                },
+            },
+        );
+        m.start(handle);
+        *self.guard = MatchState::Match(m);
     }
 
     pub fn set_match(&mut self, m: battle::Match) {
@@ -366,6 +406,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 pub struct MatchStateFacade {
     guard: std::sync::Arc<tokio::sync::Mutex<MatchState>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
+    config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
 impl MatchStateFacade {
@@ -373,6 +414,7 @@ impl MatchStateFacade {
         MatchStateFacadeGuard {
             guard: self.guard.lock().await,
             fastforwarder: self.fastforwarder.clone(),
+            config: self.config.clone(),
         }
     }
 }
@@ -381,6 +423,7 @@ struct InnerFacade {
     match_state: std::sync::Arc<tokio::sync::Mutex<MatchState>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
+    config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -392,6 +435,7 @@ impl Facade {
         MatchStateFacade {
             guard: self.0.borrow().match_state.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
+            config: self.0.borrow().config.clone(),
         }
     }
 
@@ -478,12 +522,13 @@ impl Loaded {
             ));
 
             bn6.install_main_hooks(
-                config,
+                config.clone(),
                 core.as_mut(),
                 handle,
                 Facade(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
                     match_state: match_state.clone(),
                     joyflags: joyflags.clone(),
+                    config: config.clone(),
                     gui_state,
                     fastforwarder,
                 }))),
