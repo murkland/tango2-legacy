@@ -251,10 +251,6 @@ impl Fastforwarder {
         mgba::state::State,
         input::Pair<input::Input>,
     )> {
-        self.core.as_mut().load_state(state)?;
-        let start_in_battle_time = self.bn6.in_battle_time(self.core.as_mut());
-        let commit_time = start_in_battle_time + commit_pairs.len() as u32;
-
         let input_pairs = commit_pairs
             .iter()
             .cloned()
@@ -288,13 +284,16 @@ impl Fastforwarder {
             .collect::<std::collections::VecDeque<input::Pair<input::Input>>>();
         let last_input = input_pairs.back().expect("last input pair").clone();
 
-        let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
-
+        self.core.as_mut().load_state(state)?;
         self.core
             .as_mut()
             .gba_mut()
             .cpu_mut()
             .set_pc(self.bn6.offsets.rom.main_read_joyflags);
+
+        let start_in_battle_time = self.bn6.in_battle_time(self.core.as_mut());
+        let commit_time = start_in_battle_time + commit_pairs.len() as u32;
+        let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
         *self.state.borrow_mut() = Some(State {
             local_player_index,
