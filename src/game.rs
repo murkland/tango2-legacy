@@ -176,25 +176,6 @@ impl Game {
         })
     }
 
-    pub fn load(&self, rom_filename: &std::path::Path) -> anyhow::Result<()> {
-        let save_filename = rom_filename.with_extension("sav");
-
-        *self.loaded.lock() = {
-            let handle = self.rt.handle().clone();
-            Some(loaded::Loaded::new(
-                rom_filename,
-                &save_filename,
-                handle,
-                &self.audio_device,
-                self.config.clone(),
-                self.gui.state(),
-                self.vbuf.clone(),
-                self.emu_tps_counter.clone(),
-            )?)
-        };
-        Ok(())
-    }
-
     pub fn run(mut self) {
         let mut rom_list: Vec<gui::ROMInfo> = std::fs::read_dir("roms")
             .expect("roms")
@@ -239,12 +220,8 @@ impl Game {
             .collect();
         rom_list.sort_unstable_by(|x, y| x.path.cmp(&y.path));
 
-        // Probe for ROMs.
-        {
-            let gui_state = self.gui.state();
-            gui_state.set_rom_list(rom_list.clone());
-            gui_state.open_rom_select_dialog();
-        }
+        let gui_state = self.gui.state();
+        gui_state.set_rom_list(rom_list.clone());
 
         let current_input = self.current_input.clone();
         let unfiltered_current_input = self.unfiltered_current_input.clone();
@@ -281,8 +258,9 @@ impl Game {
                     winit::event::Event::MainEventsCleared => {
                         {
                             let current_input = current_input.borrow();
+                            let mut loaded = self.loaded.lock();
 
-                            if let Some(loaded) = &*self.loaded.lock() {
+                            if let Some(loaded) = &*loaded {
                                 let mut core = loaded.lock_core();
                                 let config = self.config.lock();
 
@@ -320,21 +298,19 @@ impl Game {
 
                                 core.as_mut().set_keys(keys);
                                 loaded.set_joyflags(keys);
-                            }
-
-                            {
+                            } else {
                                 let gui_state = self.gui.state();
 
                                 let selected_rom = {
                                     let mut selected_rom = None;
-                                    let rom_select_state = gui_state.lock_rom_select_state();
-                                    match &*rom_select_state {
+                                    let rom_select_state = gui_state.request_rom();
+                                    match rom_select_state {
                                         gui::DialogState::Pending(_) => {}
                                         gui::DialogState::Ok(None) => {
                                             unreachable!();
                                         }
                                         gui::DialogState::Ok(Some(index)) => {
-                                            selected_rom = Some(&rom_list[*index]);
+                                            selected_rom = Some(&rom_list[index]);
                                         }
                                         gui::DialogState::Closed => {}
                                     }
@@ -343,8 +319,24 @@ impl Game {
 
                                 if let Some(selected_rom) = selected_rom {
                                     log::info!("loading rom: {:?}", selected_rom);
-                                    self.load(&selected_rom.path).expect("load rom");
-                                    gui_state.close_rom_select_dialog();
+                                    let save_filename = selected_rom.path.with_extension("sav");
+
+                                    *loaded = {
+                                        let handle = self.rt.handle().clone();
+                                        Some(
+                                            loaded::Loaded::new(
+                                                &selected_rom.path,
+                                                &save_filename,
+                                                handle,
+                                                &self.audio_device,
+                                                self.config.clone(),
+                                                self.gui.state(),
+                                                self.vbuf.clone(),
+                                                self.emu_tps_counter.clone(),
+                                            )
+                                            .expect("loaded"),
+                                        )
+                                    };
                                 }
                             }
 

@@ -1,4 +1,4 @@
-use crate::{battle, config, fastforwarder, gui, hooks, loaded};
+use crate::{config, fastforwarder, gui, hooks, loaded};
 
 mod munger;
 mod offsets;

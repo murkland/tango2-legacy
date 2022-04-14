@@ -258,28 +258,27 @@ impl State {
         }
         let state = connect_request_state.clone();
         match *connect_request_state {
-            DialogState::Pending(_) => {}
-            DialogState::Ok(_) | DialogState::Closed => {
+            DialogState::Pending(_) | DialogState::Closed => {}
+            DialogState::Ok(_) => {
                 *connect_request_state = DialogState::Closed;
             }
         }
         state
     }
 
-    pub fn lock_rom_select_state(&self) -> parking_lot::MutexGuard<DialogState<Option<usize>>> {
-        self.rom_select_state.lock()
-    }
-
-    pub fn open_rom_select_dialog(&self) {
+    pub fn request_rom(&self) -> DialogState<Option<usize>> {
         let mut rom_select_state = self.rom_select_state.lock();
         if let DialogState::Closed = &*rom_select_state {
             *rom_select_state = DialogState::Pending(None);
         }
-    }
-
-    pub fn close_rom_select_dialog(&self) {
-        let mut rom_select_state = self.rom_select_state.lock();
-        *rom_select_state = DialogState::Closed;
+        let state = rom_select_state.clone();
+        match *rom_select_state {
+            DialogState::Pending(_) | DialogState::Closed => {}
+            DialogState::Ok(_) => {
+                *rom_select_state = DialogState::Closed;
+            }
+        }
+        state
     }
 
     pub fn set_debug_stats_getter(&self, getter: Option<Box<dyn Fn() -> Option<DebugStats>>>) {
@@ -386,8 +385,9 @@ impl State {
                     let s = if let DialogState::Pending(s) = &mut *maybe_connect_request_state {
                         s
                     } else {
-                        unreachable!();
+                        return;
                     };
+
                     ui.label(
                         locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.description"),
                     );

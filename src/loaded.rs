@@ -340,10 +340,6 @@ impl<'a> MatchStateFacadeGuard<'a> {
         *self.guard = MatchState::Match(m);
     }
 
-    pub fn set_match(&mut self, m: battle::Match) {
-        *self.guard = MatchState::Match(m);
-    }
-
     pub fn abort(&mut self) {
         *self.guard = MatchState::Aborted;
     }
