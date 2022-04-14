@@ -61,19 +61,19 @@ impl hooks::Hooks for BN6 {
                         self.offsets.rom.battle_init_call_battle_copy_input_data,
                         Box::new(move |mut core| {
                             handle.block_on(async {
-                            let match_state = match_state.lock().await;
-                            let m = if let loaded::MatchState::Match(m) = &*match_state {
-                                m
-                            } else {
-                                return;
-                            };
+                                let match_state = match_state.lock().await;
+                                let m = if let loaded::MatchState::Match(m) = &*match_state {
+                                    m
+                                } else {
+                                    return;
+                                };
 
-                            core.gba_mut().cpu_mut().set_gpr(0, 0);
-                            let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
-                            core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                                core.gba_mut().cpu_mut().set_gpr(0, 0);
+                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
+                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                            m.lock_battle_state().await.battle.as_ref().expect("attempted to get p2 battle information while no battle was active!");
-                        });
+                                m.lock_battle_state().await.battle.as_ref().expect("attempted to get p2 battle information while no battle was active!");
+                            });
                         }),
                     )
                 },
@@ -149,7 +149,7 @@ impl hooks::Hooks for BN6 {
                                 let mut battle_state = m.lock_battle_state().await;
                                 let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
 
-                                log::info!("turn data marshaled on {}", munger.in_battle_time(core));
+                                log::info!("turn data marshaled on {}", munger.current_tick(core));
 
                                 let local_turn = munger.local_marshaled_battle_state(core);
                                 battle.add_local_pending_turn(local_turn);
@@ -188,13 +188,13 @@ impl hooks::Hooks for BN6 {
                                         let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
                                         let mut replay_writer = replay_writer.lock();
 
-                                        let in_battle_time = munger.in_battle_time(core);
+                                        let current_tick = munger.current_tick(core);
                                         if battle.committed_state().is_none() {
                                             for i in 0..battle.local_delay() {
                                                 battle
                                                     .add_local_input(
                                                         input::Input {
-                                                            local_tick: in_battle_time + i,
+                                                            local_tick: current_tick + i,
                                                             remote_tick: 0,
                                                             joyflags: 0,
                                                             custom_screen_state: 0,
@@ -207,7 +207,7 @@ impl hooks::Hooks for BN6 {
                                                 battle
                                                     .add_remote_input(
                                                         input::Input {
-                                                            local_tick: in_battle_time + i,
+                                                            local_tick: current_tick + i,
                                                             remote_tick: 0,
                                                             joyflags: 0,
                                                             custom_screen_state: 0,
@@ -226,7 +226,7 @@ impl hooks::Hooks for BN6 {
                                         }
 
                                         let joyflags: u16 = joyflags.load(std::sync::atomic::Ordering::Relaxed) as u16;
-                                        let local_tick = in_battle_time + battle.local_delay();
+                                        let local_tick = current_tick + battle.local_delay();
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
                                         let remote_tick = last_committed_remote_input.local_tick;
@@ -276,9 +276,9 @@ impl hooks::Hooks for BN6 {
                                         let tps = loaded::EXPECTED_FPS as i32 + (remote_tick as i32 - local_tick as i32 - battle.local_delay() as i32) - (last_committed_remote_input.remote_tick as i32 - last_committed_remote_input.local_tick as i32 - battle.remote_delay() as i32);
                                         core.gba_mut().sync_mut().expect("sync").set_fps_target(tps as f32);
 
-                                        let new_in_battle_time = munger.in_battle_time(core);
-                                        if new_in_battle_time != in_battle_time {
-                                            panic!("fastforwarder moved battle time: expected {}, got {}", in_battle_time, new_in_battle_time);
+                                        let new_current_tick = munger.current_tick(core);
+                                        if new_current_tick != current_tick {
+                                            panic!("fastforwarder moved battle time: expected {}, got {}", current_tick, new_current_tick);
                                         }
 
                                         core.load_state(&dirty_state).expect("load dirty state");
@@ -675,15 +675,15 @@ impl hooks::Hooks for BN6 {
                     (
                         self.offsets.rom.main_read_joyflags,
                         Box::new(move |mut core| {
-                            let in_battle_time = munger.in_battle_time(core);
+                            let current_tick = munger.current_tick(core);
 
-                            if in_battle_time == ff_state.commit_time() {
+                            if current_tick == ff_state.commit_time() {
                                 ff_state.set_committed_state(
                                     core.save_state().expect("save committed state"),
                                 );
                             }
 
-                            if in_battle_time == ff_state.dirty_time() {
+                            if current_tick == ff_state.dirty_time() {
                                 ff_state
                                     .set_dirty_state(core.save_state().expect("save dirty state"));
                             }
@@ -698,18 +698,18 @@ impl hooks::Hooks for BN6 {
                             if ip.local.local_tick != ip.remote.local_tick {
                                 ff_state.set_anyhow_error(anyhow::anyhow!(
                                     "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                    in_battle_time,
+                                    current_tick,
                                     ip.local.local_tick,
                                     ip.remote.local_tick
                                 ));
                                 return;
                             }
 
-                            if ip.local.local_tick != in_battle_time {
+                            if ip.local.local_tick != current_tick {
                                 ff_state.set_anyhow_error(anyhow::anyhow!(
                                     "input tick != in battle tick: {} != {}",
                                     ip.local.local_tick,
-                                    in_battle_time,
+                                    current_tick,
                                 ));
                                 return;
                             }
@@ -726,7 +726,7 @@ impl hooks::Hooks for BN6 {
                     (
                         self.offsets.rom.battle_update_call_battle_copy_input_data,
                         Box::new(move |mut core| {
-                            let in_battle_time = munger.in_battle_time(core);
+                            let current_tick = munger.current_tick(core);
 
                             let ip = match ff_state.pop_input_pair() {
                                 Some(ip) => ip,
@@ -742,18 +742,18 @@ impl hooks::Hooks for BN6 {
                             if ip.local.local_tick != ip.remote.local_tick {
                                 ff_state.set_anyhow_error(anyhow::anyhow!(
                                     "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                    in_battle_time,
+                                    current_tick,
                                     ip.local.local_tick,
                                     ip.local.local_tick
                                 ));
                                 return;
                             }
 
-                            if ip.local.local_tick != in_battle_time {
+                            if ip.local.local_tick != current_tick {
                                 ff_state.set_anyhow_error(anyhow::anyhow!(
                                     "input tick != in battle tick: {} != {}",
                                     ip.local.local_tick,
-                                    in_battle_time,
+                                    current_tick,
                                 ));
                                 return;
                             }
@@ -842,8 +842,8 @@ impl hooks::Hooks for BN6 {
             .set_pc(self.offsets.rom.main_read_joyflags);
     }
 
-    fn in_battle_time(&self, core: mgba::core::CoreMutRef) -> u32 {
-        self.munger.in_battle_time(core)
+    fn current_tick(&self, core: mgba::core::CoreMutRef) -> u32 {
+        self.munger.current_tick(core)
     }
 
     fn set_init(&self, core: mgba::core::CoreMutRef, player_index: u8, init: &[u8]) {

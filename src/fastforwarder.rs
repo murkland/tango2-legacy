@@ -147,9 +147,9 @@ impl Fastforwarder {
         self.core.as_mut().load_state(state)?;
         self.hooks.prepare_for_fastforward(self.core.as_mut());
 
-        let start_in_battle_time = self.hooks.in_battle_time(self.core.as_mut());
-        let commit_time = start_in_battle_time + commit_pairs.len() as u32;
-        let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
+        let start_current_tick = self.hooks.current_tick(self.core.as_mut());
+        let commit_time = start_current_tick + commit_pairs.len() as u32;
+        let dirty_time = start_current_tick + input_pairs.len() as u32 - 1;
 
         *self.state.0.borrow_mut() = Some(InnerState {
             local_player_index,

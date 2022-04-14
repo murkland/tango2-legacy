@@ -22,5 +22,5 @@ pub trait Hooks {
 
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);
 
-    fn in_battle_time(&self, core: mgba::core::CoreMutRef) -> u32;
+    fn current_tick(&self, core: mgba::core::CoreMutRef) -> u32;
 }

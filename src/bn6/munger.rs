@@ -80,7 +80,7 @@ impl Munger {
         core.raw_read_16(self.offsets.ewram.menu_control + 0x12, -1)
     }
 
-    pub(super) fn in_battle_time(&self, mut core: mgba::core::CoreMutRef) -> u32 {
+    pub(super) fn current_tick(&self, mut core: mgba::core::CoreMutRef) -> u32 {
         core.raw_read_32(self.offsets.ewram.battle_state + 0x60, -1)
     }
 }
