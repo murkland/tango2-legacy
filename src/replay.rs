@@ -7,16 +7,16 @@ pub struct Writer {
 }
 
 const HEADER: &[u8] = b"TOOT";
-const VERSION: u8 = 0x09;
+const VERSION: u8 = 0x0a;
 
 impl Writer {
     pub fn new(
-        writer: Box<dyn std::io::Write + Send>,
+        mut writer: Box<dyn std::io::Write + Send>,
         local_player_index: u8,
     ) -> std::io::Result<Self> {
+        writer.write_all(HEADER)?;
+        writer.write_u8(VERSION)?;
         let mut encoder = zstd::Encoder::new(writer, 3)?.auto_finish();
-        encoder.write_all(HEADER)?;
-        encoder.write_u8(VERSION)?;
         encoder.write_u8(local_player_index)?;
         encoder.flush()?;
         Ok(Writer { encoder })
