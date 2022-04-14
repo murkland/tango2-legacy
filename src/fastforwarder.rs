@@ -1,7 +1,7 @@
-use crate::bn6;
+use crate::hooks;
 use crate::input;
 
-struct State {
+struct InnerState {
     local_player_index: u8,
     input_pairs: std::collections::VecDeque<input::Pair<input::Input>>,
     commit_time: u32,
@@ -13,13 +13,69 @@ struct State {
 
 pub struct Fastforwarder {
     core: mgba::core::Core,
+    state: State,
+    hooks: Box<dyn hooks::Hooks>,
     _trapper: mgba::trapper::Trapper,
-    bn6: bn6::BN6,
-    state: std::rc::Rc<std::cell::RefCell<Option<State>>>,
+}
+
+#[derive(Clone)]
+struct State(std::rc::Rc<std::cell::RefCell<Option<InnerState>>>);
+
+impl hooks::FastforwarderState for State {
+    fn commit_time(&self) -> u32 {
+        self.0.borrow().as_ref().expect("commit time").commit_time
+    }
+
+    fn set_committed_state(&self, state: mgba::state::State) {
+        self.0
+            .borrow_mut()
+            .as_mut()
+            .expect("committed state")
+            .committed_state = Some(state);
+    }
+
+    fn dirty_time(&self) -> u32 {
+        self.0.borrow().as_ref().expect("dirty time").dirty_time
+    }
+
+    fn set_dirty_state(&self, state: mgba::state::State) {
+        self.0
+            .borrow_mut()
+            .as_mut()
+            .expect("dirty state")
+            .dirty_state = Some(state);
+    }
+
+    fn peek_input_pair(&self) -> Option<input::Pair<input::Input>> {
+        self.0
+            .borrow()
+            .as_ref()
+            .expect("input pairs")
+            .input_pairs
+            .front()
+            .cloned()
+    }
+
+    fn pop_input_pair(&self) -> Option<input::Pair<input::Input>> {
+        self.0
+            .borrow_mut()
+            .as_mut()
+            .expect("input pairs")
+            .input_pairs
+            .pop_front()
+    }
+
+    fn set_anyhow_error(&self, err: anyhow::Error) {
+        self.0.borrow_mut().as_mut().expect("error").result = Err(err);
+    }
+
+    fn local_player_index(&self) -> u8 {
+        self.0.borrow().as_ref().expect("error").local_player_index
+    }
 }
 
 impl Fastforwarder {
-    pub fn new(rom_path: &std::path::Path, bn6: bn6::BN6) -> anyhow::Result<Self> {
+    pub fn new(rom_path: &std::path::Path, hooks: Box<dyn hooks::Hooks>) -> anyhow::Result<Self> {
         let mut core = {
             let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
@@ -27,215 +83,19 @@ impl Fastforwarder {
             core
         };
 
-        let state =
-            std::rc::Rc::<std::cell::RefCell<Option<State>>>::new(std::cell::RefCell::new(None));
+        let state = State(std::rc::Rc::new(
+            std::cell::RefCell::<Option<InnerState>>::new(None),
+        ));
 
-        let trapper = {
-            mgba::trapper::Trapper::new(
-                &mut core,
-                vec![
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        let state = std::rc::Rc::clone(&state);
-                        (
-                            bn6.offsets.rom.main_read_joyflags,
-                            Box::new(move |mut core| {
-                                let in_battle_time = bn6.in_battle_time(core);
-                                let mut state = state.borrow_mut();
-
-                                let commit_time = state.as_ref().expect("state").commit_time;
-
-                                if in_battle_time == commit_time {
-                                    state.as_mut().expect("state").committed_state =
-                                        Some(core.save_state().expect("save committed state"));
-                                }
-
-                                if in_battle_time == state.as_ref().expect("state").dirty_time {
-                                    state.as_mut().expect("state").dirty_state =
-                                        Some(core.save_state().expect("save dirty state"));
-                                }
-
-                                if state.as_ref().expect("state").input_pairs.is_empty() {
-                                    return;
-                                }
-
-                                let ip = state
-                                    .as_mut()
-                                    .expect("state")
-                                    .input_pairs
-                                    .front()
-                                    .expect("first input pair")
-                                    .clone();
-                                if ip.local.local_tick != ip.remote.local_tick {
-                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
-                                        "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                        in_battle_time,
-                                        ip.local.local_tick,
-                                        ip.remote.local_tick
-                                    ));
-                                    return;
-                                }
-
-                                if ip.local.local_tick != in_battle_time {
-                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
-                                        "input tick != in battle tick: {} != {}",
-                                        ip.local.local_tick,
-                                        in_battle_time,
-                                    ));
-                                    return;
-                                }
-
-                                core.gba_mut()
-                                    .cpu_mut()
-                                    .set_gpr(4, ip.local.joyflags as i32);
-                            }),
-                        )
-                    },
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        let state = std::rc::Rc::clone(&state);
-                        (
-                            bn6.offsets.rom.battle_update_call_battle_copy_input_data,
-                            Box::new(move |mut core| {
-                                let in_battle_time = bn6.in_battle_time(core);
-                                let mut state = state.borrow_mut();
-
-                                let commit_time = state.as_ref().expect("state").commit_time;
-
-                                if state.as_ref().expect("state").input_pairs.is_empty() {
-                                    return;
-                                }
-
-                                core.gba_mut().cpu_mut().set_gpr(0, 0);
-                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
-
-                                let ip = state
-                                    .as_mut()
-                                    .expect("state")
-                                    .input_pairs
-                                    .pop_front()
-                                    .expect("first input pair");
-
-                                if ip.local.local_tick != ip.remote.local_tick {
-                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
-                                        "p1 tick != p2 tick (in battle tick = {}): {} != {}",
-                                        in_battle_time,
-                                        ip.local.local_tick,
-                                        ip.local.local_tick
-                                    ));
-                                    return;
-                                }
-
-                                if ip.local.local_tick != in_battle_time {
-                                    state.as_mut().expect("state").result = Err(anyhow::anyhow!(
-                                        "input tick != in battle tick: {} != {}",
-                                        ip.local.local_tick,
-                                        in_battle_time,
-                                    ));
-                                    return;
-                                }
-
-                                let local_player_index =
-                                    state.as_ref().expect("state").local_player_index;
-                                let remote_player_index = 1 - local_player_index;
-
-                                bn6.set_player_input_state(
-                                    core,
-                                    local_player_index as u32,
-                                    ip.local.joyflags,
-                                    ip.local.custom_screen_state,
-                                );
-                                if !ip.local.turn.is_empty() {
-                                    bn6.set_player_marshaled_battle_state(
-                                        core,
-                                        local_player_index as u32,
-                                        ip.local.turn.as_slice(),
-                                    );
-                                    if in_battle_time < commit_time {
-                                        log::info!("p1 turn committed at tick {}", in_battle_time);
-                                    }
-                                }
-
-                                bn6.set_player_input_state(
-                                    core,
-                                    remote_player_index as u32,
-                                    ip.remote.joyflags,
-                                    ip.remote.custom_screen_state,
-                                );
-                                if !ip.remote.turn.is_empty() {
-                                    bn6.set_player_marshaled_battle_state(
-                                        core,
-                                        remote_player_index as u32,
-                                        ip.remote.turn.as_slice(),
-                                    );
-                                    if in_battle_time < commit_time {
-                                        log::info!("p2 turn committed at tick {}", in_battle_time);
-                                    }
-                                }
-                            }),
-                        )
-                    },
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        let state = std::rc::Rc::clone(&state);
-                        (
-                            bn6.offsets.rom.battle_is_p2_tst,
-                            Box::new(move |mut core| {
-                                let state = state.borrow();
-                                core.gba_mut().cpu_mut().set_gpr(
-                                    0,
-                                    state.as_ref().expect("state").local_player_index as i32,
-                                );
-                            }),
-                        )
-                    },
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        let state = std::rc::Rc::clone(&state);
-                        (
-                            bn6.offsets.rom.link_is_p2_ret,
-                            Box::new(move |mut core| {
-                                let state = state.borrow();
-                                core.gba_mut().cpu_mut().set_gpr(
-                                    0,
-                                    state.as_ref().expect("state").local_player_index as i32,
-                                );
-                            }),
-                        )
-                    },
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        (
-                            bn6.offsets
-                                .rom
-                                .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
-                            Box::new(move |mut core| {
-                                let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
-                                core.gba_mut().cpu_mut().set_pc(r15 + 4);
-                            }),
-                        )
-                    },
-                    {
-                        let bn6 = bn6::BN6::clone(&bn6);
-                        (
-                            bn6.offsets.rom.get_copy_data_input_state_ret,
-                            Box::new(move |mut core| {
-                                core.gba_mut().cpu_mut().set_gpr(0, 2);
-                            }),
-                        )
-                    },
-                ],
-            )
-        };
+        let trapper = hooks.install_fastforwarder_hooks(core.as_mut(), Box::new(state.clone()));
 
         core.as_mut().reset();
 
         Ok(Fastforwarder {
             core,
-            _trapper: trapper,
-            bn6,
             state,
+            hooks,
+            _trapper: trapper,
         })
     }
 
@@ -285,17 +145,13 @@ impl Fastforwarder {
         let last_input = input_pairs.back().expect("last input pair").clone();
 
         self.core.as_mut().load_state(state)?;
-        self.core
-            .as_mut()
-            .gba_mut()
-            .cpu_mut()
-            .set_pc(self.bn6.offsets.rom.main_read_joyflags);
+        self.hooks.prepare_for_fastforward(self.core.as_mut());
 
-        let start_in_battle_time = self.bn6.in_battle_time(self.core.as_mut());
+        let start_in_battle_time = self.hooks.in_battle_time(self.core.as_mut());
         let commit_time = start_in_battle_time + commit_pairs.len() as u32;
         let dirty_time = start_in_battle_time + input_pairs.len() as u32 - 1;
 
-        *self.state.borrow_mut() = Some(State {
+        *self.state.0.borrow_mut() = Some(InnerState {
             local_player_index,
             input_pairs,
             commit_time,
@@ -307,6 +163,7 @@ impl Fastforwarder {
 
         while self
             .state
+            .0
             .borrow()
             .as_ref()
             .unwrap()
@@ -314,21 +171,30 @@ impl Fastforwarder {
             .is_none()
             || self
                 .state
+                .0
                 .borrow()
                 .as_ref()
                 .expect("state")
                 .dirty_state
                 .is_none()
         {
-            self.state.borrow_mut().as_mut().expect("state").result = Ok(());
+            self.state.0.borrow_mut().as_mut().expect("state").result = Ok(());
             self.core.as_mut().run_frame();
-            if self.state.borrow().as_ref().expect("state").result.is_err() {
-                let state = self.state.take().expect("state");
+            if self
+                .state
+                .0
+                .borrow()
+                .as_ref()
+                .expect("state")
+                .result
+                .is_err()
+            {
+                let state = self.state.0.take().expect("state");
                 return Err(state.result.expect_err("state result err"));
             }
         }
 
-        let state = self.state.take().expect("state");
+        let state = self.state.0.take().expect("state");
         Ok((
             state.committed_state.expect("committed state"),
             state.dirty_state.expect("dirty state"),

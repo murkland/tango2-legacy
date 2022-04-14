@@ -55,7 +55,10 @@ unsafe extern "C" fn c_trapper_bkpt16(arm_core: *mut c::ARMCore, imm: i32) {
 }
 
 impl Trapper {
-    pub fn new(core: &mut core::Core, handlers: Vec<(u32, Box<dyn Fn(core::CoreMutRef)>)>) -> Self {
+    pub fn new(
+        mut core: core::CoreMutRef,
+        handlers: Vec<(u32, Box<dyn Fn(core::CoreMutRef)>)>,
+    ) -> Self {
         let mut cpu_component = unsafe { std::mem::zeroed::<c::mCPUComponent>() };
         cpu_component.init = Some(c_trapper_init);
         cpu_component.deinit = Some(c_trapper_deinit);
@@ -69,7 +72,7 @@ impl Trapper {
         });
 
         unsafe {
-            let arm_core = core.as_mut().gba_mut().cpu_mut().ptr;
+            let arm_core = core.gba_mut().cpu_mut().ptr;
             trapper_c_struct.real_bkpt16 = (*arm_core).irqh.bkpt16;
             let components = std::slice::from_raw_parts_mut(
                 (*arm_core).components,
@@ -87,9 +90,8 @@ impl Trapper {
                     panic!("attempting to install a second trap at 0x{:08x}", addr);
                 }
                 std::collections::hash_map::Entry::Vacant(e) => {
-                    let original = core.as_mut().raw_read_16(addr, -1);
-                    core.as_mut()
-                        .raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
+                    let original = core.raw_read_16(addr, -1);
+                    core.raw_write_16(addr, -1, (0xbe00 | TRAPPER_IMM) as u16);
                     e.insert(Trap { original, handler });
                 }
             };

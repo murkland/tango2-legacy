@@ -94,7 +94,7 @@ impl Loaded {
             let joyflags = joyflags.clone();
             let bn6 = bn6;
             mgba::trapper::Trapper::new(
-                &mut core,
+                core.as_mut(),
                 vec![
                     {
                         let match_state = match_state.clone();
@@ -121,7 +121,7 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_init_marshal_ret,
@@ -142,10 +142,10 @@ impl Loaded {
                                         let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
                                         let mut replay_writer = replay_writer.lock();
 
-                                        let local_init = bn6.local_marshaled_battle_state(core);
+                                        let local_init = munger.local_marshaled_battle_state(core);
                                         m.send_init(battle_number, battle.local_delay(), &local_init).await.expect("send init");
                                         log::info!("sent local init");
-                                        bn6.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, local_init.as_slice());
+                                        munger.set_player_marshaled_battle_state(core, battle.local_player_index() as u32, local_init.as_slice());
 
                                         let remote_init = match m.receive_remote_init().await {
                                             Some(remote_init) => remote_init,
@@ -155,7 +155,7 @@ impl Loaded {
                                             }
                                         };
                                         log::info!("received remote init: {:?}", remote_init);
-                                        bn6.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, remote_init.marshaled.as_slice());
+                                        munger.set_player_marshaled_battle_state(core, battle.remote_player_index() as u32, remote_init.marshaled.as_slice());
                                         battle.set_remote_delay(remote_init.input_delay);
 
                                         let (p1_init, p2_init) = if battle.local_player_index() == 0 {
@@ -175,7 +175,7 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_turn_marshal_ret,
@@ -191,9 +191,9 @@ impl Loaded {
                                     let mut battle_state = m.lock_battle_state().await;
                                     let battle = battle_state.battle.as_mut().expect("attempted to get p2 battle information while no battle was active!");
 
-                                    log::info!("turn data marshaled on {}", bn6.in_battle_time(core));
+                                    log::info!("turn data marshaled on {}", munger.in_battle_time(core));
 
-                                    let local_turn = bn6.local_marshaled_battle_state(core);
+                                    let local_turn = munger.local_marshaled_battle_state(core);
                                     battle.add_local_pending_turn(local_turn);
                                 });
                             }),
@@ -201,10 +201,10 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         let fastforwarder = parking_lot::Mutex::new(
-                            fastforwarder::Fastforwarder::new(&rom_path, bn6.clone())?,
+                            fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?,
                         );
                         (
                             bn6.offsets.rom.main_read_joyflags,
@@ -233,7 +233,7 @@ impl Loaded {
                                         let replay_writer = battle.replay_writer().upgrade().expect("upgrade");
                                         let mut replay_writer = replay_writer.lock();
 
-                                        let in_battle_time = bn6.in_battle_time(core);
+                                        let in_battle_time = munger.in_battle_time(core);
                                         if battle.committed_state().is_none() {
                                             for i in 0..battle.local_delay() {
                                                 battle
@@ -275,7 +275,7 @@ impl Loaded {
                                         let last_committed_remote_input =
                                             battle.last_committed_remote_input();
                                         let remote_tick = last_committed_remote_input.local_tick;
-                                        let custom_screen_state = bn6.local_custom_screen_state(core);
+                                        let custom_screen_state = munger.local_custom_screen_state(core);
                                         let turn = battle.take_local_pending_turn();
 
                                         const TIMEOUT: std::time::Duration =
@@ -322,7 +322,7 @@ impl Loaded {
                                         let tps = EXPECTED_FPS as i32 + (remote_tick as i32 - local_tick as i32 - battle.local_delay() as i32) - (last_committed_remote_input.remote_tick as i32 - last_committed_remote_input.local_tick as i32 - battle.remote_delay() as i32);
                                         core.gba_mut().sync_mut().expect("sync").set_fps_target(tps as f32);
 
-                                        let new_in_battle_time = bn6.in_battle_time(core);
+                                        let new_in_battle_time = munger.in_battle_time(core);
                                         if new_in_battle_time != in_battle_time {
                                             panic!("fastforwarder moved battle time: expected {}, got {}", in_battle_time, new_in_battle_time);
                                         }
@@ -338,7 +338,7 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_update_call_battle_copy_input_data,
@@ -371,27 +371,27 @@ impl Loaded {
 
                                     let ip = battle.take_last_input().expect("last input");
 
-                                    bn6.set_player_input_state(
+                                    munger.set_player_input_state(
                                         core,
                                         battle.local_player_index() as u32,
                                         ip.local.joyflags as u16,
                                         ip.local.custom_screen_state as u8,
                                     );
                                     if !ip.local.turn.is_empty() {
-                                        bn6.set_player_marshaled_battle_state(
+                                        munger.set_player_marshaled_battle_state(
                                             core,
                                             battle.local_player_index() as u32,
                                             ip.local.turn.as_slice(),
                                         );
                                     }
-                                    bn6.set_player_input_state(
+                                    munger.set_player_input_state(
                                         core,
                                         battle.remote_player_index() as u32,
                                         ip.remote.joyflags as u16,
                                         ip.remote.custom_screen_state as u8,
                                     );
                                     if !ip.remote.turn.is_empty() {
-                                        bn6.set_player_marshaled_battle_state(
+                                        munger.set_player_marshaled_battle_state(
                                             core,
                                             battle.remote_player_index() as u32,
                                             ip.remote.turn.as_slice(),
@@ -403,7 +403,6 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_run_unpaused_step_cmp_retval,
@@ -430,7 +429,6 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_start_ret,
@@ -449,7 +447,6 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.battle_ending_ret,
@@ -514,7 +511,6 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.get_copy_data_input_state_ret,
@@ -545,7 +541,7 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         let gui_state = gui_state;
                         let config = config;
@@ -575,7 +571,7 @@ impl Loaded {
                                                     let config = config.lock();
                                                     let m = battle::Match::new(
                                                         s.code.to_string(),
-                                                        bn6.match_type(core),
+                                                        munger.match_type(core),
                                                         core.as_ref().game_title(),
                                                         core.as_ref().crc32(),
                                                         s.input_delay,
@@ -599,7 +595,7 @@ impl Loaded {
                                                     }
                                                 }
                                                 gui::DialogState::Cancelled => {
-                                                    bn6.drop_matchmaking_from_comm_menu(core, 0);
+                                                    munger.drop_matchmaking_from_comm_menu(core, 0);
                                                 }
                                                 gui::DialogState::Closed => {
                                                     unreachable!();
@@ -610,13 +606,13 @@ impl Loaded {
                                         MatchState::Match(m) => match m.poll_for_ready().await {
                                             battle::NegotiationStatus::NotReady => {}
                                             battle::NegotiationStatus::Ready => {
-                                                bn6.start_battle_from_comm_menu(core);
+                                                munger.start_battle_from_comm_menu(core);
                                                 log::info!("match started");
                                             }
                                             battle::NegotiationStatus::MatchTypeMismatch
                                             | battle::NegotiationStatus::GameMismatch => {
                                                 const WRONG_MODE: u32 = 0x25;
-                                                bn6.drop_matchmaking_from_comm_menu(
+                                                munger.drop_matchmaking_from_comm_menu(
                                                     core, WRONG_MODE,
                                                 );
                                                 *match_state = MatchState::NoMatch;
@@ -624,7 +620,7 @@ impl Loaded {
                                             battle::NegotiationStatus::Failed(e) => {
                                                 log::error!("negotiation failed: {}", e);
                                                 const CONNECTION_ERROR: u32 = 0x24;
-                                                bn6.drop_matchmaking_from_comm_menu(
+                                                munger.drop_matchmaking_from_comm_menu(
                                                     core,
                                                     CONNECTION_ERROR,
                                                 );
@@ -638,7 +634,7 @@ impl Loaded {
                     },
                     {
                         let match_state = match_state.clone();
-                        let bn6 = bn6.clone();
+                        let munger = bn6.munger.clone();
                         let handle = handle.clone();
                         (
                             bn6.offsets.rom.comm_menu_init_battle_entry,
@@ -652,7 +648,7 @@ impl Loaded {
                                     };
 
                                     let mut rng = m.rng().await.expect("rng");
-                                    bn6.set_link_battle_settings_and_background(
+                                    munger.set_link_battle_settings_and_background(
                                         core,
                                         bn6::random_battle_settings_and_background(
                                             &mut *rng,

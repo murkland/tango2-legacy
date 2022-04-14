@@ -11,6 +11,7 @@ mod datachannel;
 mod fastforwarder;
 mod game;
 mod gui;
+mod hooks;
 mod input;
 mod loaded;
 mod locales;
