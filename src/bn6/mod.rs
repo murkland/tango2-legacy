@@ -411,7 +411,6 @@ impl hooks::Hooks for BN6 {
                     let munger = self.munger.clone();
                     let handle = handle.clone();
                     let gui_state = facade.gui_state();
-                    let config = config;
                     (
                         self.offsets
                             .rom
