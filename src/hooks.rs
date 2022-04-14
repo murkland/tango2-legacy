@@ -1,4 +1,4 @@
-use crate::{config, fastforwarder, gui, loaded};
+use crate::{config, fastforwarder, loaded};
 
 pub trait Hooks {
     fn install_fastforwarder_hooks(
@@ -12,10 +12,7 @@ pub trait Hooks {
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
         core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
-        match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
-        joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
-        gui_state: std::sync::Weak<gui::State>,
-        fastforwarder: fastforwarder::Fastforwarder,
+        facade: loaded::Facade,
     ) -> mgba::trapper::Trapper;
 
     fn set_init(&self, core: mgba::core::CoreMutRef, player_index: u8, init: &[u8]);

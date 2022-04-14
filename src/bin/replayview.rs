@@ -54,13 +54,16 @@ impl Replay {
             ));
         }
 
+        let mut inits = [vec![], vec![]];
+        for _ in 0..2 {
+            let player_index = r.read_u8()?;
+            let mut init = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
+            r.read_exact(&mut init)?;
+            inits[player_index as usize] = init;
+        }
+        let [p1_init, p2_init] = inits;
+
         let local_player_index = r.read_u8()?;
-
-        let mut p1_init = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-        r.read_exact(&mut p1_init)?;
-
-        let mut p2_init = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-        r.read_exact(&mut p2_init)?;
 
         let mut state = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
         r.read_exact(&mut state)?;

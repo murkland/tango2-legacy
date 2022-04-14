@@ -187,9 +187,9 @@ impl Game {
                 handle,
                 &self.audio_device,
                 self.config.clone(),
-                Arc::downgrade(&self.gui.state()),
-                Arc::downgrade(&self.vbuf),
-                Arc::downgrade(&self.emu_tps_counter),
+                self.gui.state(),
+                self.vbuf.clone(),
+                self.emu_tps_counter.clone(),
             )?)
         };
         Ok(())

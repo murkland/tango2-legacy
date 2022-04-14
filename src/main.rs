@@ -18,6 +18,7 @@ mod locales;
 mod protocol;
 mod replay;
 mod tps;
+mod transport;
 
 const TANGO_CHILD_ENV_VAR: &str = "TANGO_CHILD";
 

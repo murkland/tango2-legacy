@@ -2,6 +2,7 @@ use crate::datachannel;
 use crate::input;
 use crate::protocol;
 use crate::replay;
+use crate::transport;
 use rand::Rng;
 use rand::SeedableRng;
 use sha3::digest::ExtendableOutput;
@@ -402,63 +403,16 @@ impl Match {
         }
     }
 
-    pub async fn send_init(
-        &self,
-        battle_number: u8,
-        input_delay: u32,
-        marshaled: &[u8],
-    ) -> anyhow::Result<()> {
+    pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
         let dc = match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
         };
-        dc.send(
-            protocol::Packet::Init(protocol::Init {
-                battle_number,
-                input_delay,
-                marshaled: marshaled.to_vec(),
-            })
-            .serialize()
-            .expect("serialize")
-            .as_slice(),
-        )
-        .await?;
-        Ok(())
+        Ok(transport::Transport::new(dc))
     }
 
-    pub async fn send_input(
-        &self,
-        battle_number: u8,
-        local_tick: u32,
-        remote_tick: u32,
-        joyflags: u16,
-        custom_screen_state: u8,
-        turn: Vec<u8>,
-    ) -> anyhow::Result<()> {
-        let dc = match &*self.r#impl.negotiation.lock().await {
-            Negotiation::Negotiated { dc, .. } => dc.clone(),
-            Negotiation::NotReady => anyhow::bail!("not ready"),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
-        };
-        dc.send(
-            protocol::Packet::Input(protocol::Input {
-                battle_number,
-                local_tick,
-                remote_tick,
-                joyflags,
-                custom_screen_state,
-                turn,
-            })
-            .serialize()
-            .expect("serialize")
-            .as_slice(),
-        )
-        .await?;
-        Ok(())
-    }
-
-    pub async fn rng(
+    pub async fn lock_rng(
         &self,
     ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
         let negotiation = self.r#impl.negotiation.lock().await;
@@ -517,10 +471,8 @@ impl Match {
             state_committed_rx: Some(rx),
             committed_state: None,
             local_pending_turn: None,
-            replay_writer: std::sync::Arc::new(parking_lot::Mutex::new(
-                replay::Writer::new(Box::new(replay_file), local_player_index)
-                    .expect("new replay writer"),
-            )),
+            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)
+                .expect("new replay writer"),
         });
     }
 
@@ -561,12 +513,12 @@ pub struct Battle {
     state_committed_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
-    replay_writer: std::sync::Arc<parking_lot::Mutex<replay::Writer>>,
+    replay_writer: replay::Writer,
 }
 
 impl Battle {
-    pub fn replay_writer(&self) -> std::sync::Weak<parking_lot::Mutex<replay::Writer>> {
-        std::sync::Arc::downgrade(&self.replay_writer)
+    pub fn replay_writer(&mut self) -> &mut replay::Writer {
+        &mut self.replay_writer
     }
 
     pub fn local_player_index(&self) -> u8 {
@@ -612,7 +564,7 @@ impl Battle {
         self.iq.remote_queue_length().await
     }
 
-    pub fn start_accepting_input(&mut self) {
+    pub fn mark_accepting_input(&mut self) {
         self.is_accepting_input = true;
     }
 
@@ -670,5 +622,20 @@ impl Battle {
             }
             None => vec![],
         }
+    }
+
+    pub fn tps_adjustment(&self) -> i32 {
+        let last_local_input = match &self.last_input {
+            Some(input::Pair { local, .. }) => local,
+            None => {
+                return 0;
+            }
+        };
+        (last_local_input.remote_tick as i32
+            - last_local_input.local_tick as i32
+            - self.local_delay() as i32)
+            - (self.last_committed_remote_input.remote_tick as i32
+                - self.last_committed_remote_input.local_tick as i32
+                - self.remote_delay() as i32)
     }
 }
