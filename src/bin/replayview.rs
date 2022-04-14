@@ -1,5 +1,6 @@
 use byteorder::ReadBytesExt;
 use clap::Parser;
+use std::io::Read;
 
 #[derive(clap::Parser)]
 struct Cli {
@@ -35,7 +36,7 @@ const HEADER: &[u8] = b"TOOT";
 const VERSION: u8 = 0x09;
 
 impl Replay {
-    fn decode(r: &mut impl std::io::Read) -> std::io::Result<Self> {
+    fn decode(mut r: impl std::io::Read) -> std::io::Result<Self> {
         let mut header = [0u8; 4];
         r.read(&mut header)?;
         if &header != HEADER {
@@ -52,16 +53,18 @@ impl Replay {
             ));
         }
 
-        let local_player_index = r.read_u8()?;
+        let mut zr = zstd::stream::read::Decoder::new(r)?;
 
-        let mut state = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-        r.read_exact(&mut state)?;
+        let local_player_index = zr.read_u8()?;
+
+        let mut state = vec![0u8; zr.read_u32::<byteorder::LittleEndian>()? as usize];
+        zr.read_exact(&mut state)?;
         let state = mgba::state::State::from_slice(&state);
 
         let mut input_pairs = vec![];
 
         loop {
-            let local_tick = match r.read_u32::<byteorder::LittleEndian>() {
+            let local_tick = match zr.read_u32::<byteorder::LittleEndian>() {
                 Ok(local_tick) => local_tick,
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -70,19 +73,19 @@ impl Replay {
                     return Err(e);
                 }
             };
-            let remote_tick = r.read_u32::<byteorder::LittleEndian>()?;
+            let remote_tick = zr.read_u32::<byteorder::LittleEndian>()?;
 
-            let p1_joyflags = r.read_u16::<byteorder::LittleEndian>()?;
-            let p2_joyflags = r.read_u16::<byteorder::LittleEndian>()?;
+            let p1_joyflags = zr.read_u16::<byteorder::LittleEndian>()?;
+            let p2_joyflags = zr.read_u16::<byteorder::LittleEndian>()?;
 
-            let p1_custom_screen_state = r.read_u8()?;
-            let p2_custom_screen_state = r.read_u8()?;
+            let p1_custom_screen_state = zr.read_u8()?;
+            let p2_custom_screen_state = zr.read_u8()?;
 
-            let mut p1_turn = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-            r.read_exact(&mut p1_turn)?;
+            let mut p1_turn = vec![0u8; zr.read_u32::<byteorder::LittleEndian>()? as usize];
+            zr.read_exact(&mut p1_turn)?;
 
-            let mut p2_turn = vec![0u8; r.read_u32::<byteorder::LittleEndian>()? as usize];
-            r.read_exact(&mut p2_turn)?;
+            let mut p2_turn = vec![0u8; zr.read_u32::<byteorder::LittleEndian>()? as usize];
+            zr.read_exact(&mut p2_turn)?;
 
             input_pairs.push(InputPair {
                 local_tick,
