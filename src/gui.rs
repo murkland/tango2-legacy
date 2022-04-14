@@ -390,68 +390,91 @@ impl State {
 
             let mut open = !matches!(&*maybe_connect_state, ConnectState::None);
 
-            egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code"))
-                .id(egui::Id::new("link-code-window"))
+            egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect"))
+                .id(egui::Id::new("connect-window"))
                 .collapsible(false)
                 .title_bar(false)
                 .fixed_size(egui::vec2(300.0, 0.0))
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
-                .show(ctx, |ui| {
-                    let s = if let ConnectState::PendingInput(s) = &mut *maybe_connect_state {
-                        s
-                    } else {
-                        return;
-                    };
+                .show(ctx, |ui| match &mut *maybe_connect_state {
+                    ConnectState::PendingInput(s) => {
+                        ui.label(
+                            locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect.description"),
+                        );
 
-                    ui.label(
-                        locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "link-code.description"),
-                    );
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut s.code).hint_text(
+                                locales::LOCALES
+                                    .lookup(&locales::SYSTEM_LOCALE, "connect.input-link-code"),
+                            ),
+                        );
+                        s.code = s.code.to_lowercase().trim().to_string();
+                        let text_ok = response.lost_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                            && !s.code.is_empty();
+                        response.request_focus();
 
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut s.code).hint_text(
-                            locales::LOCALES
-                                .lookup(&locales::SYSTEM_LOCALE, "link-code.input-link-code"),
-                        ),
-                    );
-                    s.code = s.code.to_lowercase().trim().to_string();
-                    let text_ok = response.lost_focus()
-                        && ui.input().key_pressed(egui::Key::Enter)
-                        && !s.code.is_empty();
-                    response.request_focus();
+                        ui.add(
+                            egui::Slider::new(&mut s.input_delay, 3..=10).text(
+                                locales::LOCALES
+                                    .lookup(&locales::SYSTEM_LOCALE, "connect.input-input-delay"),
+                            ),
+                        );
 
-                    ui.add(
-                        egui::Slider::new(&mut s.input_delay, 3..=10).text(
-                            locales::LOCALES
-                                .lookup(&locales::SYSTEM_LOCALE, "link-code.input-input-delay"),
-                        ),
-                    );
+                        ui.separator();
+                        let (button_ok, cancel) = ui
+                            .horizontal(|ui| {
+                                let ok = ui
+                                    .add(egui::Button::new(
+                                        locales::LOCALES
+                                            .lookup(&locales::SYSTEM_LOCALE, "connect.confirm"),
+                                    ))
+                                    .clicked();
+                                let cancel = ui
+                                    .add(egui::Button::new(
+                                        locales::LOCALES
+                                            .lookup(&locales::SYSTEM_LOCALE, "connect.cancel"),
+                                    ))
+                                    .clicked();
+                                (ok, cancel)
+                            })
+                            .inner;
 
-                    ui.separator();
-                    let (button_ok, cancel) = ui
-                        .horizontal(|ui| {
-                            let ok = ui
-                                .add(egui::Button::new(
-                                    locales::LOCALES
-                                        .lookup(&locales::SYSTEM_LOCALE, "link-code.confirm"),
-                                ))
-                                .clicked();
-                            let cancel = ui
-                                .add(egui::Button::new(
-                                    locales::LOCALES
-                                        .lookup(&locales::SYSTEM_LOCALE, "link-code.cancel"),
-                                ))
-                                .clicked();
-                            (ok, cancel)
-                        })
-                        .inner;
+                        if text_ok || button_ok {
+                            *maybe_connect_state = ConnectState::InputComplete(s.clone());
+                        }
 
-                    if text_ok || button_ok {
-                        *maybe_connect_state = ConnectState::InputComplete(s.clone());
+                        if cancel {
+                            *maybe_connect_state = ConnectState::None;
+                        }
                     }
+                    ConnectState::Negotiating {
+                        cancellation_token,
+                        progress,
+                    } => {
+                        ui.label(match progress {
+                            battle::NegotiationProgress::NotStarted => locales::LOCALES
+                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-not-started"),
+                            battle::NegotiationProgress::Signalling => locales::LOCALES
+                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-signalling"),
+                            battle::NegotiationProgress::Handshaking => locales::LOCALES
+                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-handshaking"),
+                        });
 
-                    if cancel {
-                        *maybe_connect_state = ConnectState::None;
+                        ui.add(egui::widgets::Spinner::new());
+
+                        if ui
+                            .add(egui::Button::new(
+                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect.cancel"),
+                            ))
+                            .clicked()
+                        {
+                            cancellation_token.cancel();
+                        }
+                    }
+                    _ => {
+                        return;
                     }
                 });
         }

@@ -251,6 +251,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
+    gui_state: std::sync::Arc<gui::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -388,6 +389,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 
 pub struct MatchStateFacade {
     guard: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+    gui_state: std::sync::Arc<gui::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -396,6 +398,7 @@ impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.guard.lock().await,
+            gui_state: self.gui_state.clone(),
             fastforwarder: self.fastforwarder.clone(),
             config: self.config.clone(),
         }
@@ -438,6 +441,7 @@ impl Facade {
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
             guard: self.0.borrow().match_state.clone(),
+            gui_state: self.0.borrow().gui_state.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),
         }

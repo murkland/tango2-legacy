@@ -18,9 +18,12 @@ keymapping = Keymapping
 
 debug = Debug
 
-link-code = Link code
+connect = Connect
     .input-link-code = Link code
     .input-input-delay = Input delay
     .description = Enter a link code that you and your opponent have decided on to connect to each other.
+    .description-not-started = Connecting...
+    .description-signalling = Waiting for opponent...
+    .description-handshaking = Connecting to opponent...
     .confirm = Connect
     .cancel = Cancel

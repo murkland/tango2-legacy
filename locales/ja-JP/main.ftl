@@ -18,9 +18,12 @@ keymapping = キーバインド設定
 
 debug = デバッグ
 
-link-code = リンクコード
+connect = 接続
     .input-link-code = リンクコード
     .input-input-delay = 入力遅延
     .description = お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。
+    .description-not-started = 接続中...
+    .description-signalling = 対戦相手を待機中...
+    .description-handshaking = 対戦相手に接続中...
     .confirm = 接続
     .cancel = キャンセル
