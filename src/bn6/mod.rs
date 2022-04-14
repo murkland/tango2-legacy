@@ -664,7 +664,7 @@ impl hooks::Hooks for BN6 {
     fn install_fastforwarder_hooks(
         &self,
         core: mgba::core::CoreMutRef,
-        ff_state: Box<dyn hooks::FastforwarderState>,
+        ff_state: fastforwarder::State,
     ) -> mgba::trapper::Trapper {
         mgba::trapper::Trapper::new(
             core,

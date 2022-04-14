@@ -19,14 +19,14 @@ pub struct Fastforwarder {
 }
 
 #[derive(Clone)]
-struct State(std::rc::Rc<std::cell::RefCell<Option<InnerState>>>);
+pub struct State(std::rc::Rc<std::cell::RefCell<Option<InnerState>>>);
 
-impl hooks::FastforwarderState for State {
-    fn commit_time(&self) -> u32 {
+impl State {
+    pub fn commit_time(&self) -> u32 {
         self.0.borrow().as_ref().expect("commit time").commit_time
     }
 
-    fn set_committed_state(&self, state: mgba::state::State) {
+    pub fn set_committed_state(&self, state: mgba::state::State) {
         self.0
             .borrow_mut()
             .as_mut()
@@ -34,11 +34,11 @@ impl hooks::FastforwarderState for State {
             .committed_state = Some(state);
     }
 
-    fn dirty_time(&self) -> u32 {
+    pub fn dirty_time(&self) -> u32 {
         self.0.borrow().as_ref().expect("dirty time").dirty_time
     }
 
-    fn set_dirty_state(&self, state: mgba::state::State) {
+    pub fn set_dirty_state(&self, state: mgba::state::State) {
         self.0
             .borrow_mut()
             .as_mut()
@@ -46,7 +46,7 @@ impl hooks::FastforwarderState for State {
             .dirty_state = Some(state);
     }
 
-    fn peek_input_pair(&self) -> Option<input::Pair<input::Input>> {
+    pub fn peek_input_pair(&self) -> Option<input::Pair<input::Input>> {
         self.0
             .borrow()
             .as_ref()
@@ -56,7 +56,7 @@ impl hooks::FastforwarderState for State {
             .cloned()
     }
 
-    fn pop_input_pair(&self) -> Option<input::Pair<input::Input>> {
+    pub fn pop_input_pair(&self) -> Option<input::Pair<input::Input>> {
         self.0
             .borrow_mut()
             .as_mut()
@@ -65,11 +65,11 @@ impl hooks::FastforwarderState for State {
             .pop_front()
     }
 
-    fn set_anyhow_error(&self, err: anyhow::Error) {
+    pub fn set_anyhow_error(&self, err: anyhow::Error) {
         self.0.borrow_mut().as_mut().expect("error").result = Err(err);
     }
 
-    fn local_player_index(&self) -> u8 {
+    pub fn local_player_index(&self) -> u8 {
         self.0.borrow().as_ref().expect("error").local_player_index
     }
 }
@@ -87,7 +87,7 @@ impl Fastforwarder {
             std::cell::RefCell::<Option<InnerState>>::new(None),
         ));
 
-        let trapper = hooks.install_fastforwarder_hooks(core.as_mut(), Box::new(state.clone()));
+        let trapper = hooks.install_fastforwarder_hooks(core.as_mut(), state.clone());
 
         core.as_mut().reset();
 
