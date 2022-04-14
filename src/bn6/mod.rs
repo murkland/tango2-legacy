@@ -189,10 +189,10 @@ impl hooks::Hooks for BN6 {
                                     };
 
                                     battle_state.set_committed_state(committed_state);
+                                    core.load_state(&dirty_state).expect("load dirty state");
+
                                     let last_joyflags = last_input.local.joyflags;
                                     battle_state.set_last_input(last_input, core);
-
-                                    core.load_state(&dirty_state).expect("load dirty state");
                                     core.gba_mut().cpu_mut().set_gpr(4, last_joyflags as i32);
                                     return;
                                 }
