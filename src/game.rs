@@ -321,22 +321,19 @@ impl Game {
                                     log::info!("loading rom: {:?}", selected_rom);
                                     let save_filename = selected_rom.path.with_extension("sav");
 
-                                    *loaded = {
-                                        let handle = self.rt.handle().clone();
-                                        Some(
-                                            loaded::Loaded::new(
-                                                &selected_rom.path,
-                                                &save_filename,
-                                                handle,
-                                                &self.audio_device,
-                                                self.config.clone(),
-                                                self.gui.state(),
-                                                self.vbuf.clone(),
-                                                self.emu_tps_counter.clone(),
-                                            )
-                                            .expect("loaded"),
+                                    *loaded = Some(
+                                        loaded::Loaded::new(
+                                            &selected_rom.path,
+                                            &save_filename,
+                                            self.rt.handle().clone(),
+                                            &self.audio_device,
+                                            self.config.clone(),
+                                            self.gui.state(),
+                                            self.vbuf.clone(),
+                                            self.emu_tps_counter.clone(),
                                         )
-                                    };
+                                        .expect("loaded"),
+                                    );
                                 }
                             }
 
