@@ -1,4 +1,4 @@
-use crate::{config, fastforwarder, gui, hooks, loaded};
+use crate::{facade, fastforwarder, hooks, loaded};
 
 mod munger;
 mod offsets;
@@ -43,10 +43,9 @@ fn random_battle_settings_and_background(rng: &mut impl rand::Rng, match_type: u
 impl hooks::Hooks for BN6 {
     fn install_main_hooks(
         &self,
-        config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
         core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
-        mut facade: loaded::Facade,
+        mut facade: facade::Facade,
     ) -> mgba::trapper::Trapper {
         mgba::trapper::Trapper::new(
             core,
@@ -429,25 +428,25 @@ impl hooks::Hooks for BN6 {
 
                                 if !match_state.is_active() {
                                     match facade.request_connect() {
-                                        loaded::ConnectRequestStatus::InputComplete(s) => {
+                                        facade::ConnectRequestStatus::InputComplete(s) => {
                                             let match_type = munger.match_type(core);
                                             match_state.start(core, handle2, match_type, s);
                                         }
-                                        loaded::ConnectRequestStatus::None => {
+                                        facade::ConnectRequestStatus::None => {
                                             munger.drop_matchmaking_from_comm_menu(core);
                                         }
-                                        loaded::ConnectRequestStatus::Pending => {}
+                                        facade::ConnectRequestStatus::Pending => {}
                                     }
                                     return;
                                 }
 
                                 match match_state.poll_for_ready().await {
-                                    loaded::MatchReadyStatus::NotReady => {}
-                                    loaded::MatchReadyStatus::Ready => {
+                                    facade::MatchReadyStatus::NotReady => {}
+                                    facade::MatchReadyStatus::Ready => {
                                         munger.start_battle_from_comm_menu(core);
                                         log::info!("match started");
                                     }
-                                    loaded::MatchReadyStatus::Failed => {
+                                    facade::MatchReadyStatus::Failed => {
                                         munger.drop_matchmaking_from_comm_menu(core);
                                         match_state.end();
                                     }

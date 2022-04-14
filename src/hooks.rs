@@ -1,4 +1,4 @@
-use crate::{config, fastforwarder, loaded};
+use crate::{facade, fastforwarder};
 
 pub trait Hooks {
     fn install_fastforwarder_hooks(
@@ -9,10 +9,9 @@ pub trait Hooks {
 
     fn install_main_hooks(
         &self,
-        config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
         core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
-        facade: loaded::Facade,
+        facade: facade::Facade,
     ) -> mgba::trapper::Trapper;
 
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);

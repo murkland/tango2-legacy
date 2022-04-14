@@ -8,6 +8,7 @@ mod bn6;
 mod config;
 mod current_input;
 mod datachannel;
+mod facade;
 mod fastforwarder;
 mod game;
 mod gui;
