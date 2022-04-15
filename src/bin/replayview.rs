@@ -2,6 +2,7 @@ use byteorder::ReadBytesExt;
 use clap::Parser;
 use cpal::traits::{HostTrait, StreamTrait};
 use std::io::Read;
+use tango::hooks::Hooks;
 
 #[derive(clap::Parser)]
 struct Cli {
@@ -12,25 +13,10 @@ struct Cli {
     path: std::path::PathBuf,
 }
 
-#[derive(Debug)]
-struct InputPair {
-    local_tick: u32,
-    remote_tick: u32,
-    p1_input: Input,
-    p2_input: Input,
-}
-
-#[derive(Debug)]
-struct Input {
-    joyflags: u16,
-    custom_screen_state: u8,
-    turn: Vec<u8>,
-}
-
 struct Replay {
     local_player_index: u8,
     state: mgba::state::State,
-    input_pairs: Vec<InputPair>,
+    input_pairs: Vec<tango::input::Pair<tango::input::Input>>,
 }
 
 const HEADER: &[u8] = b"TOOT";
@@ -88,20 +74,29 @@ impl Replay {
             let mut p2_turn = vec![0u8; zr.read_u32::<byteorder::LittleEndian>()? as usize];
             zr.read_exact(&mut p2_turn)?;
 
-            input_pairs.push(InputPair {
+            let p1_input = tango::input::Input {
                 local_tick,
                 remote_tick,
-                p1_input: Input {
-                    joyflags: p1_joyflags,
-                    custom_screen_state: p1_custom_screen_state,
-                    turn: p1_turn,
-                },
-                p2_input: Input {
-                    joyflags: p2_joyflags,
-                    custom_screen_state: p2_custom_screen_state,
-                    turn: p2_turn,
-                },
-            });
+                joyflags: p1_joyflags,
+                custom_screen_state: p1_custom_screen_state,
+                turn: p1_turn,
+            };
+
+            let p2_input = tango::input::Input {
+                local_tick,
+                remote_tick: local_tick,
+                joyflags: p2_joyflags,
+                custom_screen_state: p2_custom_screen_state,
+                turn: p2_turn,
+            };
+
+            let (local, remote) = if local_player_index == 0 {
+                (p1_input, p2_input)
+            } else {
+                (p2_input, p1_input)
+            };
+
+            input_pairs.push(tango::input::Pair { local, remote });
         }
 
         Ok(Replay {
@@ -175,7 +170,6 @@ fn main() -> Result<(), anyhow::Error> {
         let mut core = mgba::core::Core::new_gba("tango")?;
         let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
         core.as_mut().load_rom(vf)?;
-        core.as_mut().load_state(&replay.state)?;
         core.enable_video_buffer();
         std::sync::Arc::new(parking_lot::Mutex::new(core))
     };
@@ -194,6 +188,7 @@ fn main() -> Result<(), anyhow::Error> {
         let mut thread = mgba::thread::Thread::new(core.clone());
         let mut core = core.lock();
         thread.start();
+        thread.pause();
         core.as_mut()
             .gba_mut()
             .sync_mut()
@@ -246,6 +241,22 @@ fn main() -> Result<(), anyhow::Error> {
         )
         .build()?
     };
+
+    let _trapper = {
+        let mut core = core.lock();
+        let hooks = tango::bn6::BN6::new(&core.as_ref().game_title()).unwrap();
+        hooks.prepare_for_fastforward(core.as_mut());
+        hooks.install_fastforwarder_hooks(
+            core.as_mut(),
+            tango::fastforwarder::State::new(replay.local_player_index, &replay.input_pairs, 0, 0),
+        )
+    };
+
+    {
+        let mut core = core.lock();
+        core.as_mut().load_state(&replay.state)?;
+        thread.unpause();
+    }
 
     {
         let vbuf = vbuf.clone();

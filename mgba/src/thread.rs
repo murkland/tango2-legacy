@@ -42,6 +42,14 @@ impl Thread {
         unsafe { c::mCoreThreadJoin(&mut self.0.raw) }
     }
 
+    pub fn pause(&mut self) {
+        unsafe { c::mCoreThreadPause(&mut self.0.raw) }
+    }
+
+    pub fn unpause(&mut self) {
+        unsafe { c::mCoreThreadUnpause(&mut self.0.raw) }
+    }
+
     pub fn end(&mut self) {
         unsafe { c::mCoreThreadEnd(&mut self.0.raw) }
     }

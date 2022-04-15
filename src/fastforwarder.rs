@@ -22,6 +22,25 @@ pub struct Fastforwarder {
 pub struct State(std::rc::Rc<std::cell::RefCell<Option<InnerState>>>);
 
 impl State {
+    pub fn new(
+        local_player_index: u8,
+        input_pairs: &[input::Pair<input::Input>],
+        commit_time: u32,
+        dirty_time: u32,
+    ) -> State {
+        State(std::rc::Rc::new(
+            std::cell::RefCell::<Option<InnerState>>::new(Some(InnerState {
+                local_player_index,
+                input_pairs: input_pairs.iter().cloned().collect(),
+                commit_time,
+                committed_state: None,
+                dirty_time,
+                dirty_state: None,
+                result: Ok(()),
+            })),
+        ))
+    }
+
     pub fn commit_time(&self) -> u32 {
         self.0.borrow().as_ref().expect("commit time").commit_time
     }
@@ -141,8 +160,8 @@ impl Fastforwarder {
                     },
                 }
             }))
-            .collect::<std::collections::VecDeque<input::Pair<input::Input>>>();
-        let last_input = input_pairs.back().expect("last input pair").clone();
+            .collect::<Vec<input::Pair<input::Input>>>();
+        let last_input = input_pairs.last().expect("last input pair").clone();
 
         self.core.as_mut().load_state(state)?;
         self.hooks.prepare_for_fastforward(self.core.as_mut());
@@ -151,15 +170,7 @@ impl Fastforwarder {
         let commit_time = start_current_tick + commit_pairs.len() as u32;
         let dirty_time = start_current_tick + input_pairs.len() as u32 - 1;
 
-        *self.state.0.borrow_mut() = Some(InnerState {
-            local_player_index,
-            input_pairs,
-            commit_time,
-            committed_state: None,
-            dirty_time,
-            dirty_state: None,
-            result: Ok(()),
-        });
+        self.state = State::new(local_player_index, &input_pairs, commit_time, dirty_time);
 
         while self
             .state

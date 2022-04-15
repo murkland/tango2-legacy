@@ -20,7 +20,7 @@ where
     local_delay: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pair<T>
 where
     T: Clone,
