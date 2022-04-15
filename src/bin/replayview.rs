@@ -34,12 +34,12 @@ struct Replay {
 }
 
 const HEADER: &[u8] = b"TOOT";
-const VERSION: u8 = 0x09;
+const VERSION: u8 = 0x0a;
 
 impl Replay {
     fn decode(mut r: impl std::io::Read) -> std::io::Result<Self> {
         let mut header = [0u8; 4];
-        r.read(&mut header)?;
+        r.read_exact(&mut header)?;
         if &header != HEADER {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -117,12 +117,19 @@ fn main() -> Result<(), anyhow::Error> {
         .filter(Some("tango"), log::LevelFilter::Info)
         .filter(Some("replayview"), log::LevelFilter::Info)
         .init();
+    mgba::log::init();
 
     let args = Cli::parse();
 
-    let mut f = zstd::stream::read::Decoder::new(std::fs::File::open(args.path)?)?;
+    let mut f = std::fs::File::open(args.path)?;
 
     let replay = Replay::decode(&mut f)?;
+
+    if args.dump {
+        for ip in &replay.input_pairs {
+            println!("{:?}", ip);
+        }
+    }
 
     let rom_path = std::fs::read_dir("roms")?
         .flat_map(|dirent| {
@@ -183,16 +190,19 @@ fn main() -> Result<(), anyhow::Error> {
         .default_output_device()
         .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;
 
-    let stream = {
-        let core = core.clone();
-        mgba::audio::open_stream(core, &audio_device)?
-    };
-    stream.play()?;
-
     let mut thread = {
-        let core = core.clone();
-        mgba::thread::Thread::new(core)
+        let mut thread = mgba::thread::Thread::new(core.clone());
+        let mut core = core.lock();
+        thread.start();
+        core.as_mut()
+            .gba_mut()
+            .sync_mut()
+            .as_mut()
+            .expect("sync")
+            .set_fps_target(60.0);
+        thread
     };
+
     {
         let core = core.clone();
         let vbuf = vbuf.clone();
@@ -206,13 +216,12 @@ fn main() -> Result<(), anyhow::Error> {
             }
         })));
     }
-    thread.start();
 
-    if args.dump {
-        for ip in &replay.input_pairs {
-            println!("{:?}", ip);
-        }
-    }
+    let stream = {
+        let core = core.clone();
+        mgba::audio::open_stream(core, &audio_device)?
+    };
+    stream.play()?;
 
     let event_loop = winit::event_loop::EventLoop::new();
 

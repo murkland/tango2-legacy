@@ -63,10 +63,32 @@ impl Loaded {
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
         let mut thread = {
-            let core = core.clone();
-            mgba::thread::Thread::new(core)
+            let mut thread = mgba::thread::Thread::new(core.clone());
+            let mut core = core.lock();
+            thread.start();
+            core.as_mut()
+                .gba_mut()
+                .sync_mut()
+                .as_mut()
+                .expect("sync")
+                .set_fps_target(60.0);
+            thread
         };
-        thread.start();
+        {
+            let core = core.clone();
+            let emu_tps_counter = emu_tps_counter;
+            thread.set_frame_callback(Some(Box::new(move || {
+                // TODO: This sometimes causes segfaults when the game gets unloaded.
+                let core = core.lock();
+                let mut vbuf = vbuf.lock();
+                vbuf.copy_from_slice(core.video_buffer().unwrap());
+                for i in (0..vbuf.len()).step_by(4) {
+                    vbuf[i + 3] = 0xff;
+                }
+                let mut emu_tps_counter = emu_tps_counter.lock();
+                emu_tps_counter.mark();
+            })));
+        }
 
         let stream = {
             let core = core.clone();
@@ -79,13 +101,6 @@ impl Loaded {
         let trapper = {
             let core = core.clone();
             let mut core = core.lock();
-            core.as_mut()
-                .gba_mut()
-                .sync_mut()
-                .as_mut()
-                .expect("sync")
-                .set_fps_target(60.0);
-
             let fastforwarder = Arc::new(parking_lot::Mutex::new(
                 fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?,
             ));
@@ -103,22 +118,6 @@ impl Loaded {
                 ),
             )
         };
-
-        {
-            let core = core.clone();
-            let emu_tps_counter = emu_tps_counter;
-            thread.set_frame_callback(Some(Box::new(move || {
-                // TODO: This sometimes causes segfaults when the game gets unloaded.
-                let core = core.lock();
-                let mut vbuf = vbuf.lock();
-                vbuf.copy_from_slice(core.video_buffer().unwrap());
-                for i in (0..vbuf.len()).step_by(4) {
-                    vbuf[i + 3] = 0xff;
-                }
-                let mut emu_tps_counter = emu_tps_counter.lock();
-                emu_tps_counter.mark();
-            })));
-        }
 
         Ok(Loaded {
             core,
