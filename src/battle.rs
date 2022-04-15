@@ -97,12 +97,17 @@ impl std::fmt::Display for NegotiationError {
 
 impl std::error::Error for NegotiationError {}
 
+pub enum NegotiationFailure {
+    ProtocolVersionMismatch,
+    MatchTypeMismatch,
+    GameMismatch,
+    Unknown,
+}
+
 pub enum NegotiationStatus {
     Ready,
     NotReady(NegotiationProgress),
-    MatchTypeMismatch,
-    GameMismatch,
-    Failed(anyhow::Error),
+    Failed(NegotiationFailure),
 }
 
 #[derive(Clone, Debug)]
@@ -406,11 +411,16 @@ impl Match {
         match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
             Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
-            Negotiation::Err(NegotiationError::GameMismatch) => NegotiationStatus::GameMismatch,
-            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
-                NegotiationStatus::MatchTypeMismatch
+            Negotiation::Err(NegotiationError::GameMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::GameMismatch)
             }
-            Negotiation::Err(e) => NegotiationStatus::Failed(anyhow::format_err!("{}", e)),
+            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)
+            }
+            Negotiation::Err(NegotiationError::ProtocolVersionMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::ProtocolVersionMismatch)
+            }
+            Negotiation::Err(_) => NegotiationStatus::Failed(NegotiationFailure::Unknown),
         }
     }
 

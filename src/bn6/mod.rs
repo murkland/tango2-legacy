@@ -1,4 +1,4 @@
-use crate::{facade, fastforwarder, gui, hooks};
+use crate::{battle, facade, fastforwarder, gui, hooks};
 
 mod munger;
 mod offsets;
@@ -76,7 +76,7 @@ impl hooks::Hooks for BN6 {
                     let handle = handle.clone();
                     (
                         self.offsets.rom.battle_init_marshal_ret,
-                        Box::new(move |mut core| {
+                        Box::new(move |core| {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let mut match_state = match_state.lock().await;
@@ -434,14 +434,16 @@ impl hooks::Hooks for BN6 {
                                 }
 
                                 match match_state.poll_for_ready().await {
-                                    facade::MatchReadyStatus::NotReady => {}
-                                    facade::MatchReadyStatus::Ready => {
+                                    battle::NegotiationStatus::NotReady(_) => {}
+                                    battle::NegotiationStatus::Ready => {
                                         munger.start_battle_from_comm_menu(core);
                                         log::info!("match started");
                                     }
-                                    facade::MatchReadyStatus::Failed => {
-                                        munger.drop_matchmaking_from_comm_menu(core);
-                                        match_state.end();
+                                    battle::NegotiationStatus::Failed(_) => {
+                                        if !facade.connect_dialog_is_open() {
+                                            munger.drop_matchmaking_from_comm_menu(core);
+                                            match_state.end();
+                                        }
                                     }
                                 }
                             });

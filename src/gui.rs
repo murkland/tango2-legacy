@@ -154,8 +154,8 @@ enum ConnectState {
     PendingInput(ConnectRequest),
     InputComplete(ConnectRequest),
     Negotiating {
-        cancellation_token: tokio_util::sync::CancellationToken,
-        progress_getter: Box<dyn Fn() -> battle::NegotiationProgress>,
+        cancel: Box<dyn Fn()>,
+        status_getter: Box<dyn Fn() -> Option<battle::NegotiationStatus>>,
     },
     None,
 }
@@ -266,7 +266,8 @@ impl State {
 
     pub fn request_connect(
         &self,
-        progress_getter: Box<dyn Fn() -> battle::NegotiationProgress>,
+        cancel: Box<dyn Fn()>,
+        status_getter: Box<dyn Fn() -> Option<battle::NegotiationStatus>>,
     ) -> ConnectStatus {
         let mut connect_state = self.connect_state.lock();
         if let ConnectState::None = &*connect_state {
@@ -286,13 +287,17 @@ impl State {
             ConnectStatus::NotReady => {}
             ConnectStatus::Ready(_) => {
                 *connect_state = ConnectState::Negotiating {
-                    cancellation_token: tokio_util::sync::CancellationToken::new(),
-                    progress_getter,
+                    cancel,
+                    status_getter,
                 };
             }
         }
 
         status
+    }
+
+    pub fn connect_dialog_is_open(&self) -> bool {
+        !matches!(&*self.connect_state.lock(), ConnectState::None)
     }
 
     pub fn request_rom(&self) -> DialogState<Option<usize>> {
@@ -463,30 +468,89 @@ impl State {
                         }
                     }
                     ConnectState::Negotiating {
-                        cancellation_token,
-                        progress_getter,
-                    } => {
-                        let progress = progress_getter();
-                        ui.label(match progress {
-                            battle::NegotiationProgress::NotStarted => locales::LOCALES
-                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-not-started"),
-                            battle::NegotiationProgress::Signalling => locales::LOCALES
-                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-signalling"),
-                            battle::NegotiationProgress::Handshaking => locales::LOCALES
-                                .lookup(&locales::SYSTEM_LOCALE, "connect.description-handshaking"),
-                        });
-
-                        ui.add(egui::widgets::Spinner::new());
-
-                        if ui
-                            .add(egui::Button::new(
-                                locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect.cancel"),
-                            ))
-                            .clicked()
-                        {
-                            cancellation_token.cancel();
+                        cancel,
+                        status_getter,
+                    } => match status_getter() {
+                        None => {
+                            *maybe_connect_state = ConnectState::None;
                         }
-                    }
+                        Some(status) => match status {
+                            battle::NegotiationStatus::Ready => {
+                                unreachable!()
+                            }
+                            battle::NegotiationStatus::NotReady(progress) => {
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::widgets::Spinner::new());
+
+                                    ui.label(match progress {
+                                        battle::NegotiationProgress::NotStarted => locales::LOCALES
+                                            .lookup(
+                                                &locales::SYSTEM_LOCALE,
+                                                "connect.description-not-started",
+                                            ),
+                                        battle::NegotiationProgress::Signalling => locales::LOCALES
+                                            .lookup(
+                                                &locales::SYSTEM_LOCALE,
+                                                "connect.description-signalling",
+                                            ),
+                                        battle::NegotiationProgress::Handshaking => {
+                                            locales::LOCALES.lookup(
+                                                &locales::SYSTEM_LOCALE,
+                                                "connect.description-handshaking",
+                                            )
+                                        }
+                                    });
+                                });
+
+                                if ui
+                                    .add(egui::Button::new(
+                                        locales::LOCALES
+                                            .lookup(&locales::SYSTEM_LOCALE, "connect.cancel"),
+                                    ))
+                                    .clicked()
+                                {
+                                    cancel();
+                                }
+                            }
+                            battle::NegotiationStatus::Failed(failure) => {
+                                ui.label(match failure {
+                                    battle::NegotiationFailure::GameMismatch => locales::LOCALES
+                                        .lookup(
+                                            &locales::SYSTEM_LOCALE,
+                                            "connect.description-error-game-mismatch",
+                                        ),
+                                    battle::NegotiationFailure::MatchTypeMismatch => {
+                                        locales::LOCALES.lookup(
+                                            &locales::SYSTEM_LOCALE,
+                                            "connect.description-error-match-type-mismatch",
+                                        )
+                                    }
+                                    battle::NegotiationFailure::ProtocolVersionMismatch => {
+                                        locales::LOCALES.lookup(
+                                            &locales::SYSTEM_LOCALE,
+                                            "connect.description-error-protocol-version-mismatch",
+                                        )
+                                    }
+                                    battle::NegotiationFailure::Unknown => locales::LOCALES.lookup(
+                                        &locales::SYSTEM_LOCALE,
+                                        "connect.description-error-unknown",
+                                    ),
+                                });
+
+                                if ui
+                                    .add(egui::Button::new(
+                                        locales::LOCALES.lookup(
+                                            &locales::SYSTEM_LOCALE,
+                                            "connect.confirm-error",
+                                        ),
+                                    ))
+                                    .clicked()
+                                {
+                                    *maybe_connect_state = ConnectState::None;
+                                }
+                            }
+                        },
+                    },
                     _ => {
                         return;
                     }

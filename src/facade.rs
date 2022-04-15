@@ -251,15 +251,8 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
-    gui_state: std::sync::Arc<gui::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-}
-
-pub enum MatchReadyStatus {
-    Ready,
-    NotReady,
-    Failed,
 }
 
 impl<'a> MatchStateFacadeGuard<'a> {
@@ -279,19 +272,13 @@ impl<'a> MatchStateFacadeGuard<'a> {
         }
     }
 
-    pub async fn poll_for_ready(&self) -> MatchReadyStatus {
+    pub async fn poll_for_ready(&self) -> battle::NegotiationStatus {
         let m = if let loaded::MatchState::Match(m) = &*self.guard {
             m
         } else {
             unreachable!();
         };
-        match m.poll_for_ready().await {
-            battle::NegotiationStatus::Ready => MatchReadyStatus::Ready,
-            battle::NegotiationStatus::NotReady(_) => MatchReadyStatus::NotReady,
-            battle::NegotiationStatus::MatchTypeMismatch => MatchReadyStatus::Failed,
-            battle::NegotiationStatus::GameMismatch => MatchReadyStatus::Failed,
-            battle::NegotiationStatus::Failed(_) => MatchReadyStatus::Failed,
-        }
+        m.poll_for_ready().await
     }
 
     pub fn start(
@@ -387,9 +374,9 @@ impl<'a> MatchStateFacadeGuard<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct MatchStateFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
-    gui_state: std::sync::Arc<gui::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -398,7 +385,6 @@ impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
-            gui_state: self.gui_state.clone(),
             fastforwarder: self.fastforwarder.clone(),
             config: self.config.clone(),
         }
@@ -438,7 +424,6 @@ impl Facade {
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
             arc: self.0.borrow().match_state.clone(),
-            gui_state: self.0.borrow().gui_state.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),
         }
@@ -451,14 +436,37 @@ impl Facade {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn request_connect(&self) -> gui::ConnectStatus {
+    pub fn request_connect(&mut self) -> gui::ConnectStatus {
         let handle = self.0.borrow().handle.clone();
-        let match_state = self.0.borrow().match_state.clone();
-        self.0.borrow().gui_state.request_connect(Box::new(move || {
-            handle.block_on(async {
-                let match_state = match_state.lock().await;
-                battle::NegotiationProgress::Handshaking
-            })
-        }))
+        let match_state = self.match_state();
+        self.0.borrow().gui_state.request_connect(
+            {
+                let match_state = match_state.clone();
+                let handle = handle.clone();
+                Box::new(move || {
+                    handle.block_on(async {
+                        let mut match_state = match_state.lock().await;
+                        match_state.end();
+                    });
+                })
+            },
+            {
+                let match_state = match_state.clone();
+                let handle = handle.clone();
+                Box::new(move || {
+                    handle.block_on(async {
+                        let match_state = match_state.lock().await;
+                        if !match_state.is_active() {
+                            return None;
+                        }
+                        Some(match_state.poll_for_ready().await)
+                    })
+                })
+            },
+        )
+    }
+
+    pub fn connect_dialog_is_open(&self) -> bool {
+        self.0.borrow().gui_state.connect_dialog_is_open()
     }
 }
