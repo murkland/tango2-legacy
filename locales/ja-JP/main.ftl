@@ -31,4 +31,4 @@ connect = 接続
     .description-error-unknown = 不明なエラーが発生しました。
     .confirm = 接続
     .cancel = キャンセル
-    .confirm-error = 確認
+    .confirm-error = やべっ！
