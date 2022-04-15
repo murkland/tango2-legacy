@@ -29,7 +29,7 @@ jobs:
 
             - run: pandoc --standalone -o README.html README.md
 
-            - run: mkdir out && cd out && mkdir tango-${{ github.ref_name }} && mkdir tango-${{ github.ref_name }}/roms && mkdir tango-${{ github.ref_name }}/replays && mkdir tango-${{ github.ref_name }}/saves && cp ../README.html ../target/x86_64-pc-windows-gnu/release/tango.exe tango-${{ github.ref_name }} && zip -r tango-${{ github.ref_name }}-${{ matrix.target }}.zip tango-${{ github.ref_name }} && cp tango-${{ github.ref_name }}-${{ matrix.target }}.zip ..
+            - run: mkdir out && cd out && mkdir tango-${{ github.ref_name }} && mkdir tango-${{ github.ref_name }}/roms && mkdir tango-${{ github.ref_name }}/replays && mkdir tango-${{ github.ref_name }}/saves && cp ../README.html ../target/x86_64-pc-windows-gnu/release/tango.exe ../target/x86_64-pc-windows-gnu/release/replayview.exe tango-${{ github.ref_name }} && zip -r tango-${{ github.ref_name }}-${{ matrix.target }}.zip tango-${{ github.ref_name }} && cp tango-${{ github.ref_name }}-${{ matrix.target }}.zip ..
 
             - uses: softprops/action-gh-release@v1
               with:
