@@ -9,7 +9,7 @@ struct Cli {
     dump: bool,
 
     #[clap(parse(from_os_str))]
-    path: std::path::PathBuf,
+    path: Option<std::path::PathBuf>,
 
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
@@ -118,18 +118,21 @@ fn main() -> Result<(), anyhow::Error> {
 
     let args = Cli::parse();
 
-    let mut f = std::fs::File::open(args.path.clone())?;
-    let output_path = args
-        .output_path
-        .unwrap_or_else(|| args.path.as_path().with_extension(".mp4").to_path_buf());
+    let path = match args.path {
+        Some(path) => path,
+        None => native_dialog::FileDialog::new()
+            .add_filter("tango replay", &["tangoreplay"])
+            .show_open_single_file()?
+            .ok_or_else(|| anyhow::anyhow!("no file selected"))?,
+    };
+
+    let mut f = std::fs::File::open(path.clone())?;
 
     let replay = Replay::decode(&mut f)?;
 
-    if args.dump {
-        for ip in &replay.input_pairs {
-            println!("{:?}", ip);
-        }
-    }
+    let output_path = args
+        .output_path
+        .unwrap_or_else(|| path.as_path().with_extension(".mp4").to_path_buf());
 
     let rom_path = std::fs::read_dir("roms")?
         .flat_map(|dirent| {
