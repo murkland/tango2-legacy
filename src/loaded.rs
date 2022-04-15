@@ -106,7 +106,6 @@ impl Loaded {
 
         {
             let core = core.clone();
-            let vbuf = vbuf;
             let emu_tps_counter = emu_tps_counter;
             thread.set_frame_callback(Some(Box::new(move || {
                 // TODO: This sometimes causes segfaults when the game gets unloaded.

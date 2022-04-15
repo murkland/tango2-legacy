@@ -1,5 +1,6 @@
 use byteorder::ReadBytesExt;
 use clap::Parser;
+use cpal::traits::{HostTrait, StreamTrait};
 use std::io::Read;
 
 #[derive(clap::Parser)]
@@ -163,9 +164,49 @@ fn main() -> Result<(), anyhow::Error> {
 
     log::info!("found rom: {}", rom_path.display());
 
-    let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
-    let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY).expect("vf");
-    core.as_mut().load_rom(vf).expect("load_rom");
+    let core = {
+        let mut core = mgba::core::Core::new_gba("tango")?;
+        let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
+        core.as_mut().load_rom(vf)?;
+        core.as_mut().load_state(&replay.state)?;
+        core.enable_video_buffer();
+        std::sync::Arc::new(parking_lot::Mutex::new(core))
+    };
+
+    let vbuf = std::sync::Arc::new(parking_lot::Mutex::new(vec![
+        0u8;
+        (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4)
+            as usize
+    ]));
+
+    let audio_device = cpal::default_host()
+        .default_output_device()
+        .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;
+
+    let stream = {
+        let core = core.clone();
+        mgba::audio::open_stream(core, &audio_device)?
+    };
+    stream.play()?;
+
+    let mut thread = {
+        let core = core.clone();
+        mgba::thread::Thread::new(core)
+    };
+    {
+        let core = core.clone();
+        let vbuf = vbuf.clone();
+        thread.set_frame_callback(Some(Box::new(move || {
+            // TODO: This sometimes causes segfaults when the game gets unloaded.
+            let core = core.lock();
+            let mut vbuf = vbuf.lock();
+            vbuf.copy_from_slice(core.video_buffer().unwrap());
+            for i in (0..vbuf.len()).step_by(4) {
+                vbuf[i + 3] = 0xff;
+            }
+        })));
+    }
+    thread.start();
 
     if args.dump {
         for ip in &replay.input_pairs {
@@ -173,5 +214,43 @@ fn main() -> Result<(), anyhow::Error> {
         }
     }
 
-    Ok(())
+    let event_loop = winit::event_loop::EventLoop::new();
+
+    let window = {
+        let size =
+            winit::dpi::LogicalSize::new(mgba::gba::SCREEN_WIDTH * 3, mgba::gba::SCREEN_HEIGHT * 3);
+        winit::window::WindowBuilder::new()
+            .with_title("tango replayview")
+            .with_inner_size(size)
+            .with_min_inner_size(size)
+            .build(&event_loop)?
+    };
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture =
+            pixels::SurfaceTexture::new(window_size.width, window_size.height, &window);
+        pixels::PixelsBuilder::new(
+            mgba::gba::SCREEN_WIDTH,
+            mgba::gba::SCREEN_HEIGHT,
+            surface_texture,
+        )
+        .build()?
+    };
+
+    {
+        let vbuf = vbuf.clone();
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = winit::event_loop::ControlFlow::Poll;
+
+            match event {
+                winit::event::Event::MainEventsCleared => {
+                    let vbuf = vbuf.lock().clone();
+                    pixels.get_frame().copy_from_slice(&vbuf);
+                    pixels.render().expect("render pixels");
+                }
+                _ => {}
+            }
+        });
+    }
 }
