@@ -112,7 +112,7 @@ impl Replay {
 fn main() -> Result<(), anyhow::Error> {
     env_logger::Builder::from_default_env()
         .filter(Some("tango"), log::LevelFilter::Info)
-        .filter(Some("replayview"), log::LevelFilter::Info)
+        .filter(Some("replaydump"), log::LevelFilter::Info)
         .init();
     mgba::log::init();
 
