@@ -242,13 +242,23 @@ fn main() -> Result<(), anyhow::Error> {
         .build()?
     };
 
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let _trapper = {
         let mut core = core.lock();
+        let done = done.clone();
         let hooks = tango::bn6::BN6::new(&core.as_ref().game_title()).unwrap();
         hooks.prepare_for_fastforward(core.as_mut());
         hooks.install_fastforwarder_hooks(
             core.as_mut(),
-            tango::fastforwarder::State::new(replay.local_player_index, replay.input_pairs, 0, 0),
+            tango::fastforwarder::State::new(
+                replay.local_player_index,
+                replay.input_pairs,
+                0,
+                0,
+                Box::new(move || {
+                    done.store(true, std::sync::atomic::Ordering::Relaxed);
+                }),
+            ),
         )
     };
 
@@ -262,6 +272,11 @@ fn main() -> Result<(), anyhow::Error> {
         let vbuf = vbuf.clone();
         event_loop.run(move |event, _, control_flow| {
             *control_flow = winit::event_loop::ControlFlow::Poll;
+
+            if done.load(std::sync::atomic::Ordering::Relaxed) {
+                *control_flow = winit::event_loop::ControlFlow::Exit;
+                return;
+            }
 
             match event {
                 winit::event::Event::MainEventsCleared => {

@@ -8,6 +8,7 @@ struct InnerState {
     committed_state: Option<mgba::state::State>,
     dirty_time: u32,
     dirty_state: Option<mgba::state::State>,
+    on_battle_ended: Box<dyn Fn()>,
     result: anyhow::Result<()>,
 }
 
@@ -17,6 +18,7 @@ impl InnerState {
         input_pairs: Vec<input::Pair<input::Input>>,
         commit_time: u32,
         dirty_time: u32,
+        on_battle_ended: Box<dyn Fn()>,
     ) -> Self {
         InnerState {
             local_player_index,
@@ -25,6 +27,7 @@ impl InnerState {
             committed_state: None,
             dirty_time,
             dirty_state: None,
+            on_battle_ended,
             result: Ok(()),
         }
     }
@@ -46,6 +49,7 @@ impl State {
         input_pairs: Vec<input::Pair<input::Input>>,
         commit_time: u32,
         dirty_time: u32,
+        on_battle_ended: Box<dyn Fn()>,
     ) -> State {
         State(std::rc::Rc::new(
             std::cell::RefCell::<Option<InnerState>>::new(Some(InnerState::new(
@@ -53,6 +57,7 @@ impl State {
                 input_pairs,
                 commit_time,
                 dirty_time,
+                on_battle_ended,
             ))),
         ))
     }
@@ -105,7 +110,20 @@ impl State {
     }
 
     pub fn local_player_index(&self) -> u8 {
-        self.0.borrow().as_ref().expect("error").local_player_index
+        self.0
+            .borrow()
+            .as_ref()
+            .expect("local player index")
+            .local_player_index
+    }
+
+    pub fn on_battle_ended(&self) {
+        (self
+            .0
+            .borrow()
+            .as_ref()
+            .expect("on battle ended")
+            .on_battle_ended)();
     }
 }
 
@@ -191,6 +209,7 @@ impl Fastforwarder {
             input_pairs,
             commit_time,
             dirty_time,
+            Box::new(|| {}),
         ));
 
         while self

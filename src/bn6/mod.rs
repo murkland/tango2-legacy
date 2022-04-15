@@ -676,6 +676,7 @@ impl hooks::Hooks for BN6 {
                     )
                 },
                 {
+                    let ff_state = ff_state.clone();
                     (
                         self.offsets.rom.link_is_p2_ret,
                         Box::new(move |mut core| {
@@ -701,6 +702,15 @@ impl hooks::Hooks for BN6 {
                         self.offsets.rom.get_copy_data_input_state_ret,
                         Box::new(move |mut core| {
                             core.gba_mut().cpu_mut().set_gpr(0, 2);
+                        }),
+                    )
+                },
+                {
+                    let ff_state = ff_state.clone();
+                    (
+                        self.offsets.rom.battle_ending_ret,
+                        Box::new(move |_core| {
+                            ff_state.on_battle_ended();
                         }),
                     )
                 },
