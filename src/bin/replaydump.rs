@@ -221,6 +221,8 @@ fn main() -> Result<(), anyhow::Error> {
             right.set_rates(clock_rate as f64, SAMPLE_RATE);
             right.read_samples(&mut buf[1..], right.samples_avail(), true);
         }
+        let frame_duration =
+            std::time::Duration::from_secs_f64(buf.len() as f64 / 2.0 / SAMPLE_RATE);
     }
     bar.finish();
 
