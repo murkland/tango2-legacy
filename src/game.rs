@@ -250,6 +250,9 @@ impl Game {
                         if !self.gui.handle_event(window_event) {
                             let mut current_input = current_input.borrow_mut();
                             current_input.handle_event(window_event);
+                        } else {
+                            // If an event was handled by the UI, clear our current input.
+                            *current_input.borrow_mut() = current_input::CurrentInput::new();
                         }
 
                         let mut unfiltered_current_input = unfiltered_current_input.borrow_mut();
@@ -363,16 +366,11 @@ impl Game {
                             .expect("render pixels");
                         self.fps_counter.lock().mark();
 
-                        {
-                            let mut current_input = current_input.borrow_mut();
-                            current_input.step();
-                        }
+                        let mut current_input = current_input.borrow_mut();
+                        current_input.step();
 
-                        {
-                            let mut unfiltered_current_input =
-                                unfiltered_current_input.borrow_mut();
-                            unfiltered_current_input.step();
-                        }
+                        let mut unfiltered_current_input = unfiltered_current_input.borrow_mut();
+                        unfiltered_current_input.step();
                     }
                     _ => {}
                 }
