@@ -202,27 +202,28 @@ fn main() -> Result<(), anyhow::Error> {
     core.as_mut().load_state(&replay.state)?;
 
     const SAMPLE_RATE: f64 = 48000.0;
+    let mut buf = vec![0i16; SAMPLE_RATE as usize];
     let bar = indicatif::ProgressBar::new(ff_state.inputs_pairs_left() as u64);
     while !*done.borrow() {
         bar.inc(1);
         core.as_mut().run_frame();
         let clock_rate = core.as_ref().frequency();
-        let mut buf = {
+        let n = {
             let mut core = core.as_mut();
             let mut left = core.audio_channel(0);
             left.set_rates(clock_rate as f64, SAMPLE_RATE);
-            let mut buf = vec![0i16; (left.samples_avail() as usize) * 2];
-            left.read_samples(&mut buf[..], left.samples_avail(), true);
-            buf
+            let n = left.samples_avail();
+            left.read_samples(&mut buf[..(n * 2) as usize], left.samples_avail(), true);
+            n
         };
         {
             let mut core = core.as_mut();
             let mut right = core.audio_channel(1);
             right.set_rates(clock_rate as f64, SAMPLE_RATE);
-            right.read_samples(&mut buf[1..], right.samples_avail(), true);
+            right.read_samples(&mut buf[1..(n * 2) as usize], n, true);
         }
-        let frame_duration =
-            std::time::Duration::from_secs_f64(buf.len() as f64 / 2.0 / SAMPLE_RATE);
+        let buf = &buf[..(n * 2) as usize];
+        let frame_duration = std::time::Duration::from_secs_f64(n as f64 / SAMPLE_RATE);
     }
     bar.finish();
 
