@@ -9,7 +9,10 @@ struct Cli {
     dump: bool,
 
     #[clap(parse(from_os_str))]
-    path: Option<std::path::PathBuf>,
+    path: std::path::PathBuf,
+
+    #[clap(parse(from_os_str))]
+    output_path: Option<std::path::PathBuf>,
 }
 
 struct Replay {
@@ -115,14 +118,10 @@ fn main() -> Result<(), anyhow::Error> {
 
     let args = Cli::parse();
 
-    let path = match args.path {
-        Some(path) => path,
-        None => native_dialog::FileDialog::new()
-            .add_filter("tango replay", &["tangoreplay"])
-            .show_open_single_file()?
-            .ok_or_else(|| anyhow::anyhow!("no file selected"))?,
-    };
-    let mut f = std::fs::File::open(path)?;
+    let mut f = std::fs::File::open(args.path.clone())?;
+    let output_path = args
+        .output_path
+        .unwrap_or_else(|| args.path.as_path().with_extension(".mp4").to_path_buf());
 
     let replay = Replay::decode(&mut f)?;
 
@@ -201,8 +200,40 @@ fn main() -> Result<(), anyhow::Error> {
 
     core.as_mut().load_state(&replay.state)?;
 
-    let mut audio_out = std::fs::File::create("audio.pcm")?;
-    let mut video_out = std::fs::File::create("video.rgba")?;
+    let video_output = tempfile::NamedTempFile::new()?;
+    let mut video_ffmpeg = std::process::Command::new("ffmpeg");
+    video_ffmpeg.stdin(std::process::Stdio::piped());
+    video_ffmpeg.args(&["-y"]);
+    // Input args.
+    video_ffmpeg.args(&[
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "rgba",
+        "-video_size",
+        "240x160",
+        "-framerate",
+        "16777216/280896",
+        "-i",
+        "pipe:",
+    ]);
+    // Filters.
+    video_ffmpeg.args(&["-vf", "scale=iw*5:ih*5:flags=neighbor"]);
+    // Output args.
+    video_ffmpeg.args(&["-c:v", "libx264", "-f", "mp4"]);
+    video_ffmpeg.arg(&video_output.path());
+    let mut video_child = video_ffmpeg.spawn()?;
+
+    let audio_output = tempfile::NamedTempFile::new()?;
+    let mut audio_ffmpeg = std::process::Command::new("ffmpeg");
+    audio_ffmpeg.stdin(std::process::Stdio::piped());
+    audio_ffmpeg.args(&["-y"]);
+    // Input args.
+    audio_ffmpeg.args(&["-f", "s16le", "-ar", "48k", "-ac", "2", "-i", "pipe:"]);
+    // Output args.
+    audio_ffmpeg.args(&["-c:a", "aac", "-f", "mp4"]);
+    audio_ffmpeg.arg(&audio_output.path());
+    let mut audio_child = audio_ffmpeg.spawn()?;
 
     const SAMPLE_RATE: f64 = 48000.0;
     let mut samples = vec![0i16; SAMPLE_RATE as usize];
@@ -228,18 +259,41 @@ fn main() -> Result<(), anyhow::Error> {
         }
         let samples = &samples[..(n * 2) as usize];
 
-        let mut audio_bytes = vec![0u8; samples.len() * 2];
-        LittleEndian::write_i16_into(&samples, &mut audio_bytes[..]);
-
-        audio_out.write_all(&audio_bytes)?;
-
         vbuf.copy_from_slice(core.video_buffer().unwrap());
         for i in (0..vbuf.len()).step_by(4) {
             vbuf[i + 3] = 0xff;
         }
-        video_out.write_all(vbuf.as_slice())?;
+        video_child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(vbuf.as_slice())?;
+
+        let mut audio_bytes = vec![0u8; samples.len() * 2];
+        LittleEndian::write_i16_into(&samples, &mut audio_bytes[..]);
+        audio_child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(&audio_bytes)?;
     }
     bar.finish();
+
+    video_child.stdin = None;
+    video_child.wait()?;
+    audio_child.stdin = None;
+    audio_child.wait()?;
+
+    let mut mux_ffmpeg = std::process::Command::new("ffmpeg");
+    mux_ffmpeg.args(&["-y"]);
+    mux_ffmpeg.args(&["-i"]);
+    mux_ffmpeg.arg(video_output.path());
+    mux_ffmpeg.args(&["-i"]);
+    mux_ffmpeg.arg(audio_output.path());
+    mux_ffmpeg.args(&["-c:v", "copy", "-c:a", "copy"]);
+    mux_ffmpeg.arg(output_path);
+    let mut mux_child = mux_ffmpeg.spawn()?;
+    mux_child.wait()?;
 
     Ok(())
 }

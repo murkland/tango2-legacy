@@ -3598,6 +3598,7 @@ dependencies = [
  "subtle",
  "sys-locale",
  "tango-matchmaking",
+ "tempfile",
  "time",
  "tokio",
  "tokio-stream",
