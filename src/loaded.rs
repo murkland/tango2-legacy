@@ -92,8 +92,9 @@ impl Loaded {
 
             bn6.install_main_hooks(
                 core.as_mut(),
-                handle,
+                handle.clone(),
                 facade::Facade::new(
+                    handle.clone(),
                     match_state.clone(),
                     joyflags.clone(),
                     gui_state,

@@ -406,6 +406,7 @@ impl MatchStateFacade {
 }
 
 struct InnerFacade {
+    handle: tokio::runtime::Handle,
     match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
@@ -418,6 +419,7 @@ pub struct Facade(std::rc::Rc<std::cell::RefCell<InnerFacade>>);
 
 impl Facade {
     pub fn new(
+        handle: tokio::runtime::Handle,
         match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
@@ -425,6 +427,7 @@ impl Facade {
         fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
+            handle,
             match_state,
             joyflags,
             config,
@@ -449,10 +452,13 @@ impl Facade {
     }
 
     pub fn request_connect(&self) -> gui::ConnectStatus {
+        let handle = self.0.borrow().handle.clone();
         let match_state = self.0.borrow().match_state.clone();
-        self.0
-            .borrow()
-            .gui_state
-            .request_connect(Box::new(|| battle::NegotiationProgress::NotStarted))
+        self.0.borrow().gui_state.request_connect(Box::new(move || {
+            handle.block_on(async {
+                let match_state = match_state.lock().await;
+                battle::NegotiationProgress::Handshaking
+            })
+        }))
     }
 }

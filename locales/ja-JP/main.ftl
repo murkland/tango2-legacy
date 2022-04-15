@@ -2,7 +2,7 @@ select-game = ゲーム選択
     .description =
         下記より開始するゲームを選択してください。
 
-        以下のリストが空の場合は、「roms」ディレクトリにROMファイルを、「saves」ディレクトリにセーブファイルを置いてください。
+        以下のリストが空の場合は、「roms」ディレクトリにROMファイルを、「saves」ディレクトリにセーブファイルを配置してください。
 
 keymapping = キーバインド設定
     .up = 上
@@ -27,6 +27,7 @@ connect = 接続
     .description-handshaking = 対戦相手に接続中...
     .description-error-incorrect-match-type = 相手と選択したモードが異なります。
     .description-error-incorrect-game = 相手のゲームと互換性がありません。
+    .description-error-incorrect-protocol-version = 相手の tango ヴァーションと互換性がありません。
     .confirm = 接続
     .cancel = キャンセル
-    .confirm-error = しまった！
+    .confirm-error = 確認

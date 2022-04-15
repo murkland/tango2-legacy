@@ -27,6 +27,7 @@ connect = Connect
     .description-handshaking = Connecting to opponent...
     .description-error-incorrect-match-type = You and your opponent have selected different modes.
     .description-error-incorrect-game = You and your opponent have incompatible games.
+    .description-error-incorrect-protocol-version = You and your opponent have incompatible versions of Tango.
     .confirm = Connect
     .cancel = Cancel
     .confirm-error = Damn!
