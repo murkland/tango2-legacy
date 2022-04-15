@@ -107,11 +107,11 @@ pub struct Config {
 
 const CONFIG_FILE: &str = "tango.toml";
 
-pub fn save_config(config: &Config) -> anyhow::Result<()> {
+pub fn save(config: &Config) -> anyhow::Result<()> {
     std::fs::write(CONFIG_FILE, toml::to_vec(config)?)?;
     Ok(())
 }
 
-pub fn load_config() -> anyhow::Result<Config> {
+pub fn load() -> anyhow::Result<Config> {
     Ok(toml::from_slice(&std::fs::read(CONFIG_FILE)?)?)
 }

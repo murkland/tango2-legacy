@@ -1,26 +1,5 @@
 #![windows_subsystem = "windows"]
 
-#[macro_use]
-extern crate lazy_static;
-
-mod battle;
-mod bn6;
-mod config;
-mod current_input;
-mod datachannel;
-mod facade;
-mod fastforwarder;
-mod game;
-mod gui;
-mod hooks;
-mod input;
-mod loaded;
-mod locales;
-mod protocol;
-mod replay;
-mod tps;
-mod transport;
-
 const TANGO_CHILD_ENV_VAR: &str = "TANGO_CHILD";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,12 +47,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn child_main() -> Result<(), Box<dyn std::error::Error>> {
     mgba::log::init();
-    let config = match config::load_config() {
+    let config = match tango::config::load() {
         Ok(config) => config,
         Err(e) => {
             log::warn!("failed to load config, will load default instead: {}", e);
-            let config = config::Config::default();
-            config::save_config(&config)?;
+            let config = tango::config::Config::default();
+            tango::config::save(&config)?;
             config
         }
     };
@@ -81,7 +60,7 @@ fn child_main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = std::fs::create_dir("roms");
     let _ = std::fs::create_dir("saves");
     let _ = std::fs::create_dir("replays");
-    let g = game::Game::new(config)?;
+    let g = tango::game::Game::new(config)?;
     g.run();
     Ok(())
 }

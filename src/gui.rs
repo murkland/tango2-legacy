@@ -710,7 +710,7 @@ impl State {
                         });
                 });
             if bound {
-                if let Err(e) = config::save_config(&*config) {
+                if let Err(e) = config::save(&*config) {
                     log::warn!("failed to save config: {}", e);
                 }
             }
