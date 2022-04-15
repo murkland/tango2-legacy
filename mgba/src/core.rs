@@ -149,6 +149,10 @@ impl<'a> CoreRef<'a> {
         };
         c
     }
+
+    pub fn frame_counter(&self) -> u32 {
+        unsafe { (*self.ptr).frameCounter.unwrap()(self.ptr) }
+    }
 }
 
 #[repr(transparent)]

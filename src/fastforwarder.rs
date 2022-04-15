@@ -120,10 +120,19 @@ impl State {
     pub fn on_battle_ended(&self) {
         (self
             .0
-            .borrow()
-            .as_ref()
+            .borrow_mut()
+            .as_mut()
             .expect("on battle ended")
             .on_battle_ended)();
+    }
+
+    pub fn inputs_pairs_left(&self) -> usize {
+        self.0
+            .borrow()
+            .as_ref()
+            .expect("input pairs")
+            .input_pairs
+            .len()
     }
 }
 
