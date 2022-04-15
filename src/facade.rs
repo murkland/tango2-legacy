@@ -388,7 +388,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 }
 
 pub struct MatchStateFacade {
-    guard: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+    arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
     gui_state: std::sync::Arc<gui::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
@@ -397,7 +397,7 @@ pub struct MatchStateFacade {
 impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
-            guard: self.guard.lock().await,
+            guard: self.arc.lock().await,
             gui_state: self.gui_state.clone(),
             fastforwarder: self.fastforwarder.clone(),
             config: self.config.clone(),
@@ -411,12 +411,6 @@ struct InnerFacade {
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
-}
-
-pub enum ConnectRequestStatus {
-    Pending,
-    None,
-    InputComplete(gui::ConnectRequest),
 }
 
 #[derive(Clone)]
@@ -440,7 +434,7 @@ impl Facade {
     }
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
-            guard: self.0.borrow().match_state.clone(),
+            arc: self.0.borrow().match_state.clone(),
             gui_state: self.0.borrow().gui_state.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),
@@ -454,13 +448,11 @@ impl Facade {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn request_connect(&self) -> ConnectRequestStatus {
-        match self.0.borrow().gui_state.request_connect() {
-            gui::ConnectState::PendingInput(_) => ConnectRequestStatus::Pending,
-            gui::ConnectState::InputComplete(s) => ConnectRequestStatus::InputComplete(s),
-            gui::ConnectState::Negotiating { .. } | gui::ConnectState::None => {
-                ConnectRequestStatus::None
-            }
-        }
+    pub fn request_connect(&self) -> gui::ConnectStatus {
+        let match_state = self.0.borrow().match_state.clone();
+        self.0
+            .borrow()
+            .gui_state
+            .request_connect(Box::new(|| battle::NegotiationProgress::NotStarted))
     }
 }

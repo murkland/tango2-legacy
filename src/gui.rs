@@ -150,13 +150,12 @@ impl Gui {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum ConnectState {
+enum ConnectState {
     PendingInput(ConnectRequest),
     InputComplete(ConnectRequest),
     Negotiating {
         cancellation_token: tokio_util::sync::CancellationToken,
-        progress: battle::NegotiationProgress,
+        progress_getter: Box<dyn Fn() -> battle::NegotiationProgress>,
     },
     None,
 }
@@ -236,6 +235,12 @@ fn keybinder(
     egui::InnerResponse::new(bound, response)
 }
 
+pub enum ConnectStatus {
+    None,
+    NotReady,
+    Ready(ConnectRequest),
+}
+
 impl State {
     pub fn new(
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
@@ -259,7 +264,10 @@ impl State {
         *rom_list = rom_filenames;
     }
 
-    pub fn request_connect(&self) -> ConnectState {
+    pub fn request_connect(
+        &self,
+        progress_getter: Box<dyn Fn() -> battle::NegotiationProgress>,
+    ) -> ConnectStatus {
         let mut connect_state = self.connect_state.lock();
         if let ConnectState::None = &*connect_state {
             *connect_state = ConnectState::PendingInput(ConnectRequest {
@@ -267,19 +275,24 @@ impl State {
                 input_delay: 3,
             });
         }
-        let state = connect_state.clone();
-        match *connect_state {
-            ConnectState::Negotiating { .. }
-            | ConnectState::PendingInput(_)
-            | ConnectState::None => {}
-            ConnectState::InputComplete(_) => {
+        let status = match &*connect_state {
+            ConnectState::Negotiating { .. } | ConnectState::None => ConnectStatus::None,
+            ConnectState::PendingInput(_) => ConnectStatus::NotReady,
+            ConnectState::InputComplete(s) => ConnectStatus::Ready(s.clone()),
+        };
+
+        match status {
+            ConnectStatus::None => {}
+            ConnectStatus::NotReady => {}
+            ConnectStatus::Ready(_) => {
                 *connect_state = ConnectState::Negotiating {
                     cancellation_token: tokio_util::sync::CancellationToken::new(),
-                    progress: battle::NegotiationProgress::NotStarted,
+                    progress_getter,
                 };
             }
         }
-        state
+
+        status
     }
 
     pub fn request_rom(&self) -> DialogState<Option<usize>> {
@@ -451,8 +464,9 @@ impl State {
                     }
                     ConnectState::Negotiating {
                         cancellation_token,
-                        progress,
+                        progress_getter,
                     } => {
+                        let progress = progress_getter();
                         ui.label(match progress {
                             battle::NegotiationProgress::NotStarted => locales::LOCALES
                                 .lookup(&locales::SYSTEM_LOCALE, "connect.description-not-started"),

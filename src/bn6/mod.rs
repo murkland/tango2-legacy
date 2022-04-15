@@ -1,4 +1,4 @@
-use crate::{facade, fastforwarder, hooks};
+use crate::{facade, fastforwarder, gui, hooks};
 
 mod munger;
 mod offsets;
@@ -421,14 +421,14 @@ impl hooks::Hooks for BN6 {
 
                                 if !match_state.is_active() {
                                     match facade.request_connect() {
-                                        facade::ConnectRequestStatus::InputComplete(s) => {
+                                        gui::ConnectStatus::Ready(s) => {
                                             let match_type = munger.match_type(core);
                                             match_state.start(core, handle2, match_type, s);
                                         }
-                                        facade::ConnectRequestStatus::None => {
+                                        gui::ConnectStatus::None => {
                                             munger.drop_matchmaking_from_comm_menu(core);
                                         }
-                                        facade::ConnectRequestStatus::Pending => {}
+                                        gui::ConnectStatus::NotReady => {}
                                     }
                                     return;
                                 }
