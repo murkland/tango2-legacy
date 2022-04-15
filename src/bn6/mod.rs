@@ -413,27 +413,30 @@ impl hooks::Hooks for BN6 {
                                 core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
                                 let match_state = facade.match_state();
-                                let mut match_state = match_state.lock().await;
+                                let negotiation_status = {
+                                    let mut match_state = match_state.lock().await;
 
-                                if match_state.is_aborted() {
-                                    panic!("match was aborted without being started?")
-                                }
-
-                                if !match_state.is_active() {
-                                    match facade.request_connect() {
-                                        gui::ConnectStatus::Ready(s) => {
-                                            let match_type = munger.match_type(core);
-                                            match_state.start(core, handle2, match_type, s);
-                                        }
-                                        gui::ConnectStatus::None => {
-                                            munger.drop_matchmaking_from_comm_menu(core);
-                                        }
-                                        gui::ConnectStatus::NotReady => {}
+                                    if match_state.is_aborted() {
+                                        panic!("match was aborted without being started?")
                                     }
-                                    return;
-                                }
 
-                                match match_state.poll_for_ready().await {
+                                    if !match_state.is_active() {
+                                        match facade.request_connect() {
+                                            gui::ConnectStatus::Ready(s) => {
+                                                let match_type = munger.match_type(core);
+                                                match_state.start(core, handle2, match_type, s);
+                                            }
+                                            gui::ConnectStatus::None => {
+                                                munger.drop_matchmaking_from_comm_menu(core);
+                                            }
+                                            gui::ConnectStatus::NotReady => {}
+                                        }
+                                        return;
+                                    }
+                                    match_state.poll_for_ready().await
+                                };
+
+                                match negotiation_status {
                                     battle::NegotiationStatus::NotReady(_) => {}
                                     battle::NegotiationStatus::Ready => {
                                         munger.start_battle_from_comm_menu(core);
@@ -442,6 +445,7 @@ impl hooks::Hooks for BN6 {
                                     battle::NegotiationStatus::Failed(_) => {
                                         if !facade.connect_dialog_is_open() {
                                             munger.drop_matchmaking_from_comm_menu(core);
+                                            let mut match_state = match_state.lock().await;
                                             match_state.end();
                                         }
                                     }
