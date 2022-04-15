@@ -55,11 +55,12 @@ pub fn open_stream(
     core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
     device: &cpal::Device,
 ) -> Result<cpal::Stream, anyhow::Error> {
-    // TODO: Perform smarter config selection, this can choose really low bitrate configs by default.
+    let mut supported_configs = device.supported_output_configs()?.collect::<Vec<_>>();
+    supported_configs.sort_by(|x, y| x.max_sample_rate().cmp(&y.max_sample_rate()));
     let mut supported_config = None;
-    while let Some(f) = device.supported_output_configs()?.next() {
+    for f in supported_configs.into_iter() {
         if f.max_sample_rate().0 > 44100 && f.channels() == 2 {
-            supported_config = Some(f.with_sample_rate(cpal::SampleRate(44100)));
+            supported_config = Some(f.with_max_sample_rate());
         }
     }
 
