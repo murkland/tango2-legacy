@@ -21,6 +21,12 @@ pub struct Game {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
+        log::info!(
+            "wgpu adapters: {:?}",
+            wgpu::Instance::new(wgpu::Backends::all())
+                .enumerate_adapters(wgpu::Backends::all())
+                .collect::<Vec<_>>()
+        );
         let audio_device = cpal::default_host()
             .default_output_device()
             .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;

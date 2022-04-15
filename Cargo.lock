@@ -3567,6 +3567,7 @@ dependencies = [
  "toml",
  "unic-langid",
  "webrtc",
+ "wgpu",
  "winit",
  "winres",
  "zstd",
