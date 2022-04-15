@@ -302,6 +302,10 @@ impl hooks::Hooks for BN6 {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let match_state = match_state.lock().await;
+                                if !match_state.is_active() {
+                                    return;
+                                }
+
                                 match_state.start_battle().await;
                             });
                         }),
@@ -316,6 +320,10 @@ impl hooks::Hooks for BN6 {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let match_state = match_state.lock().await;
+                                if !match_state.is_active() {
+                                    return;
+                                }
+
                                 match_state.end_battle(core).await;
                             });
                         }),
