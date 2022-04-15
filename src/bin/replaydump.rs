@@ -202,11 +202,9 @@ fn main() -> Result<(), anyhow::Error> {
     core.as_mut().load_state(&replay.state)?;
 
     let mut audio_out = std::fs::File::create("audio.pcm")?;
-    let mut timecode_out = std::fs::File::create("timecodes.txt")?;
     let mut video_out = std::fs::File::create("video.rgba")?;
 
     const SAMPLE_RATE: f64 = 48000.0;
-    let mut sample_time = 0;
     let mut samples = vec![0i16; SAMPLE_RATE as usize];
     let mut vbuf = vec![0u8; (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4) as usize];
     let bar = indicatif::ProgressBar::new(ff_state.inputs_pairs_left() as u64);
@@ -229,15 +227,11 @@ fn main() -> Result<(), anyhow::Error> {
             right.read_samples(&mut samples[1..(n * 2) as usize], n, true);
         }
         let samples = &samples[..(n * 2) as usize];
-        sample_time += n;
-
-        let frame_time = std::time::Duration::from_secs_f64(sample_time as f64 / SAMPLE_RATE);
 
         let mut audio_bytes = vec![0u8; samples.len() * 2];
         LittleEndian::write_i16_into(&samples, &mut audio_bytes[..]);
 
         audio_out.write_all(&audio_bytes)?;
-        timecode_out.write_all(format!("{}\n", frame_time.as_millis()).as_bytes())?;
 
         vbuf.copy_from_slice(core.video_buffer().unwrap());
         for i in (0..vbuf.len()).step_by(4) {
