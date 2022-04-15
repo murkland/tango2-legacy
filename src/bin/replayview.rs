@@ -248,7 +248,7 @@ fn main() -> Result<(), anyhow::Error> {
         hooks.prepare_for_fastforward(core.as_mut());
         hooks.install_fastforwarder_hooks(
             core.as_mut(),
-            tango::fastforwarder::State::new(replay.local_player_index, &replay.input_pairs, 0, 0),
+            tango::fastforwarder::State::new(replay.local_player_index, replay.input_pairs, 0, 0),
         )
     };
 
