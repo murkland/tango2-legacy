@@ -99,6 +99,11 @@ impl Game {
                 mgba::gba::SCREEN_HEIGHT,
                 surface_texture,
             )
+            .request_adapter_options(wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
             .build()?;
             let gui = gui::Gui::new(
                 config,
