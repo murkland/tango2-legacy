@@ -38,7 +38,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     let output_path = args
         .output_path
-        .unwrap_or_else(|| path.as_path().with_extension(".mp4").to_path_buf());
+        .unwrap_or_else(|| path.as_path().with_extension("mp4").to_path_buf());
 
     let rom_path = std::fs::read_dir("roms")?
         .flat_map(|dirent| {
