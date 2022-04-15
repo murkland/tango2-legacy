@@ -150,7 +150,8 @@ impl Gui {
     }
 }
 
-enum ConnectState {
+enum ConnectDialogState {
+    Cancelled,
     PendingInput(ConnectRequest),
     InputComplete(ConnectRequest),
     Negotiating {
@@ -181,7 +182,7 @@ pub struct ROMInfo {
 }
 
 pub struct State {
-    connect_state: parking_lot::Mutex<ConnectState>,
+    connect_state: parking_lot::Mutex<ConnectDialogState>,
     rom_select_state: parking_lot::Mutex<DialogState<Option<usize>>>,
     show_debug: std::sync::atomic::AtomicBool,
     show_menu: std::sync::atomic::AtomicBool,
@@ -247,7 +248,7 @@ impl State {
         unfiltered_current_input: std::rc::Rc<std::cell::RefCell<current_input::CurrentInput>>,
     ) -> Self {
         Self {
-            connect_state: parking_lot::Mutex::new(ConnectState::None),
+            connect_state: parking_lot::Mutex::new(ConnectDialogState::None),
             rom_select_state: parking_lot::Mutex::new(DialogState::Closed),
             show_debug: false.into(),
             show_menu: false.into(),
@@ -270,23 +271,33 @@ impl State {
         status_getter: Box<dyn Fn() -> Option<battle::NegotiationStatus>>,
     ) -> ConnectStatus {
         let mut connect_state = self.connect_state.lock();
-        if let ConnectState::None = &*connect_state {
-            *connect_state = ConnectState::PendingInput(ConnectRequest {
+        if let ConnectDialogState::Cancelled = &*connect_state {
+            *connect_state = ConnectDialogState::None;
+            return ConnectStatus::None;
+        }
+
+        if let ConnectDialogState::None = &*connect_state {
+            *connect_state = ConnectDialogState::PendingInput(ConnectRequest {
                 code: "".to_owned(),
                 input_delay: 3,
             });
         }
         let status = match &*connect_state {
-            ConnectState::Negotiating { .. } | ConnectState::None => ConnectStatus::None,
-            ConnectState::PendingInput(_) => ConnectStatus::NotReady,
-            ConnectState::InputComplete(s) => ConnectStatus::Ready(s.clone()),
+            ConnectDialogState::Cancelled => {
+                unreachable!()
+            }
+            ConnectDialogState::Negotiating { .. } | ConnectDialogState::None => {
+                ConnectStatus::None
+            }
+            ConnectDialogState::PendingInput(_) => ConnectStatus::NotReady,
+            ConnectDialogState::InputComplete(s) => ConnectStatus::Ready(s.clone()),
         };
 
         match status {
             ConnectStatus::None => {}
             ConnectStatus::NotReady => {}
             ConnectStatus::Ready(_) => {
-                *connect_state = ConnectState::Negotiating {
+                *connect_state = ConnectDialogState::Negotiating {
                     cancel,
                     status_getter,
                 };
@@ -297,7 +308,7 @@ impl State {
     }
 
     pub fn connect_dialog_is_open(&self) -> bool {
-        !matches!(&*self.connect_state.lock(), ConnectState::None)
+        !matches!(&*self.connect_state.lock(), ConnectDialogState::None)
     }
 
     pub fn request_rom(&self) -> DialogState<Option<usize>> {
@@ -406,7 +417,7 @@ impl State {
         {
             let mut maybe_connect_state = self.connect_state.lock();
 
-            let mut open = !matches!(&*maybe_connect_state, ConnectState::None);
+            let mut open = !matches!(&*maybe_connect_state, ConnectDialogState::None);
 
             egui::Window::new(locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect"))
                 .id(egui::Id::new("connect-window"))
@@ -416,7 +427,7 @@ impl State {
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .open(&mut open)
                 .show(ctx, |ui| match &mut *maybe_connect_state {
-                    ConnectState::PendingInput(s) => {
+                    ConnectDialogState::PendingInput(s) => {
                         ui.label(
                             locales::LOCALES.lookup(&locales::SYSTEM_LOCALE, "connect.description"),
                         );
@@ -460,23 +471,23 @@ impl State {
                             .inner;
 
                         if text_ok || button_ok {
-                            *maybe_connect_state = ConnectState::InputComplete(s.clone());
+                            *maybe_connect_state = ConnectDialogState::InputComplete(s.clone());
                         }
 
                         if cancel {
-                            *maybe_connect_state = ConnectState::None;
+                            *maybe_connect_state = ConnectDialogState::Cancelled;
                         }
                     }
-                    ConnectState::Negotiating {
+                    ConnectDialogState::Negotiating {
                         cancel,
                         status_getter,
                     } => match status_getter() {
                         None => {
-                            *maybe_connect_state = ConnectState::None;
+                            *maybe_connect_state = ConnectDialogState::None;
                         }
                         Some(status) => match status {
                             battle::NegotiationStatus::Ready => {
-                                unreachable!()
+                                *maybe_connect_state = ConnectDialogState::None;
                             }
                             battle::NegotiationStatus::NotReady(progress) => {
                                 ui.horizontal(|ui| {
@@ -546,7 +557,7 @@ impl State {
                                     ))
                                     .clicked()
                                 {
-                                    *maybe_connect_state = ConnectState::None;
+                                    *maybe_connect_state = ConnectDialogState::None;
                                 }
                             }
                         },
