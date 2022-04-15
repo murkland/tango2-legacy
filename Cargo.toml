@@ -40,6 +40,7 @@ futures-util = "0.3.21"
 clap = { version = "3.1", features = ["derive"] }
 tango-matchmaking = { path = "tango-matchmaking" }
 mgba = { path = "mgba" }
+native-dialog = "0.6.3"
 
 [patch.crates-io]
 webrtc-util = { git = "https://github.com/webrtc-rs/util", rev = "2d193c0fd146e4d48ce63d07dbd085702b60aac2" }

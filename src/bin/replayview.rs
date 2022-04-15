@@ -10,7 +10,7 @@ struct Cli {
     dump: bool,
 
     #[clap(parse(from_os_str))]
-    path: std::path::PathBuf,
+    path: Option<std::path::PathBuf>,
 }
 
 struct Replay {
@@ -116,7 +116,14 @@ fn main() -> Result<(), anyhow::Error> {
 
     let args = Cli::parse();
 
-    let mut f = std::fs::File::open(args.path)?;
+    let path = match args.path {
+        Some(path) => path,
+        None => native_dialog::FileDialog::new()
+            .add_filter("tango replay", &["tangoreplay"])
+            .show_open_single_file()?
+            .ok_or_else(|| anyhow::anyhow!("no file selected"))?,
+    };
+    let mut f = std::fs::File::open(path)?;
 
     let replay = Replay::decode(&mut f)?;
 
