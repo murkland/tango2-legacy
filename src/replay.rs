@@ -59,7 +59,7 @@ impl Writer {
         self.encoder
             .write_u32::<byteorder::LittleEndian>(p2.turn.len() as u32)?;
         self.encoder.write_all(&p2.turn)?;
-        self.encoder.flush()?;
+
         Ok(())
     }
 }
