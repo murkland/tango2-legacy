@@ -138,9 +138,17 @@ fn main() -> Result<(), anyhow::Error> {
         })));
     }
 
+    let supported_config = tango::audio::get_supported_config(&audio_device)?;
+    log::info!("selected audio config: {:?}", supported_config);
+
     let stream = tango::audio::open_stream(
         &audio_device,
-        tango::audio::timewarp_stream::TimewarpStream::new(core.clone()),
+        &supported_config,
+        tango::audio::timewarp_stream::TimewarpStream::new(
+            core.clone(),
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ),
     )?;
     stream.play()?;
 

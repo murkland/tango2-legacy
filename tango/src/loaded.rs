@@ -145,13 +145,23 @@ impl Loaded {
             bn6.install_audio_hooks(audio_core.as_mut(), audio_state_rendezvous.clone())
         };
 
+        let supported_config = audio::get_supported_config(audio_device)?;
+        log::info!("selected audio config: {:?}", supported_config);
+
         let stream = audio::open_stream(
             audio_device,
+            &supported_config,
             audio::mux_stream::MuxStream::new(vec![
                 Box::new(audio::timewarp_stream::TimewarpStream::new(
                     audio_core.clone(),
+                    supported_config.sample_rate(),
+                    supported_config.channels(),
                 )),
-                Box::new(audio::timewarp_stream::TimewarpStream::new(core.clone())),
+                Box::new(audio::timewarp_stream::TimewarpStream::new(
+                    core.clone(),
+                    supported_config.sample_rate(),
+                    supported_config.channels(),
+                )),
             ]),
         )?;
         stream.play()?;

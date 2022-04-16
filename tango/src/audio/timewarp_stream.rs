@@ -5,11 +5,15 @@ pub struct TimewarpStream {
 }
 
 impl TimewarpStream {
-    pub fn new(core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>) -> TimewarpStream {
+    pub fn new(
+        core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+        sample_rate: cpal::SampleRate,
+        channels: u16,
+    ) -> TimewarpStream {
         Self {
             core,
-            sample_rate: cpal::SampleRate(0),
-            channels: 2,
+            sample_rate,
+            channels,
         }
     }
 }
@@ -57,13 +61,5 @@ impl super::Stream for TimewarpStream {
         }
 
         available as usize * self.channels as usize
-    }
-
-    fn set_sample_rate(&mut self, sample_rate: cpal::SampleRate) {
-        self.sample_rate = sample_rate;
-    }
-
-    fn set_channels(&mut self, channels: u16) {
-        self.channels = channels;
     }
 }

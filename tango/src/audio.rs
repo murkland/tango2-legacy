@@ -5,14 +5,9 @@ pub mod timewarp_stream;
 
 pub trait Stream {
     fn fill(&mut self, buf: &mut [i16]) -> usize;
-    fn set_sample_rate(&mut self, sample_rate: cpal::SampleRate);
-    fn set_channels(&mut self, channels: u16);
 }
 
-pub fn open_stream(
-    device: &cpal::Device,
-    mut stream: impl Stream + Send + 'static,
-) -> Result<cpal::Stream, anyhow::Error> {
+pub fn get_supported_config(device: &cpal::Device) -> anyhow::Result<cpal::SupportedStreamConfig> {
     let mut supported_configs = device.supported_output_configs()?.collect::<Vec<_>>();
     supported_configs.sort_by(|x, y| x.max_sample_rate().cmp(&y.max_sample_rate()));
     let mut supported_config = None;
@@ -28,17 +23,19 @@ pub fn open_stream(
         anyhow::bail!("no supported stream config found");
     };
 
-    let config = supported_config.config();
-    log::info!("selected audio config: {:?}", config);
+    Ok(supported_config)
+}
 
-    stream.set_channels(config.channels);
-    stream.set_sample_rate(config.sample_rate);
-
+pub fn open_stream(
+    device: &cpal::Device,
+    supported_config: &cpal::SupportedStreamConfig,
+    mut stream: impl Stream + Send + 'static,
+) -> Result<cpal::Stream, anyhow::Error> {
     let error_callback = |err| log::error!("audio stream error: {}", err);
 
     Ok(match supported_config.sample_format() {
         cpal::SampleFormat::U16 => device.build_output_stream(
-            &config,
+            &supported_config.config(),
             {
                 let mut buf = vec![];
                 move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
@@ -54,7 +51,7 @@ pub fn open_stream(
             error_callback,
         ),
         cpal::SampleFormat::I16 => device.build_output_stream(
-            &config,
+            &supported_config.config(),
             {
                 let mut buf = vec![];
                 move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
@@ -70,7 +67,7 @@ pub fn open_stream(
             error_callback,
         ),
         cpal::SampleFormat::F32 => device.build_output_stream(
-            &config,
+            &supported_config.config(),
             {
                 let mut buf = vec![];
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {

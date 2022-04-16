@@ -19,16 +19,4 @@ impl super::Stream for MuxStream {
         }
         self.streams[self.index].fill(buf)
     }
-
-    fn set_sample_rate(&mut self, sample_rate: cpal::SampleRate) {
-        for stream in &mut self.streams {
-            stream.set_sample_rate(sample_rate)
-        }
-    }
-
-    fn set_channels(&mut self, channels: u16) {
-        for stream in &mut self.streams {
-            stream.set_channels(channels)
-        }
-    }
 }
