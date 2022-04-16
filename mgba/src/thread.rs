@@ -34,6 +34,13 @@ impl Thread {
         self.0.frame_callback = f;
     }
 
+    pub fn handle(&mut self) -> Handle {
+        Handle {
+            ptr: &mut self.0.raw,
+            _lifetime: std::marker::PhantomData,
+        }
+    }
+
     pub fn start(&mut self) -> bool {
         unsafe { c::mCoreThreadStart(&mut self.0.raw) }
     }
@@ -42,15 +49,22 @@ impl Thread {
         unsafe { c::mCoreThreadJoin(&mut self.0.raw) }
     }
 
-    pub fn pause(&mut self) {
-        unsafe { c::mCoreThreadPause(&mut self.0.raw) }
-    }
-
-    pub fn unpause(&mut self) {
-        unsafe { c::mCoreThreadUnpause(&mut self.0.raw) }
-    }
-
     pub fn end(&mut self) {
         unsafe { c::mCoreThreadEnd(&mut self.0.raw) }
+    }
+}
+
+pub struct Handle<'a> {
+    ptr: *mut c::mCoreThread,
+    _lifetime: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> Handle<'a> {
+    pub fn pause(&self) {
+        unsafe { c::mCoreThreadPause(self.ptr) }
+    }
+
+    pub fn unpause(&self) {
+        unsafe { c::mCoreThreadUnpause(self.ptr) }
     }
 }

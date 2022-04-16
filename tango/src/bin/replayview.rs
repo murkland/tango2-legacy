@@ -114,7 +114,7 @@ fn main() -> Result<(), anyhow::Error> {
         let mut thread = mgba::thread::Thread::new(core.clone());
         let mut core = core.lock();
         thread.start();
-        thread.pause();
+        thread.handle().pause();
         core.as_mut()
             .gba_mut()
             .sync_mut()
@@ -199,7 +199,7 @@ fn main() -> Result<(), anyhow::Error> {
     {
         let mut core = core.lock();
         core.as_mut().load_state(&replay.state)?;
-        thread.unpause();
+        thread.handle().unpause();
     }
 
     {
