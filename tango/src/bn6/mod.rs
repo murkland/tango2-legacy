@@ -142,7 +142,7 @@ impl hooks::Hooks for BN6 {
                     let handle = handle.clone();
                     (
                         self.offsets.rom.main_read_joyflags,
-                        Box::new(move |mut core| {
+                        Box::new(move |core| {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let mut match_state = match_state.lock().await;
