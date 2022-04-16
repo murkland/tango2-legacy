@@ -708,7 +708,7 @@ impl hooks::Hooks for BN6 {
                 {
                     let ff_state = ff_state.clone();
                     (
-                        self.offsets.rom.battle_ending_ret,
+                        self.offsets.rom.battle_end_entry,
                         Box::new(move |_core| {
                             ff_state.on_battle_ended();
                         }),
