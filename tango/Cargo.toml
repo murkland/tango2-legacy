@@ -44,6 +44,7 @@ mgba = { path = "../mgba" }
 native-dialog = "0.6.3"
 indicatif = "0.16"
 tempfile = "3.3.0"
+shell-words = "1.1"
 
 [build-dependencies]
 winres = "0.1"

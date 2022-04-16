@@ -15,10 +15,10 @@ struct Cli {
     output_path: Option<std::path::PathBuf>,
 
     #[clap(short('a'), long)]
-    ffmpeg_audio_arg: Vec<std::ffi::OsString>,
+    ffmpeg_audio_flags: String,
 
     #[clap(short('v'), long)]
-    ffmpeg_video_arg: Vec<std::ffi::OsString>,
+    ffmpeg_video_flags: String,
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -135,7 +135,7 @@ fn main() -> Result<(), anyhow::Error> {
         "pipe:",
     ]);
     // Output args.
-    video_ffmpeg.args(&args.ffmpeg_video_arg);
+    video_ffmpeg.args(shell_words::split(&args.ffmpeg_video_flags)?);
     video_ffmpeg.args(&["-c:v", "libx264", "-f", "mp4"]);
     video_ffmpeg.arg(&video_output.path());
     let mut video_child = video_ffmpeg.spawn()?;
@@ -147,7 +147,7 @@ fn main() -> Result<(), anyhow::Error> {
     // Input args.
     audio_ffmpeg.args(&["-f", "s16le", "-ar", "48k", "-ac", "2", "-i", "pipe:"]);
     // Output args.
-    video_ffmpeg.args(&args.ffmpeg_audio_arg);
+    audio_ffmpeg.args(shell_words::split(&args.ffmpeg_audio_flags)?);
     audio_ffmpeg.args(&["-c:a", "aac", "-f", "mp4"]);
     audio_ffmpeg.arg(&audio_output.path());
     let mut audio_child = audio_ffmpeg.spawn()?;
