@@ -303,6 +303,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
+        // TODO: Switch to primary stream.
+        // TODO: Pause audio core.
         *self.guard = loaded::MatchState::Aborted;
     }
 
@@ -327,6 +329,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
         } else {
             unreachable!();
         };
+        // TODO: Switch to audio core stream.
+        // TODO: Unpause audio core.
         m.start_battle().await;
     }
 
@@ -340,6 +344,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
+        // TODO: Switch to primary stream.
+        // TODO: Pause audio core.
         m.end_battle().await;
     }
 

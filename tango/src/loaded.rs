@@ -73,7 +73,7 @@ impl Loaded {
                 .sync_mut()
                 .as_mut()
                 .expect("sync")
-                .set_fps_target(60.0);
+                .set_fps_target(EXPECTED_FPS as f32);
             thread
         };
         {
@@ -135,7 +135,7 @@ impl Loaded {
                 .sync_mut()
                 .as_mut()
                 .expect("sync")
-                .set_fps_target(60.0);
+                .set_fps_target(EXPECTED_FPS as f32);
             audio_core_thread
         };
 
@@ -153,12 +153,12 @@ impl Loaded {
             &supported_config,
             audio::mux_stream::MuxStream::new(vec![
                 Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    audio_core.clone(),
+                    core.clone(),
                     supported_config.sample_rate(),
                     supported_config.channels(),
                 )),
                 Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    core.clone(),
+                    audio_core.clone(),
                     supported_config.sample_rate(),
                     supported_config.channels(),
                 )),
