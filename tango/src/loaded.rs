@@ -92,7 +92,7 @@ impl Loaded {
 
         let stream = {
             let core = core.clone();
-            mgba::audio::open_stream(core, audio_device)?
+            mgba::audio::timewarp_stream::open(core, audio_device)?
         };
         stream.play()?;
 
