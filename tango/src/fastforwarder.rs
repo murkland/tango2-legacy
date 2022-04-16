@@ -34,7 +34,7 @@ impl InnerState {
 }
 
 pub struct Fastforwarder {
-    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    core: mgba::core::Core,
     state: State,
     hooks: Box<dyn hooks::Hooks>,
     _trapper: mgba::trapper::Trapper,
@@ -138,19 +138,18 @@ impl State {
 
 impl Fastforwarder {
     pub fn new(rom_path: &std::path::Path, hooks: Box<dyn hooks::Hooks>) -> anyhow::Result<Self> {
-        let core = std::sync::Arc::new(parking_lot::Mutex::new({
+        let mut core = {
             let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;
             core.as_mut().load_rom(rom_vf)?;
             core
-        }));
+        };
 
         let state = State(std::rc::Rc::new(
             std::cell::RefCell::<Option<InnerState>>::new(None),
         ));
 
         let trapper = {
-            let mut core = core.lock();
             let trapper = hooks.install_fastforwarder_hooks(core.as_mut(), state.clone());
             core.as_mut().reset();
             trapper
@@ -176,8 +175,6 @@ impl Fastforwarder {
         mgba::state::State,
         input::Pair<input::Input>,
     )> {
-        let mut core = self.core.lock();
-
         let input_pairs = commit_pairs
             .iter()
             .cloned()
@@ -211,10 +208,10 @@ impl Fastforwarder {
             .collect::<Vec<input::Pair<input::Input>>>();
         let last_input = input_pairs.last().expect("last input pair").clone();
 
-        core.as_mut().load_state(state)?;
-        self.hooks.prepare_for_fastforward(core.as_mut());
+        self.core.as_mut().load_state(state)?;
+        self.hooks.prepare_for_fastforward(self.core.as_mut());
 
-        let start_current_tick = self.hooks.current_tick(core.as_mut());
+        let start_current_tick = self.hooks.current_tick(self.core.as_mut());
         let commit_time = start_current_tick + commit_pairs.len() as u32;
         let dirty_time = start_current_tick + input_pairs.len() as u32 - 1;
 
@@ -244,7 +241,7 @@ impl Fastforwarder {
                 .is_none()
         {
             self.state.0.borrow_mut().as_mut().expect("state").result = Ok(());
-            core.as_mut().run_frame();
+            self.core.as_mut().run_frame();
             if self
                 .state
                 .0
@@ -265,9 +262,5 @@ impl Fastforwarder {
             state.dirty_state.expect("dirty state"),
             last_input,
         ))
-    }
-
-    pub fn core(&self) -> std::sync::Arc<parking_lot::Mutex<mgba::core::Core>> {
-        self.core.clone()
     }
 }

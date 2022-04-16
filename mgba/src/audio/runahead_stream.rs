@@ -36,6 +36,11 @@ impl super::Stream for RunaheadStream {
                 available
             };
 
+            if available == 0 {
+                core.as_mut().run_frame();
+                continue;
+            }
+
             if self.channels == 2 {
                 let mut core = core.as_mut();
                 let mut right = core.audio_channel(1);
@@ -48,7 +53,6 @@ impl super::Stream for RunaheadStream {
                 n = buf_left.len();
             }
             buf_left = &mut buf_left[n..];
-            core.as_mut().run_frame();
         }
 
         buf.len()
