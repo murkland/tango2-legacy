@@ -406,7 +406,19 @@ impl Match {
     }
 
     pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
-        self.r#impl.remote_init_receiver.lock().await.recv().await
+        if let Some(init) = self.r#impl.remote_init_receiver.lock().await.recv().await {
+            let battle_state = self.r#impl.battle_state.lock().await;
+            if init.battle_number != battle_state.number {
+                log::warn!(
+                    "expected battle number {} but got {}",
+                    battle_state.number
+                    init.battle_number,
+                )
+            }
+            Some(init)
+        } else {
+            None
+        }
     }
 
     pub async fn poll_for_ready(&self) -> NegotiationStatus {
