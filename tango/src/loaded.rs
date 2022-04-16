@@ -90,19 +90,16 @@ impl Loaded {
             })));
         }
 
-        let stream = mgba::audio::open_stream(
-            audio_device,
-            mgba::audio::timewarp_stream::TimewarpStream::new(core.clone()),
-        )?;
-        stream.play()?;
+        let main_stream = mgba::audio::timewarp_stream::TimewarpStream::new(core.clone());
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-        let trapper = {
+        let (trapper, ff_stream) = {
             let core = core.clone();
             let mut core = core.lock();
             let fastforwarder =
                 fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?;
+            let ff_stream = mgba::audio::runahead_stream::RunaheadStream::new(fastforwarder.core());
 
             let trapper = bn6.install_main_hooks(
                 core.as_mut(),
@@ -116,8 +113,14 @@ impl Loaded {
                     Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
             );
-            trapper
+            (trapper, ff_stream)
         };
+
+        let stream = mgba::audio::open_stream(
+            audio_device,
+            mgba::audio::mux_stream::MuxStream::new(vec![Box::new(main_stream)]),
+        )?;
+        stream.play()?;
 
         Ok(Loaded {
             core,

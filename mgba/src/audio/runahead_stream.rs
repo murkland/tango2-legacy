@@ -17,22 +17,20 @@ impl RunaheadStream {
 impl super::Stream for RunaheadStream {
     fn fill(&mut self, buf: &mut [i16]) -> usize {
         let mut core = self.core.as_ref().lock();
-        let frame_count = (buf.len() / self.channels as usize) as u64;
-
         let clock_rate = core.as_ref().frequency();
-
-        let n = frame_count as i32;
 
         let mut buf_left = &mut buf[..];
 
         while !buf_left.is_empty() {
+            let frame_count = (buf_left.len() / self.channels as usize) as i32;
+
             let available = {
                 let mut core = core.as_mut();
                 let mut left = core.audio_channel(0);
                 left.set_rates(clock_rate as f64, self.sample_rate.0 as f64);
                 let mut available = left.samples_avail();
-                if available > n {
-                    available = n;
+                if available > frame_count {
+                    available = frame_count;
                 }
                 left.read_samples(buf_left, available, self.channels == 2);
                 available
@@ -45,7 +43,11 @@ impl super::Stream for RunaheadStream {
                 right.read_samples(&mut buf_left[1..], available, self.channels == 2);
             }
 
-            buf_left = &mut buf_left[(available * 2) as usize..];
+            let mut n = (available * 2) as usize;
+            if n > buf_left.len() {
+                n = buf_left.len();
+            }
+            buf_left = &mut buf_left[n..];
             core.as_mut().run_frame();
         }
 

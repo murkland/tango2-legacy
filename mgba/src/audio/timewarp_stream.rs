@@ -17,7 +17,7 @@ impl TimewarpStream {
 impl super::Stream for TimewarpStream {
     fn fill(&mut self, buf: &mut [i16]) -> usize {
         let mut core = self.core.as_ref().lock();
-        let frame_count = (buf.len() / self.channels as usize) as u64;
+        let frame_count = (buf.len() / self.channels as usize) as i32;
 
         let clock_rate = core.as_ref().frequency();
 
@@ -27,8 +27,6 @@ impl super::Stream for TimewarpStream {
             faux_clock = crate::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
 
-        let n = frame_count as i32;
-
         let available = {
             let mut core = core.as_mut();
             let mut left = core.audio_channel(0);
@@ -37,8 +35,8 @@ impl super::Stream for TimewarpStream {
                 self.sample_rate.0 as f64 * faux_clock as f64,
             );
             let mut available = left.samples_avail();
-            if available > n {
-                available = n;
+            if available > frame_count {
+                available = frame_count;
             }
             left.read_samples(buf, available, self.channels == 2);
             available
