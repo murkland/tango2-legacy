@@ -115,8 +115,10 @@ fn main() -> Result<(), anyhow::Error> {
 
     core.as_mut().load_state(&replay.state)?;
 
+    let ffmpeg_path = "ffmpeg";
+
     let video_output = tempfile::NamedTempFile::new()?;
-    let mut video_ffmpeg = std::process::Command::new("ffmpeg");
+    let mut video_ffmpeg = std::process::Command::new(&ffmpeg_path);
     video_ffmpeg.stdin(std::process::Stdio::piped());
     video_ffmpeg.args(&["-y"]);
     // Input args.
@@ -139,7 +141,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut video_child = video_ffmpeg.spawn()?;
 
     let audio_output = tempfile::NamedTempFile::new()?;
-    let mut audio_ffmpeg = std::process::Command::new("ffmpeg");
+    let mut audio_ffmpeg = std::process::Command::new(&ffmpeg_path);
     audio_ffmpeg.stdin(std::process::Stdio::piped());
     audio_ffmpeg.args(&["-y"]);
     // Input args.
@@ -199,7 +201,7 @@ fn main() -> Result<(), anyhow::Error> {
     audio_child.stdin = None;
     audio_child.wait()?;
 
-    let mut mux_ffmpeg = std::process::Command::new("ffmpeg");
+    let mut mux_ffmpeg = std::process::Command::new(&ffmpeg_path);
     mux_ffmpeg.args(&["-y"]);
     mux_ffmpeg.args(&["-i"]);
     mux_ffmpeg.arg(video_output.path());
