@@ -102,23 +102,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
         battle.set_last_input(last_input);
     }
 
-    pub fn set_last_input(
-        &mut self,
-        input: input::Pair<input::Input>,
-        mut core: mgba::core::CoreMutRef,
-    ) {
-        let battle = self
-            .guard
-            .battle
-            .as_mut()
-            .expect("attempted to get battle information while no battle was active!");
-        battle.set_last_input(input);
-        core.gba_mut()
-            .sync_mut()
-            .expect("sync")
-            .set_fps_target((loaded::EXPECTED_FPS as i32 + battle.tps_adjustment()) as f32);
-    }
-
     pub fn set_committed_state(&mut self, state: mgba::state::State) {
         let battle = self
             .guard
