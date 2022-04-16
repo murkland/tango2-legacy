@@ -39,6 +39,7 @@ pub struct Settings {
 
 struct MatchImpl {
     negotiation: tokio::sync::Mutex<Negotiation>,
+    start_time: std::time::SystemTime,
     session_id: String,
     match_type: u16,
     game_title: String,
@@ -379,6 +380,7 @@ impl Match {
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                 NegotiationProgress::NotStarted,
             )),
+            start_time: std::time::SystemTime::now(),
             session_id,
             match_type,
             game_title,
@@ -461,12 +463,13 @@ impl Match {
             local_player_index
         );
         let replay_filename = format!(
-            "{}_p{}.tangoreplay",
-            time::OffsetDateTime::from(std::time::SystemTime::now())
+            "{}_battle{}_p{}.tangoreplay",
+            time::OffsetDateTime::from(self.r#impl.start_time)
                 .format(time::macros::format_description!(
                     "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
                 ))
                 .expect("format time"),
+            battle_state.number + 1,
             local_player_index + 1
         );
         let replay_file =
