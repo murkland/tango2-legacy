@@ -91,12 +91,13 @@ impl<'a> BattleStateFacadeGuard<'a> {
             )
             .expect("fastforward");
 
+        core.load_state(&dirty_state).expect("load dirty state");
+
         {
             let mut audio_state_rendezvous = self.audio_state_rendezvous.lock();
-            *audio_state_rendezvous = Some(dirty_state.clone());
+            *audio_state_rendezvous = Some(dirty_state);
         }
 
-        core.load_state(&dirty_state).expect("load dirty state");
         battle.set_committed_state(committed_state);
         battle.set_last_input(last_input);
     }
