@@ -18,7 +18,7 @@ jobs:
               with:
                   submodules: recursive
 
-            - uses: actions/cache@v2
+            - uses: pat-s/always-upload-cache@v2
               with:
                   path: |
                       ~/.cargo/registry
