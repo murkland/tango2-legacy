@@ -171,29 +171,20 @@ impl hooks::Hooks for BN6 {
 
                                     const TIMEOUT: std::time::Duration =
                                         std::time::Duration::from_secs(5);
-                                    let (committed_state, dirty_state, last_input) = if let Ok((committed_state, dirty_state, last_input)) = tokio::time::timeout(
+                                    if let Err(_) = tokio::time::timeout(
                                         TIMEOUT,
                                         battle_state.add_local_input_and_fastforward(
-                                                current_tick,
-                                                facade.joyflags() as u16,
-                                                munger.local_custom_screen_state(core),
-                                                turn.clone()
+                                            core,
+                                            current_tick,
+                                            facade.joyflags() as u16,
+                                            munger.local_custom_screen_state(core),
+                                            turn.clone()
                                         ),
                                     )
-                                    .await
-                                    {
-                                        (committed_state, dirty_state, last_input)
-                                    } else {
+                                    .await {
                                         log::error!("could not queue local input within {:?}, dropping connection", TIMEOUT);
                                         break 'abort;
                                     };
-
-                                    battle_state.set_committed_state(committed_state);
-                                    core.load_state(&dirty_state).expect("load dirty state");
-
-                                    let last_joyflags = last_input.local.joyflags;
-                                    battle_state.set_last_input(last_input, core);
-                                    core.gba_mut().cpu_mut().set_gpr(4, last_joyflags as i32);
                                     return;
                                 }
                                 match_state.abort(core);
@@ -556,11 +547,6 @@ impl hooks::Hooks for BN6 {
                                 );
                             }
 
-                            if current_tick == ff_state.dirty_time() {
-                                ff_state
-                                    .set_dirty_state(core.save_state().expect("save dirty state"));
-                            }
-
                             let ip = match ff_state.peek_input_pair() {
                                 Some(ip) => ip,
                                 None => {
@@ -590,6 +576,11 @@ impl hooks::Hooks for BN6 {
                             core.gba_mut()
                                 .cpu_mut()
                                 .set_gpr(4, ip.local.joyflags as i32);
+
+                            if current_tick == ff_state.dirty_time() {
+                                ff_state
+                                    .set_dirty_state(core.save_state().expect("save dirty state"));
+                            }
                         }),
                     )
                 },
@@ -715,6 +706,30 @@ impl hooks::Hooks for BN6 {
                     )
                 },
             ],
+        )
+    }
+
+    fn install_audio_hooks(
+        &self,
+        core: mgba::core::CoreMutRef,
+        audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    ) -> mgba::trapper::Trapper {
+        mgba::trapper::Trapper::new(
+            core,
+            vec![{
+                (
+                    self.offsets.rom.main_read_joyflags,
+                    Box::new(move |mut core| {
+                        let mut audio_state_rendezvous = audio_state_rendezvous.lock();
+                        let state = if let Some(state) = audio_state_rendezvous.take() {
+                            state
+                        } else {
+                            return;
+                        };
+                        core.load_state(&state).expect("loaded state");
+                    }),
+                )
+            }],
         )
     }
 

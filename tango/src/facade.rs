@@ -3,6 +3,7 @@ use crate::{battle, config, fastforwarder, gui, input, loaded};
 pub struct BattleStateFacadeGuard<'a> {
     m: &'a battle::Match,
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
+    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -26,14 +27,11 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
     pub async fn add_local_input_and_fastforward(
         &mut self,
+        mut core: mgba::core::CoreMutRef<'_>,
         current_tick: u32,
         joyflags: u16,
         custom_screen_state: u8,
         turn: Vec<u8>,
-    ) -> (
-        mgba::state::State,
-        mgba::state::State,
-        input::Pair<input::Input>,
     ) {
         let fastforwarder = self.fastforwarder.clone();
         let battle_number = self.guard.number;
@@ -83,7 +81,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
         }
 
         let mut fastforwarder = fastforwarder.lock();
-        fastforwarder
+        let (committed_state, dirty_state, last_input) = fastforwarder
             .fastforward(
                 battle.committed_state().as_ref().expect("committed state"),
                 battle.local_player_index(),
@@ -91,7 +89,16 @@ impl<'a> BattleStateFacadeGuard<'a> {
                 battle.last_committed_remote_input(),
                 &left,
             )
-            .expect("fastforward")
+            .expect("fastforward");
+
+        {
+            let mut audio_state_rendezvous = self.audio_state_rendezvous.lock();
+            *audio_state_rendezvous = Some(dirty_state.clone());
+        }
+
+        core.load_state(&dirty_state).expect("load dirty state");
+        battle.set_committed_state(committed_state);
+        battle.set_last_input(last_input);
     }
 
     pub fn set_last_input(
@@ -251,6 +258,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
+    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -325,6 +333,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
         BattleStateFacadeGuard {
             m,
             guard,
+            audio_state_rendezvous: self.audio_state_rendezvous.clone(),
             fastforwarder: self.fastforwarder.clone(),
         }
     }
@@ -377,6 +386,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct MatchStateFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -385,6 +395,7 @@ impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
+            audio_state_rendezvous: self.audio_state_rendezvous.clone(),
             fastforwarder: self.fastforwarder.clone(),
             config: self.config.clone(),
         }
@@ -397,6 +408,7 @@ struct InnerFacade {
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
+    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -410,6 +422,7 @@ impl Facade {
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
+        audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
         fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
@@ -418,12 +431,14 @@ impl Facade {
             joyflags,
             config,
             gui_state,
+            audio_state_rendezvous,
             fastforwarder,
         })))
     }
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
             arc: self.0.borrow().match_state.clone(),
+            audio_state_rendezvous: self.0.borrow().audio_state_rendezvous.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),
         }

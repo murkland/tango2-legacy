@@ -16,7 +16,9 @@ pub struct Loaded {
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
     _trapper: mgba::trapper::Trapper,
+    _audio_trapper: mgba::trapper::Trapper,
     _thread: mgba::thread::Thread,
+    _audio_core_thread: mgba::thread::Thread,
     _stream: cpal::Stream,
 }
 
@@ -92,6 +94,8 @@ impl Loaded {
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
+        let audio_state_rendezvous = std::sync::Arc::new(parking_lot::Mutex::new(None));
+
         let trapper = {
             let core = core.clone();
             let mut core = core.lock();
@@ -107,14 +111,50 @@ impl Loaded {
                     joyflags.clone(),
                     gui_state,
                     config.clone(),
+                    audio_state_rendezvous.clone(),
                     Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
             )
         };
 
+        let audio_core = Arc::new(Mutex::new({
+            let mut core = mgba::core::Core::new_gba("tango")?;
+            let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
+            core.as_mut().load_rom(rom_vf)?;
+            core.as_mut().reset();
+            core
+        }));
+
+        let audio_core_thread = {
+            let mut audio_core_thread = mgba::thread::Thread::new(audio_core.clone());
+            let mut audio_core = audio_core.lock();
+            audio_core_thread.start();
+            audio_core
+                .as_mut()
+                .gba_mut()
+                .sync_mut()
+                .as_mut()
+                .expect("sync")
+                .set_fps_target(60.0);
+            audio_core_thread
+        };
+
+        let audio_trapper = {
+            let audio_core = audio_core.clone();
+            let mut audio_core = audio_core.lock();
+            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_rendezvous.clone())
+        };
+
         let stream = mgba::audio::open_stream(
             audio_device,
-            mgba::audio::timewarp_stream::TimewarpStream::new(core.clone()),
+            mgba::audio::mux_stream::MuxStream::new(vec![
+                Box::new(mgba::audio::timewarp_stream::TimewarpStream::new(
+                    audio_core.clone(),
+                )),
+                Box::new(mgba::audio::timewarp_stream::TimewarpStream::new(
+                    core.clone(),
+                )),
+            ]),
         )?;
         stream.play()?;
 
@@ -123,7 +163,9 @@ impl Loaded {
             match_state,
             joyflags,
             _trapper: trapper,
+            _audio_trapper: audio_trapper,
             _thread: thread,
+            _audio_core_thread: audio_core_thread,
             _stream: stream,
         })
     }

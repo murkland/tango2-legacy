@@ -14,6 +14,12 @@ pub trait Hooks {
         facade: facade::Facade,
     ) -> mgba::trapper::Trapper;
 
+    fn install_audio_hooks(
+        &self,
+        core: mgba::core::CoreMutRef,
+        audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    ) -> mgba::trapper::Trapper;
+
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);
 
     fn current_tick(&self, core: mgba::core::CoreMutRef) -> u32;

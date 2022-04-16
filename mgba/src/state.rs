@@ -1,5 +1,6 @@
 use super::c;
 
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct State(pub(super) Box<c::GBASerializedState>);
 
