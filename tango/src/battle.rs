@@ -411,7 +411,7 @@ impl Match {
             if init.battle_number != battle_state.number {
                 log::warn!(
                     "expected battle number {} but got {}",
-                    battle_state.number
+                    battle_state.number,
                     init.battle_number,
                 )
             }
