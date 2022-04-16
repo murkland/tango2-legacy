@@ -68,10 +68,20 @@ fn main() -> Result<(), anyhow::Error> {
             }
 
             if core.as_ref().game_title() != replay.state.rom_title() {
+                log::warn!(
+                    "{} is not eligible (title is {})",
+                    dirent.path().display(),
+                    core.as_ref().game_title()
+                );
                 return vec![];
             }
 
             if core.as_ref().crc32() != replay.state.rom_crc32() {
+                log::warn!(
+                    "{} is not eligible (crc32 is {:08x})",
+                    dirent.path().display(),
+                    core.as_ref().crc32()
+                );
                 return vec![];
             }
 
