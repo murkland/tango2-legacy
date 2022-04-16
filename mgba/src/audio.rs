@@ -3,18 +3,15 @@ use cpal::traits::DeviceTrait;
 pub mod runahead_stream;
 pub mod timewarp_stream;
 
+pub trait Stream {
+    fn fill(&mut self, buf: &mut [i16]) -> usize;
+    fn set_sample_rate(&mut self, sample_rate: cpal::SampleRate);
+    fn set_channels(&mut self, channels: u16);
+}
+
 pub fn open_stream(
-    core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
     device: &cpal::Device,
-    fill_buf: impl Fn(
-            &mut Vec<i16>,
-            usize,
-            std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
-            u16,
-            cpal::SampleRate,
-        ) -> usize
-        + Send
-        + 'static,
+    mut stream: impl Stream + Send + 'static,
 ) -> Result<cpal::Stream, anyhow::Error> {
     let mut supported_configs = device.supported_output_configs()?.collect::<Vec<_>>();
     supported_configs.sort_by(|x, y| x.max_sample_rate().cmp(&y.max_sample_rate()));
@@ -34,8 +31,8 @@ pub fn open_stream(
     let config = supported_config.config();
     log::info!("selected audio config: {:?}", config);
 
-    let channels = config.channels;
-    let sample_rate = config.sample_rate;
+    stream.set_channels(config.channels);
+    stream.set_sample_rate(config.sample_rate);
 
     let error_callback = |err| log::error!("audio stream error: {}", err);
 
@@ -45,8 +42,10 @@ pub fn open_stream(
             {
                 let mut buf = vec![];
                 move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
-                    let core = core.clone();
-                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    if data.len() > buf.len() {
+                        buf = vec![0i16; data.len()];
+                    }
+                    let n = stream.fill(&mut buf[..data.len()]);
                     for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y as u16 + 32768;
                     }
@@ -59,8 +58,10 @@ pub fn open_stream(
             {
                 let mut buf = vec![];
                 move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    let core = core.clone();
-                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    if data.len() > buf.len() {
+                        buf = vec![0i16; data.len()];
+                    }
+                    let n = stream.fill(&mut buf[..data.len()]);
                     for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y;
                     }
@@ -73,8 +74,10 @@ pub fn open_stream(
             {
                 let mut buf = vec![];
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let core = core.clone();
-                    let n = fill_buf(&mut buf, data.len(), core, channels, sample_rate);
+                    if data.len() > buf.len() {
+                        buf = vec![0i16; data.len()];
+                    }
+                    let n = stream.fill(&mut buf[..data.len()]);
                     for (x, y) in data.iter_mut().zip(buf[..n].iter()) {
                         *x = *y as f32 / 32768.0;
                     }

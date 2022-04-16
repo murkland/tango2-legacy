@@ -138,10 +138,10 @@ fn main() -> Result<(), anyhow::Error> {
         })));
     }
 
-    let stream = {
-        let core = core.clone();
-        mgba::audio::open_stream(core, &audio_device, mgba::audio::timewarp_stream::fill_buf)?
-    };
+    let stream = mgba::audio::open_stream(
+        &audio_device,
+        mgba::audio::timewarp_stream::TimewarpStream::new(core.clone()),
+    )?;
     stream.play()?;
 
     let event_loop = winit::event_loop::EventLoop::new();

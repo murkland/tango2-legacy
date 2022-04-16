@@ -90,10 +90,10 @@ impl Loaded {
             })));
         }
 
-        let stream = {
-            let core = core.clone();
-            mgba::audio::open_stream(core, audio_device, mgba::audio::timewarp_stream::fill_buf)?
-        };
+        let stream = mgba::audio::open_stream(
+            audio_device,
+            mgba::audio::timewarp_stream::TimewarpStream::new(core.clone()),
+        )?;
         stream.play()?;
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
@@ -101,11 +101,10 @@ impl Loaded {
         let trapper = {
             let core = core.clone();
             let mut core = core.lock();
-            let fastforwarder = Arc::new(parking_lot::Mutex::new(
-                fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?,
-            ));
+            let fastforwarder =
+                fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?;
 
-            bn6.install_main_hooks(
+            let trapper = bn6.install_main_hooks(
                 core.as_mut(),
                 handle.clone(),
                 facade::Facade::new(
@@ -114,9 +113,10 @@ impl Loaded {
                     joyflags.clone(),
                     gui_state,
                     config.clone(),
-                    fastforwarder,
+                    Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
-            )
+            );
+            trapper
         };
 
         Ok(Loaded {
