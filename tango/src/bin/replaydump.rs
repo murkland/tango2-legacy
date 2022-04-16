@@ -14,10 +14,10 @@ struct Cli {
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
 
-    #[clap(short('a'), long)]
+    #[clap(short('a'), long, default_value = "")]
     ffmpeg_audio_flags: String,
 
-    #[clap(short('v'), long)]
+    #[clap(short('v'), long, default_value = "")]
     ffmpeg_video_flags: String,
 }
 
@@ -41,6 +41,11 @@ fn main() -> Result<(), anyhow::Error> {
     let mut f = std::fs::File::open(path.clone())?;
 
     let replay = tango::replay::Replay::decode(&mut f)?;
+    log::info!(
+        "replay is for {} (crc32 = {:08x})",
+        replay.state.rom_title(),
+        replay.state.rom_crc32()
+    );
 
     let output_path = args
         .output_path

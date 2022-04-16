@@ -30,6 +30,11 @@ fn main() -> Result<(), anyhow::Error> {
     let mut f = std::fs::File::open(path)?;
 
     let replay = tango::replay::Replay::decode(&mut f)?;
+    log::info!(
+        "replay is for {} (crc32 = {:08x})",
+        replay.state.rom_title(),
+        replay.state.rom_crc32()
+    );
 
     if args.dump {
         for ip in &replay.input_pairs {
