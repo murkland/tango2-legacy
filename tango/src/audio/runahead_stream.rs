@@ -1,11 +1,11 @@
 pub struct RunaheadStream {
-    core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
     sample_rate: cpal::SampleRate,
     channels: u16,
 }
 
 impl RunaheadStream {
-    pub fn new(core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>) -> RunaheadStream {
+    pub fn new(core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>) -> RunaheadStream {
         Self {
             core,
             sample_rate: cpal::SampleRate(0),

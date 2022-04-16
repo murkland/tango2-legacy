@@ -1,4 +1,4 @@
-use crate::{battle, bn6, config, facade, fastforwarder, gui, hooks::Hooks, tps};
+use crate::{audio, battle, bn6, config, facade, fastforwarder, gui, hooks::Hooks, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -145,15 +145,13 @@ impl Loaded {
             bn6.install_audio_hooks(audio_core.as_mut(), audio_state_rendezvous.clone())
         };
 
-        let stream = mgba::audio::open_stream(
+        let stream = audio::open_stream(
             audio_device,
-            mgba::audio::mux_stream::MuxStream::new(vec![
-                Box::new(mgba::audio::timewarp_stream::TimewarpStream::new(
+            audio::mux_stream::MuxStream::new(vec![
+                Box::new(audio::timewarp_stream::TimewarpStream::new(
                     audio_core.clone(),
                 )),
-                Box::new(mgba::audio::timewarp_stream::TimewarpStream::new(
-                    core.clone(),
-                )),
+                Box::new(audio::timewarp_stream::TimewarpStream::new(core.clone())),
             ]),
         )?;
         stream.play()?;

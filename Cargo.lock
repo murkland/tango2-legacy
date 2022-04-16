@@ -2144,7 +2144,6 @@ dependencies = [
  "bindgen 0.57.0",
  "cmake",
  "const-zero",
- "cpal",
  "lazy_static",
  "log",
  "parking_lot 0.12.0",

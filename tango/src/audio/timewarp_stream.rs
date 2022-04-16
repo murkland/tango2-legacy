@@ -1,11 +1,11 @@
 pub struct TimewarpStream {
-    core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>,
+    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
     sample_rate: cpal::SampleRate,
     channels: u16,
 }
 
 impl TimewarpStream {
-    pub fn new(core: std::sync::Arc<parking_lot::Mutex<crate::core::Core>>) -> TimewarpStream {
+    pub fn new(core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>) -> TimewarpStream {
         Self {
             core,
             sample_rate: cpal::SampleRate(0),
@@ -24,7 +24,7 @@ impl super::Stream for TimewarpStream {
         let mut faux_clock = 1.0;
         if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
-            faux_clock = crate::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
+            faux_clock = mgba::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
 
         let available = {

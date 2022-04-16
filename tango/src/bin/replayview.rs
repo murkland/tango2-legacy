@@ -138,9 +138,9 @@ fn main() -> Result<(), anyhow::Error> {
         })));
     }
 
-    let stream = mgba::audio::open_stream(
+    let stream = tango::audio::open_stream(
         &audio_device,
-        mgba::audio::timewarp_stream::TimewarpStream::new(core.clone()),
+        tango::audio::timewarp_stream::TimewarpStream::new(core.clone()),
     )?;
     stream.play()?;
 

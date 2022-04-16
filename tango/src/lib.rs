@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod audio;
 pub mod battle;
 pub mod bn6;
 pub mod config;
