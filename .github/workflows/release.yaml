@@ -55,7 +55,7 @@ jobs:
                   mkdir tango-replaytools &&
                   cp ../target/x86_64-pc-windows-gnu/release/replayview.exe ../target/x86_64-pc-windows-gnu/release/replaydump.exe tango-replaytools &&
                   mv tango-replaytools tango-replaytools-${{ github.ref_name }} &&
-                  zip -r tango-replaytools-${{ github.ref_name }}-replaytools-${{ matrix.target }}.zip tango-replaytools-${{ github.ref_name }} &&
+                  zip -r tango-replaytools-${{ github.ref_name }}-${{ matrix.target }}.zip tango-replaytools-${{ github.ref_name }} &&
                   cp tango-replaytools-${{ github.ref_name }}-${{ matrix.target }}.zip ..
 
             - uses: softprops/action-gh-release@v1
