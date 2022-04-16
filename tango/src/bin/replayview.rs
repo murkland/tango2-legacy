@@ -140,7 +140,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     let stream = {
         let core = core.clone();
-        mgba::audio::timewarp_stream::open(core, &audio_device)?
+        mgba::audio::open_stream(core, &audio_device, mgba::audio::timewarp_stream::fill_buf)?
     };
     stream.play()?;
 
