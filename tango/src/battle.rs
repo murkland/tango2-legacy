@@ -457,6 +457,7 @@ impl Match {
 
     pub async fn start_battle(&self) {
         let mut battle_state = self.r#impl.battle_state.lock().await;
+        battle_state.number += 1;
         let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
         log::info!(
             "starting battle: local_player_index = {}",
