@@ -1,7 +1,6 @@
 use cpal::traits::DeviceTrait;
 
 pub mod mux_stream;
-pub mod runahead_stream;
 pub mod timewarp_stream;
 
 pub trait Stream {
