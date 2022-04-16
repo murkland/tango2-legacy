@@ -94,7 +94,7 @@ impl Loaded {
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-        let audio_state_rendezvous = std::sync::Arc::new(parking_lot::Mutex::new(None));
+        let (audio_state_sender, audio_state_receiver) = std::sync::mpsc::channel();
 
         let trapper = {
             let core = core.clone();
@@ -111,7 +111,7 @@ impl Loaded {
                     joyflags.clone(),
                     gui_state,
                     config.clone(),
-                    audio_state_rendezvous.clone(),
+                    audio_state_sender,
                     Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
             )
@@ -142,7 +142,7 @@ impl Loaded {
         let audio_trapper = {
             let audio_core = audio_core.clone();
             let mut audio_core = audio_core.lock();
-            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_rendezvous.clone())
+            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_receiver)
         };
 
         let supported_config = audio::get_supported_config(audio_device)?;

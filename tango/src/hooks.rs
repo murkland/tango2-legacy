@@ -17,7 +17,7 @@ pub trait Hooks {
     fn install_audio_hooks(
         &self,
         core: mgba::core::CoreMutRef,
-        audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+        audio_state_receiver: std::sync::mpsc::Receiver<mgba::state::State>,
     ) -> mgba::trapper::Trapper;
 
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);

@@ -3,7 +3,7 @@ use crate::{battle, config, fastforwarder, gui, input, loaded};
 pub struct BattleStateFacadeGuard<'a> {
     m: &'a battle::Match,
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
-    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -93,10 +93,9 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
         core.load_state(&dirty_state).expect("load dirty state");
 
-        {
-            let mut audio_state_rendezvous = self.audio_state_rendezvous.lock();
-            *audio_state_rendezvous = Some(dirty_state);
-        }
+        self.audio_state_sender
+            .send(dirty_state)
+            .expect("send audio state");
 
         battle.set_committed_state(committed_state);
         battle.set_last_input(last_input);
@@ -242,7 +241,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
-    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -317,7 +316,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
         BattleStateFacadeGuard {
             m,
             guard,
-            audio_state_rendezvous: self.audio_state_rendezvous.clone(),
+            audio_state_sender: self.audio_state_sender.clone(),
             fastforwarder: self.fastforwarder.clone(),
         }
     }
@@ -370,7 +369,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct MatchStateFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
-    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -379,7 +378,7 @@ impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
-            audio_state_rendezvous: self.audio_state_rendezvous.clone(),
+            audio_state_sender: self.audio_state_sender.clone(),
             fastforwarder: self.fastforwarder.clone(),
             config: self.config.clone(),
         }
@@ -392,7 +391,7 @@ struct InnerFacade {
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-    audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -406,7 +405,7 @@ impl Facade {
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-        audio_state_rendezvous: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+        audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
         fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
@@ -415,14 +414,14 @@ impl Facade {
             joyflags,
             config,
             gui_state,
-            audio_state_rendezvous,
+            audio_state_sender,
             fastforwarder,
         })))
     }
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
             arc: self.0.borrow().match_state.clone(),
-            audio_state_rendezvous: self.0.borrow().audio_state_rendezvous.clone(),
+            audio_state_sender: self.0.borrow().audio_state_sender.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),
         }
