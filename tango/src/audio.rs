@@ -12,7 +12,7 @@ pub fn get_supported_config(device: &cpal::Device) -> anyhow::Result<cpal::Suppo
     supported_configs.sort_by(|x, y| x.max_sample_rate().cmp(&y.max_sample_rate()));
     let mut supported_config = None;
     for f in supported_configs.into_iter() {
-        if f.max_sample_rate().0 >= 44100 && f.max_sample_rate().0 <= 48000 && f.channels() == 2 {
+        if f.max_sample_rate().0 >= 44100 && f.max_sample_rate().0 <= 48000 {
             supported_config = Some(f.with_max_sample_rate());
         }
     }
