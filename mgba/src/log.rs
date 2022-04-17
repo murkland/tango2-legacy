@@ -33,7 +33,7 @@ unsafe extern "C" fn c_log(
     fmt: *const std::os::raw::c_char,
     args: c::va_list,
 ) {
-    LOG_FUNC.lock().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
+    // LOG_FUNC.lock().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
 }
 
 pub fn init() {
