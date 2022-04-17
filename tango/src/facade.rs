@@ -1,4 +1,4 @@
-use crate::{battle, config, fastforwarder, gui, input, loaded};
+use crate::{audio, battle, config, fastforwarder, gui, input, loaded};
 
 pub struct BattleStateFacadeGuard<'a> {
     m: &'a battle::Match,
@@ -252,6 +252,8 @@ pub struct MatchStateFacadeGuard<'a> {
     audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
+    primary_mux_handle: audio::mux_stream::MuxHandle,
+    audio_core_mux_handle: audio::mux_stream::MuxHandle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
@@ -312,7 +314,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
-        // TODO: Switch to primary stream.
+        self.primary_mux_handle.switch();
         self.audio_core_handle.pause();
         *self.guard = loaded::MatchState::Aborted;
     }
@@ -344,6 +346,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
             core.load_state(&save_state).expect("load state");
         });
         self.audio_core_handle.unpause();
+        self.audio_core_mux_handle.switch();
         m.start_battle().await;
     }
 
@@ -357,7 +360,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
-        // TODO: Switch to primary stream.
+        self.primary_mux_handle.switch();
         self.audio_core_handle.pause();
         m.end_battle().await;
     }
@@ -391,6 +394,8 @@ pub struct MatchStateFacade {
     audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
+    primary_mux_handle: audio::mux_stream::MuxHandle,
+    audio_core_mux_handle: audio::mux_stream::MuxHandle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
@@ -401,6 +406,8 @@ impl MatchStateFacade {
             audio_state_sender: self.audio_state_sender.clone(),
             fastforwarder: self.fastforwarder.clone(),
             audio_core_handle: self.audio_core_handle.clone(),
+            primary_mux_handle: self.primary_mux_handle.clone(),
+            audio_core_mux_handle: self.audio_core_mux_handle.clone(),
             config: self.config.clone(),
         }
     }
@@ -414,6 +421,8 @@ struct InnerFacade {
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
     audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     audio_core_handle: mgba::thread::Handle,
+    primary_mux_handle: audio::mux_stream::MuxHandle,
+    audio_core_mux_handle: audio::mux_stream::MuxHandle,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -429,6 +438,8 @@ impl Facade {
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
         audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
         audio_core_handle: mgba::thread::Handle,
+        primary_mux_handle: audio::mux_stream::MuxHandle,
+        audio_core_mux_handle: audio::mux_stream::MuxHandle,
         fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
@@ -439,6 +450,8 @@ impl Facade {
             gui_state,
             audio_state_sender,
             audio_core_handle,
+            primary_mux_handle,
+            audio_core_mux_handle,
             fastforwarder,
         })))
     }
@@ -448,6 +461,8 @@ impl Facade {
             audio_state_sender: self.0.borrow().audio_state_sender.clone(),
             audio_core_handle: self.0.borrow().audio_core_handle.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
+            primary_mux_handle: self.0.borrow().primary_mux_handle.clone(),
+            audio_core_mux_handle: self.0.borrow().audio_core_mux_handle.clone(),
             config: self.0.borrow().config.clone(),
         }
     }

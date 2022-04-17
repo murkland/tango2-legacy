@@ -69,6 +69,10 @@ impl Core {
     pub fn video_buffer(&self) -> Option<&[u8]> {
         self.video_buffer.as_deref()
     }
+
+    pub unsafe fn raw_ptr(&self) -> *mut c::mCore {
+        self.ptr
+    }
 }
 
 impl Drop for Core {

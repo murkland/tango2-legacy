@@ -72,6 +72,21 @@ impl Loaded {
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
 
+        let mut muxer = audio::mux_stream::MuxStream::new();
+
+        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            &audio_core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
+
+        let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            &core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
+        primary_mux_handle.switch();
+
         let audio_core_thread = mgba::thread::Thread::new(audio_core);
         audio_core_thread.start();
         audio_core_thread.handle().pause();
@@ -98,6 +113,8 @@ impl Loaded {
                     config.clone(),
                     audio_state_sender,
                     audio_core_thread.handle(),
+                    primary_mux_handle,
+                    audio_core_mux_handle,
                     Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
             )
@@ -122,22 +139,7 @@ impl Loaded {
             emu_tps_counter.mark();
         });
 
-        let stream = audio::open_stream(
-            audio_device,
-            &supported_config,
-            audio::mux_stream::MuxStream::new(vec![
-                Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    &thread,
-                    supported_config.sample_rate(),
-                    supported_config.channels(),
-                )),
-                Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    &audio_core_thread,
-                    supported_config.sample_rate(),
-                    supported_config.channels(),
-                )),
-            ]),
-        )?;
+        let stream = audio::open_stream(audio_device, &supported_config, muxer)?;
         stream.play()?;
 
         Ok(Loaded {

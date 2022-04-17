@@ -153,6 +153,17 @@ fn main() -> Result<(), anyhow::Error> {
         )
     };
 
+    let stream = tango::audio::open_stream(
+        &audio_device,
+        &supported_config,
+        tango::audio::timewarp_stream::TimewarpStream::new(
+            &core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ),
+    )?;
+    stream.play()?;
+
     let thread = mgba::thread::Thread::new(core);
     thread.start();
     thread.handle().pause();
@@ -177,17 +188,6 @@ fn main() -> Result<(), anyhow::Error> {
         core.load_state(&replay.state).expect("load state");
     });
     thread.handle().unpause();
-
-    let stream = tango::audio::open_stream(
-        &audio_device,
-        &supported_config,
-        tango::audio::timewarp_stream::TimewarpStream::new(
-            &thread,
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ),
-    )?;
-    stream.play()?;
 
     {
         let vbuf = vbuf.clone();

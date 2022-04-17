@@ -56,10 +56,6 @@ impl Thread {
     pub fn end(&self) {
         unsafe { c::mCoreThreadEnd(&mut self.0.lock().raw) }
     }
-
-    pub unsafe fn raw_core_ptr(&self) -> *mut c::mCore {
-        self.0.lock().raw.core
-    }
 }
 
 #[derive(Clone)]

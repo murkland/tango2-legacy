@@ -8,12 +8,12 @@ unsafe impl Send for TimewarpStream {}
 
 impl TimewarpStream {
     pub fn new(
-        thread: &mgba::thread::Thread,
+        core: &mgba::core::Core,
         sample_rate: cpal::SampleRate,
         channels: u16,
     ) -> TimewarpStream {
         Self {
-            core: unsafe { thread.raw_core_ptr() },
+            core: unsafe { core.raw_ptr() },
             sample_rate,
             channels,
         }
