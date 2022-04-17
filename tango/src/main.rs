@@ -3,15 +3,16 @@
 const TANGO_CHILD_ENV_VAR: &str = "TANGO_CHILD";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::Builder::from_default_env()
+        .filter(Some("tango"), log::LevelFilter::Info)
+        .init();
+
     log::info!(
         "welcome to tango v{}-{}!",
         env!("CARGO_PKG_VERSION"),
         git_version::git_version!()
     );
 
-    env_logger::Builder::from_default_env()
-        .filter(Some("tango"), log::LevelFilter::Info)
-        .init();
     if std::env::var(TANGO_CHILD_ENV_VAR).unwrap_or_default() == "1" {
         return child_main();
     }
