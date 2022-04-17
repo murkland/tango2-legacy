@@ -17,13 +17,13 @@ struct Cli {
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
 
-    #[clap(short('a'), long, default_value = "-ar 48000 -q:a 1 -ac 2")]
+    #[clap(short('a'), long, default_value = "-c:a aac -ar 48000 -q:a 1 -ac 2")]
     ffmpeg_audio_flags: String,
 
     #[clap(
         short('v'),
         long,
-        default_value = "-vf scale=iw*4:ih*4:flags=neighbor,format=yuv420p -force_key_frames expr:gte(t,n_forced/2) -crf 18 -bf 2"
+        default_value = "-c:v libx264 -vf scale=iw*4:ih*4:flags=neighbor,format=yuv420p -force_key_frames expr:gte(t,n_forced/2) -crf 18 -bf 2"
     )]
     ffmpeg_video_flags: String,
 
@@ -161,7 +161,7 @@ fn main() -> Result<(), anyhow::Error> {
         ])
         // Output args.
         .args(shell_words::split(&args.ffmpeg_video_flags)?)
-        .args(&["-c:v", "libx264", "-f", "mp4"])
+        .args(&["-f", "mp4"])
         .arg(&video_output.path())
         .spawn()?;
 
@@ -173,7 +173,7 @@ fn main() -> Result<(), anyhow::Error> {
         .args(&["-f", "s16le", "-ar", "48k", "-ac", "2", "-i", "pipe:"])
         // Output args.
         .args(shell_words::split(&args.ffmpeg_audio_flags)?)
-        .args(&["-c:a", "aac", "-f", "mp4"])
+        .args(&["-f", "mp4"])
         .arg(&audio_output.path())
         .spawn()?;
 
