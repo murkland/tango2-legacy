@@ -60,14 +60,15 @@ impl Loaded {
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-        let (audio_state_sender, audio_state_receiver) = std::sync::mpsc::sync_channel(0);
+        let audio_state_holder = Arc::new(parking_lot::Mutex::new(None));
 
         let mut audio_core = mgba::core::Core::new_gba("tango")?;
         let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
         audio_core.as_mut().load_rom(rom_vf)?;
         audio_core.as_mut().reset();
 
-        let audio_trapper = bn6.install_audio_hooks(audio_core.as_mut(), audio_state_receiver);
+        let audio_trapper =
+            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_holder.clone());
 
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
@@ -111,7 +112,7 @@ impl Loaded {
                     joyflags.clone(),
                     gui_state,
                     config.clone(),
-                    audio_state_sender,
+                    audio_state_holder.clone(),
                     audio_core_thread.handle(),
                     primary_mux_handle,
                     audio_core_mux_handle,

@@ -712,7 +712,7 @@ impl hooks::Hooks for BN6 {
     fn install_audio_hooks(
         &self,
         core: mgba::core::CoreMutRef,
-        audio_state_receiver: std::sync::mpsc::Receiver<mgba::state::State>,
+        audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     ) -> mgba::trapper::Trapper {
         mgba::trapper::Trapper::new(
             core,
@@ -720,7 +720,7 @@ impl hooks::Hooks for BN6 {
                 (
                     self.offsets.rom.main_read_joyflags,
                     Box::new(move |mut core| {
-                        let state = if let Ok(state) = audio_state_receiver.try_recv() {
+                        let state = if let Some(state) = audio_state_holder.lock().take() {
                             state
                         } else {
                             return;
