@@ -173,6 +173,14 @@ impl<'a> BattleStateFacadeGuard<'a> {
         };
         log::info!("received remote init: {:?}", init);
 
+        if init.battle_number != self.guard.number {
+            log::warn!(
+                "expected battle number {} but got {}",
+                self.guard.number,
+                init.battle_number,
+            )
+        }
+
         self.guard
             .battle
             .as_mut()
