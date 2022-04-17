@@ -26,12 +26,12 @@ lazy_static! {
         )));
 }
 
-unsafe extern "C" fn c_log<T>(
+unsafe extern "C" fn c_log(
     _logger: *mut c::mLogger,
     category: i32,
     level: u32,
     fmt: *const std::os::raw::c_char,
-    args: T,
+    args: c::va_list,
 ) {
     LOG_FUNC.lock().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
 }
