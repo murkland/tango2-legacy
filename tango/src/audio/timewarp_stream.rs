@@ -24,6 +24,7 @@ impl super::Stream for TimewarpStream {
     fn fill(&self, buf: &mut [i16]) -> usize {
         let mut core = unsafe { mgba::core::CoreMutRef::from_ptr(self.core) };
         let frame_count = (buf.len() / self.channels as usize) as i32;
+        let stereo = self.channels > 1;
 
         let clock_rate = core.as_ref().frequency();
 
@@ -43,17 +44,17 @@ impl super::Stream for TimewarpStream {
             if available > frame_count {
                 available = frame_count;
             }
-            left.read_samples(buf, available, self.channels > 1);
+            left.read_samples(buf, available, stereo);
             available
         };
 
-        if self.channels > 1 {
+        if stereo {
             let mut right = core.audio_channel(1);
             right.set_rates(
                 clock_rate as f64,
                 self.sample_rate.0 as f64 * faux_clock as f64,
             );
-            right.read_samples(&mut buf[1..], available, self.channels > 1);
+            right.read_samples(&mut buf[1..], available, stereo);
         }
 
         if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
