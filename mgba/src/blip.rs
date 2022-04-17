@@ -16,7 +16,7 @@ impl<'a> BlipMutRef<'a> {
         unsafe { c::blip_samples_avail(self.ptr) }
     }
 
-    pub fn read_samples(&self, out: &mut [i16], count: i32, stereo: bool) -> i32 {
+    pub fn read_samples(&mut self, out: &mut [i16], count: i32, stereo: bool) -> i32 {
         unsafe {
             c::blip_read_samples(
                 self.ptr,
@@ -25,5 +25,9 @@ impl<'a> BlipMutRef<'a> {
                 if stereo { 1 } else { 0 },
             )
         }
+    }
+
+    pub fn clear(&mut self) {
+        unsafe { c::blip_clear(self.ptr) }
     }
 }
