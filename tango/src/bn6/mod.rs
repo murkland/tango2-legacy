@@ -289,7 +289,7 @@ impl hooks::Hooks for BN6 {
                     let handle = handle.clone();
                     (
                         self.offsets.rom.battle_start_ret,
-                        Box::new(move |_core| {
+                        Box::new(move |core| {
                             handle.block_on(async {
                                 let match_state = facade.match_state();
                                 let match_state = match_state.lock().await;
@@ -297,7 +297,7 @@ impl hooks::Hooks for BN6 {
                                     return;
                                 }
 
-                                match_state.start_battle().await;
+                                match_state.start_battle(core).await;
                             });
                         }),
                     )

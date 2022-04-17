@@ -110,8 +110,8 @@ fn main() -> Result<(), anyhow::Error> {
         .default_output_device()
         .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;
 
-    let mut thread = {
-        let mut thread = mgba::thread::Thread::new(core.clone());
+    let thread = {
+        let thread = mgba::thread::Thread::new(core.clone());
         let mut core = core.lock();
         thread.start();
         thread.handle().pause();

@@ -64,8 +64,8 @@ impl Loaded {
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
-        let mut thread = {
-            let mut thread = mgba::thread::Thread::new(core.clone());
+        let thread = {
+            let thread = mgba::thread::Thread::new(core.clone());
             let mut core = core.lock();
             thread.start();
             core.as_mut()
@@ -96,6 +96,35 @@ impl Loaded {
 
         let (audio_state_sender, audio_state_receiver) = std::sync::mpsc::channel();
 
+        let audio_core = Arc::new(Mutex::new({
+            let mut core = mgba::core::Core::new_gba("tango")?;
+            let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
+            core.as_mut().load_rom(rom_vf)?;
+            core.as_mut().reset();
+            core
+        }));
+
+        let audio_core_thread = {
+            let audio_core_thread = mgba::thread::Thread::new(audio_core.clone());
+            let mut audio_core = audio_core.lock();
+            audio_core_thread.start();
+            audio_core
+                .as_mut()
+                .gba_mut()
+                .sync_mut()
+                .as_mut()
+                .expect("sync")
+                .set_fps_target(EXPECTED_FPS as f32);
+            audio_core_thread.handle().pause();
+            audio_core_thread
+        };
+
+        let audio_trapper = {
+            let audio_core = audio_core.clone();
+            let mut audio_core = audio_core.lock();
+            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_receiver)
+        };
+
         let trapper = {
             let core = core.clone();
             let mut core = core.lock();
@@ -112,37 +141,11 @@ impl Loaded {
                     gui_state,
                     config.clone(),
                     audio_state_sender,
+                    audio_core.clone(),
+                    audio_core_thread.handle(),
                     Arc::new(parking_lot::Mutex::new(fastforwarder)),
                 ),
             )
-        };
-
-        let audio_core = Arc::new(Mutex::new({
-            let mut core = mgba::core::Core::new_gba("tango")?;
-            let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
-            core.as_mut().load_rom(rom_vf)?;
-            core.as_mut().reset();
-            core
-        }));
-
-        let audio_core_thread = {
-            let mut audio_core_thread = mgba::thread::Thread::new(audio_core.clone());
-            let mut audio_core = audio_core.lock();
-            audio_core_thread.start();
-            audio_core
-                .as_mut()
-                .gba_mut()
-                .sync_mut()
-                .as_mut()
-                .expect("sync")
-                .set_fps_target(EXPECTED_FPS as f32);
-            audio_core_thread
-        };
-
-        let audio_trapper = {
-            let audio_core = audio_core.clone();
-            let mut audio_core = audio_core.lock();
-            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_receiver)
         };
 
         let supported_config = audio::get_supported_config(audio_device)?;
@@ -153,12 +156,12 @@ impl Loaded {
             &supported_config,
             audio::mux_stream::MuxStream::new(vec![
                 Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    core.clone(),
+                    audio_core.clone(),
                     supported_config.sample_rate(),
                     supported_config.channels(),
                 )),
                 Box::new(audio::timewarp_stream::TimewarpStream::new(
-                    audio_core.clone(),
+                    core.clone(),
                     supported_config.sample_rate(),
                     supported_config.channels(),
                 )),

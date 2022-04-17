@@ -2,7 +2,7 @@ use super::c;
 use super::core;
 
 #[repr(transparent)]
-pub struct Thread(Box<ThreadImpl>);
+pub struct Thread(std::sync::Arc<parking_lot::Mutex<Box<ThreadImpl>>>);
 
 pub struct ThreadImpl {
     raw: c::mCoreThread,
@@ -27,39 +27,40 @@ impl Thread {
         t.raw.logger.d = unsafe { *c::mLogGetContext() };
         t.raw.userData = &mut *t as *mut _ as *mut std::os::raw::c_void;
         t.raw.frameCallback = Some(c_frame_callback);
-        Thread(t)
+        Thread(std::sync::Arc::new(parking_lot::Mutex::new(t)))
     }
 
-    pub fn set_frame_callback(&mut self, f: Option<Box<dyn Fn() + Send>>) {
-        self.0.frame_callback = f;
+    pub fn set_frame_callback(&self, f: Option<Box<dyn Fn() + Send>>) {
+        self.0.lock().frame_callback = f;
     }
 
-    pub fn handle(&mut self) -> Handle {
+    pub fn handle(&self) -> Handle {
         Handle {
-            ptr: &mut self.0.raw,
-            _lifetime: std::marker::PhantomData,
+            _thread_arc: self.0.clone(),
+            ptr: &mut self.0.lock().raw,
         }
     }
 
-    pub fn start(&mut self) -> bool {
-        unsafe { c::mCoreThreadStart(&mut self.0.raw) }
+    pub fn start(&self) -> bool {
+        unsafe { c::mCoreThreadStart(&mut self.0.lock().raw) }
     }
 
-    pub fn join(&mut self) {
-        unsafe { c::mCoreThreadJoin(&mut self.0.raw) }
+    pub fn join(&self) {
+        unsafe { c::mCoreThreadJoin(&mut self.0.lock().raw) }
     }
 
-    pub fn end(&mut self) {
-        unsafe { c::mCoreThreadEnd(&mut self.0.raw) }
+    pub fn end(&self) {
+        unsafe { c::mCoreThreadEnd(&mut self.0.lock().raw) }
     }
 }
 
-pub struct Handle<'a> {
+#[derive(Clone)]
+pub struct Handle {
+    _thread_arc: std::sync::Arc<parking_lot::Mutex<Box<ThreadImpl>>>,
     ptr: *mut c::mCoreThread,
-    _lifetime: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Handle<'a> {
+impl Handle {
     pub fn pause(&self) {
         unsafe { c::mCoreThreadPause(self.ptr) }
     }
