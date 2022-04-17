@@ -199,12 +199,12 @@ pub struct BattleDebugStats {
     pub remote_qlen: usize,
     pub local_delay: u32,
     pub remote_delay: u32,
+    pub tps_adjustment: i32,
 }
 
 pub struct DebugStats {
     pub fps: f32,
     pub emu_tps: f32,
-    pub target_tps: f32,
     pub match_state: &'static str,
     pub battle_debug_stats: Option<BattleDebugStats>,
 }
@@ -733,10 +733,7 @@ impl State {
                             ui.end_row();
 
                             ui.label("TPS");
-                            ui.label(format!(
-                                "{:.0} (target = {:.0})",
-                                debug_stats.emu_tps, debug_stats.target_tps
-                            ));
+                            ui.label(format!("{:.0}", debug_stats.emu_tps));
                             ui.end_row();
 
                             ui.label("Match state");
@@ -746,6 +743,10 @@ impl State {
                             if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
                                 ui.label("Player index");
                                 ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
+                                ui.end_row();
+
+                                ui.label("TPS adjustment");
+                                ui.label(format!("{:}", battle_debug_stats.tps_adjustment));
                                 ui.end_row();
 
                                 ui.label("Queue length");

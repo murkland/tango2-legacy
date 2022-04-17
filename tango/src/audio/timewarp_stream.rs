@@ -1,17 +1,19 @@
 pub struct TimewarpStream {
-    core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    core: *mut mgba::c::mCore,
     sample_rate: cpal::SampleRate,
     channels: u16,
 }
 
+unsafe impl Send for TimewarpStream {}
+
 impl TimewarpStream {
     pub fn new(
-        core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+        thread: &mgba::thread::Thread,
         sample_rate: cpal::SampleRate,
         channels: u16,
     ) -> TimewarpStream {
         Self {
-            core,
+            core: unsafe { thread.raw_core_ptr() },
             sample_rate,
             channels,
         }
@@ -20,19 +22,18 @@ impl TimewarpStream {
 
 impl super::Stream for TimewarpStream {
     fn fill(&self, buf: &mut [i16]) -> usize {
-        let mut core = self.core.as_ref().lock();
+        let mut core = unsafe { mgba::core::CoreMutRef::from_ptr(self.core) };
         let frame_count = (buf.len() / self.channels as usize) as i32;
 
         let clock_rate = core.as_ref().frequency();
 
         let mut faux_clock = 1.0;
-        if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
             faux_clock = mgba::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
 
         let available = {
-            let mut core = core.as_mut();
             let mut left = core.audio_channel(0);
             left.set_rates(
                 clock_rate as f64,
@@ -47,7 +48,6 @@ impl super::Stream for TimewarpStream {
         };
 
         if self.channels == 2 {
-            let mut core = core.as_mut();
             let mut right = core.audio_channel(1);
             right.set_rates(
                 clock_rate as f64,
@@ -56,7 +56,7 @@ impl super::Stream for TimewarpStream {
             right.read_samples(&mut buf[1..], available, self.channels == 2);
         }
 
-        if let Some(sync) = core.as_mut().gba_mut().sync_mut().as_mut() {
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.consume_audio();
         }
 

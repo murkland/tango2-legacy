@@ -291,4 +291,11 @@ impl<'a> CoreMutRef<'a> {
             _lifetime: std::marker::PhantomData,
         }
     }
+
+    pub unsafe fn from_ptr(ptr: *mut c::mCore) -> Self {
+        CoreMutRef {
+            ptr: ptr,
+            _lifetime: std::marker::PhantomData,
+        }
+    }
 }

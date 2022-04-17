@@ -3,7 +3,7 @@ use crate::{battle, config, fastforwarder, gui, input, loaded};
 pub struct BattleStateFacadeGuard<'a> {
     m: &'a battle::Match,
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
-    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
+    audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
@@ -249,9 +249,8 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
-    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
+    audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
-    audio_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
     audio_core_handle: mgba::thread::Handle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -341,11 +340,9 @@ impl<'a> MatchStateFacadeGuard<'a> {
         };
         self.audio_core_handle.pause();
         let save_state = core.save_state().expect("save state");
-        self.audio_core
-            .lock()
-            .as_mut()
-            .load_state(&save_state)
-            .expect("load state");
+        self.audio_core_handle.run_on_core(move |mut core| {
+            core.load_state(&save_state).expect("load state");
+        });
         self.audio_core_handle.unpause();
         m.start_battle().await;
     }
@@ -391,9 +388,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct MatchStateFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
-    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
+    audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
-    audio_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
     audio_core_handle: mgba::thread::Handle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
@@ -404,7 +400,6 @@ impl MatchStateFacade {
             guard: self.arc.lock().await,
             audio_state_sender: self.audio_state_sender.clone(),
             fastforwarder: self.fastforwarder.clone(),
-            audio_core: self.audio_core.clone(),
             audio_core_handle: self.audio_core_handle.clone(),
             config: self.config.clone(),
         }
@@ -417,8 +412,7 @@ struct InnerFacade {
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-    audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
-    audio_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+    audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
     audio_core_handle: mgba::thread::Handle,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
@@ -433,8 +427,7 @@ impl Facade {
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-        audio_state_sender: std::sync::mpsc::Sender<mgba::state::State>,
-        audio_core: std::sync::Arc<parking_lot::Mutex<mgba::core::Core>>,
+        audio_state_sender: std::sync::mpsc::SyncSender<mgba::state::State>,
         audio_core_handle: mgba::thread::Handle,
         fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
@@ -445,7 +438,6 @@ impl Facade {
             config,
             gui_state,
             audio_state_sender,
-            audio_core,
             audio_core_handle,
             fastforwarder,
         })))
@@ -454,7 +446,6 @@ impl Facade {
         MatchStateFacade {
             arc: self.0.borrow().match_state.clone(),
             audio_state_sender: self.0.borrow().audio_state_sender.clone(),
-            audio_core: self.0.borrow().audio_core.clone(),
             audio_core_handle: self.0.borrow().audio_core_handle.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),
             config: self.0.borrow().config.clone(),

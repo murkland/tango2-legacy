@@ -92,13 +92,10 @@ fn main() -> Result<(), anyhow::Error> {
 
     log::info!("found rom: {}", rom_path.display());
 
-    let core = {
-        let mut core = mgba::core::Core::new_gba("tango")?;
-        let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
-        core.as_mut().load_rom(vf)?;
-        core.enable_video_buffer();
-        std::sync::Arc::new(parking_lot::Mutex::new(core))
-    };
+    let mut core = mgba::core::Core::new_gba("tango")?;
+    let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
+    core.as_mut().load_rom(vf)?;
+    core.enable_video_buffer();
 
     let vbuf = std::sync::Arc::new(parking_lot::Mutex::new(vec![
         0u8;
@@ -110,34 +107,6 @@ fn main() -> Result<(), anyhow::Error> {
         .default_output_device()
         .ok_or_else(|| anyhow::format_err!("could not open audio device"))?;
 
-    let thread = {
-        let thread = mgba::thread::Thread::new(core.clone());
-        let mut core = core.lock();
-        thread.start();
-        thread.handle().pause();
-        core.as_mut()
-            .gba_mut()
-            .sync_mut()
-            .as_mut()
-            .expect("sync")
-            .set_fps_target(60.0);
-        thread
-    };
-
-    {
-        let core = core.clone();
-        let vbuf = vbuf.clone();
-        thread.set_frame_callback(Some(Box::new(move || {
-            // TODO: This sometimes causes segfaults when the game gets unloaded.
-            let core = core.lock();
-            let mut vbuf = vbuf.lock();
-            vbuf.copy_from_slice(core.video_buffer().unwrap());
-            for i in (0..vbuf.len()).step_by(4) {
-                vbuf[i + 3] = 0xff;
-            }
-        })));
-    }
-
     let supported_config = tango::audio::get_supported_config(&audio_device)?;
     log::info!("selected audio config: {:?}", supported_config);
 
@@ -145,7 +114,7 @@ fn main() -> Result<(), anyhow::Error> {
         &audio_device,
         &supported_config,
         tango::audio::timewarp_stream::TimewarpStream::new(
-            core.clone(),
+            &core,
             supported_config.sample_rate(),
             supported_config.channels(),
         ),
@@ -178,7 +147,6 @@ fn main() -> Result<(), anyhow::Error> {
 
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let _trapper = {
-        let mut core = core.lock();
         let done = done.clone();
         let hooks = tango::bn6::BN6::new(&core.as_ref().game_title()).unwrap();
         hooks.prepare_for_fastforward(core.as_mut());
@@ -196,11 +164,30 @@ fn main() -> Result<(), anyhow::Error> {
         )
     };
 
+    let thread = mgba::thread::Thread::new(core);
+    thread.start();
+    thread.handle().pause();
+    thread.handle().run_on_core(|mut core| {
+        core.gba_mut()
+            .sync_mut()
+            .as_mut()
+            .expect("sync")
+            .set_fps_target(60.0);
+    });
     {
-        let mut core = core.lock();
-        core.as_mut().load_state(&replay.state)?;
-        thread.handle().unpause();
+        let vbuf = vbuf.clone();
+        thread.set_frame_callback(move |video_buffer| {
+            let mut vbuf = vbuf.lock();
+            vbuf.copy_from_slice(video_buffer);
+            for i in (0..vbuf.len()).step_by(4) {
+                vbuf[i + 3] = 0xff;
+            }
+        });
     }
+    thread.handle().run_on_core(move |mut core| {
+        core.load_state(&replay.state).expect("load state");
+    });
+    thread.handle().unpause();
 
     {
         let vbuf = vbuf.clone();

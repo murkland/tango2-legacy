@@ -135,14 +135,12 @@ impl Game {
                         return None;
                     };
 
-                    let core = loaded.lock_core();
                     let emu_tps_counter = emu_tps_counter.lock();
                     let fps_counter = fps_counter.lock();
                     let match_state = loaded.lock_match_state().await;
                     Some(gui::DebugStats {
                         fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
                         emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
-                        target_tps: core.as_ref().gba().sync().unwrap().fps_target(),
                         match_state: match &*match_state {
                             loaded::MatchState::NoMatch => "none",
                             loaded::MatchState::Aborted => "aborted",
@@ -160,6 +158,7 @@ impl Game {
                                         remote_qlen: battle.remote_queue_length().await,
                                         local_delay: battle.local_delay(),
                                         remote_delay: battle.remote_delay(),
+                                        tps_adjustment: battle.tps_adjustment(),
                                     }),
                                     None => None,
                                 }
@@ -275,7 +274,6 @@ impl Game {
                             let mut loaded = self.loaded.lock();
 
                             if let Some(loaded) = &*loaded {
-                                let mut core = loaded.lock_core();
                                 let config = self.config.lock();
 
                                 let mut keys = 0u32;
@@ -310,7 +308,9 @@ impl Game {
                                     keys |= mgba::input::keys::SELECT;
                                 }
 
-                                core.as_mut().set_keys(keys);
+                                loaded.thread_handle().run_on_core(move |mut core| {
+                                    core.set_keys(keys);
+                                });
                                 loaded.set_joyflags(keys);
                             } else {
                                 let gui_state = self.gui.state();

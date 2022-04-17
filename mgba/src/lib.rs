@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 pub mod arm_core;
 pub mod blip;
-mod c;
+pub mod c;
 pub mod core;
 pub mod gba;
 pub mod input;
