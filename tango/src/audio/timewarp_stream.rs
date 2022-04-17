@@ -43,17 +43,17 @@ impl super::Stream for TimewarpStream {
             if available > frame_count {
                 available = frame_count;
             }
-            left.read_samples(buf, available, self.channels == 2);
+            left.read_samples(buf, available, self.channels > 1);
             available
         };
 
-        if self.channels == 2 {
+        if self.channels > 1 {
             let mut right = core.audio_channel(1);
             right.set_rates(
                 clock_rate as f64,
                 self.sample_rate.0 as f64 * faux_clock as f64,
             );
-            right.read_samples(&mut buf[1..], available, self.channels == 2);
+            right.read_samples(&mut buf[1..], available, self.channels > 1);
         }
 
         if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
