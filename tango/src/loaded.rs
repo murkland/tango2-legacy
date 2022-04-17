@@ -12,11 +12,11 @@ pub enum MatchState {
 }
 
 pub struct Loaded {
+    _stream: cpal::Stream,
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
-    thread: mgba::thread::Thread,
     _audio_core_thread: mgba::thread::Thread,
-    _stream: cpal::Stream,
+    thread: mgba::thread::Thread,
 }
 
 impl Loaded {
