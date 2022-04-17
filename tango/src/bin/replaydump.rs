@@ -11,14 +11,24 @@ struct Cli {
     #[clap(parse(from_os_str))]
     path: Option<std::path::PathBuf>,
 
+    #[clap(long)]
+    ignore_crc32: bool,
+
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
 
-    #[clap(short('a'), long, default_value = "")]
+    #[clap(short('a'), long, default_value = "-ar 48000 -q:a 1 -ac 2")]
     ffmpeg_audio_flags: String,
 
-    #[clap(short('v'), long, default_value = "")]
+    #[clap(
+        short('v'),
+        long,
+        default_value = "-vf scale=iw*4:ih*4:flags=neighbor,format=yuv420p -force_key_frames expr:gte(t,n_forced/2) -crf 18 -bf 2"
+    )]
     ffmpeg_video_flags: String,
+
+    #[clap(short('m'), long, default_value = "-movflags +faststart")]
+    ffmpeg_mux_flags: String,
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -85,7 +95,7 @@ fn main() -> Result<(), anyhow::Error> {
                 return vec![];
             }
 
-            if core.as_ref().crc32() != replay.state.rom_crc32() {
+            if !args.ignore_crc32 && core.as_ref().crc32() != replay.state.rom_crc32() {
                 log::warn!(
                     "{} is not eligible (crc32 is {:08x})",
                     dirent.path().display(),
@@ -133,39 +143,39 @@ fn main() -> Result<(), anyhow::Error> {
     let ffmpeg_path = "ffmpeg";
 
     let video_output = tempfile::NamedTempFile::new()?;
-    let mut video_ffmpeg = std::process::Command::new(&ffmpeg_path);
-    video_ffmpeg.stdin(std::process::Stdio::piped());
-    video_ffmpeg.args(&["-y"]);
-    // Input args.
-    video_ffmpeg.args(&[
-        "-f",
-        "rawvideo",
-        "-pixel_format",
-        "rgba",
-        "-video_size",
-        "240x160",
-        "-framerate",
-        "16777216/280896",
-        "-i",
-        "pipe:",
-    ]);
-    // Output args.
-    video_ffmpeg.args(shell_words::split(&args.ffmpeg_video_flags)?);
-    video_ffmpeg.args(&["-c:v", "libx264", "-f", "mp4"]);
-    video_ffmpeg.arg(&video_output.path());
-    let mut video_child = video_ffmpeg.spawn()?;
+    let mut video_child = std::process::Command::new(&ffmpeg_path)
+        .stdin(std::process::Stdio::piped())
+        .args(&["-y"])
+        // Input args.
+        .args(&[
+            "-f",
+            "rawvideo",
+            "-pixel_format",
+            "rgba",
+            "-video_size",
+            "240x160",
+            "-framerate",
+            "16777216/280896",
+            "-i",
+            "pipe:",
+        ])
+        // Output args.
+        .args(shell_words::split(&args.ffmpeg_video_flags)?)
+        .args(&["-c:v", "libx264", "-f", "mp4"])
+        .arg(&video_output.path())
+        .spawn()?;
 
     let audio_output = tempfile::NamedTempFile::new()?;
-    let mut audio_ffmpeg = std::process::Command::new(&ffmpeg_path);
-    audio_ffmpeg.stdin(std::process::Stdio::piped());
-    audio_ffmpeg.args(&["-y"]);
-    // Input args.
-    audio_ffmpeg.args(&["-f", "s16le", "-ar", "48k", "-ac", "2", "-i", "pipe:"]);
-    // Output args.
-    audio_ffmpeg.args(shell_words::split(&args.ffmpeg_audio_flags)?);
-    audio_ffmpeg.args(&["-c:a", "aac", "-f", "mp4"]);
-    audio_ffmpeg.arg(&audio_output.path());
-    let mut audio_child = audio_ffmpeg.spawn()?;
+    let mut audio_child = std::process::Command::new(&ffmpeg_path)
+        .stdin(std::process::Stdio::piped())
+        .args(&["-y"])
+        // Input args.
+        .args(&["-f", "s16le", "-ar", "48k", "-ac", "2", "-i", "pipe:"])
+        // Output args.
+        .args(shell_words::split(&args.ffmpeg_audio_flags)?)
+        .args(&["-c:a", "aac", "-f", "mp4"])
+        .arg(&audio_output.path())
+        .spawn()?;
 
     const SAMPLE_RATE: f64 = 48000.0;
     let mut samples = vec![0i16; SAMPLE_RATE as usize];
@@ -216,15 +226,16 @@ fn main() -> Result<(), anyhow::Error> {
     audio_child.stdin = None;
     audio_child.wait()?;
 
-    let mut mux_ffmpeg = std::process::Command::new(&ffmpeg_path);
-    mux_ffmpeg.args(&["-y"]);
-    mux_ffmpeg.args(&["-i"]);
-    mux_ffmpeg.arg(video_output.path());
-    mux_ffmpeg.args(&["-i"]);
-    mux_ffmpeg.arg(audio_output.path());
-    mux_ffmpeg.args(&["-c:v", "copy", "-c:a", "copy"]);
-    mux_ffmpeg.arg(output_path);
-    let mut mux_child = mux_ffmpeg.spawn()?;
+    let mut mux_child = std::process::Command::new(&ffmpeg_path)
+        .args(&["-y"])
+        .args(&["-i"])
+        .arg(video_output.path())
+        .args(&["-i"])
+        .arg(audio_output.path())
+        .args(&["-c:v", "copy", "-c:a", "copy"])
+        .args(shell_words::split(&args.ffmpeg_mux_flags)?)
+        .arg(output_path)
+        .spawn()?;
     mux_child.wait()?;
 
     Ok(())
