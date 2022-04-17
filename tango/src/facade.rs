@@ -338,11 +338,12 @@ impl<'a> MatchStateFacadeGuard<'a> {
         };
         self.audio_core_handle.pause();
         let save_state = core.save_state().expect("save state");
+        let audio_core_mux_handle = self.audio_core_mux_handle.clone();
         self.audio_core_handle.run_on_core(move |mut core| {
             core.load_state(&save_state).expect("load state");
+            audio_core_mux_handle.switch();
         });
         self.audio_core_handle.unpause();
-        self.audio_core_mux_handle.switch();
         m.start_battle().await;
     }
 
