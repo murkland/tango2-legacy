@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let log_file = std::fs::File::create(log_path)?;
 
-    std::process::Command::new(std::env::current_exe()?)
+    let status = std::process::Command::new(std::env::current_exe()?)
         .args(
             std::env::args_os()
                 .skip(1)
@@ -42,6 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .stderr(log_file)
         .spawn()?
         .wait()?;
+
+    if let Some(code) = status.code() {
+        std::process::exit(code);
+    }
 
     Ok(())
 }
