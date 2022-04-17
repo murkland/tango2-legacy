@@ -1,6 +1,6 @@
 # tango
 
-![tango](logo.png)
+![tango](docs/logo.png)
 
 (logo courtesy of [pnw_ssbmars](https://twitter.com/pnw_ssbmars) / ロゴ提供：[pnw_ssbmars](https://twitter.com/pnw_ssbmars))
 
