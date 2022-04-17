@@ -10,8 +10,8 @@ impl MuxStream {
 }
 
 impl super::Stream for MuxStream {
-    fn fill(&mut self, buf: &mut [i16]) -> usize {
-        for (i, stream) in self.streams.iter_mut().enumerate() {
+    fn fill(&self, buf: &mut [i16]) -> usize {
+        for (i, stream) in self.streams.iter().enumerate() {
             if i == self.index {
                 continue;
             }

@@ -19,7 +19,7 @@ impl TimewarpStream {
 }
 
 impl super::Stream for TimewarpStream {
-    fn fill(&mut self, buf: &mut [i16]) -> usize {
+    fn fill(&self, buf: &mut [i16]) -> usize {
         let mut core = self.core.as_ref().lock();
         let frame_count = (buf.len() / self.channels as usize) as i32;
 

@@ -4,7 +4,7 @@ pub mod mux_stream;
 pub mod timewarp_stream;
 
 pub trait Stream {
-    fn fill(&mut self, buf: &mut [i16]) -> usize;
+    fn fill(&self, buf: &mut [i16]) -> usize;
 }
 
 pub fn get_supported_config(device: &cpal::Device) -> anyhow::Result<cpal::SupportedStreamConfig> {
@@ -29,7 +29,7 @@ pub fn get_supported_config(device: &cpal::Device) -> anyhow::Result<cpal::Suppo
 pub fn open_stream(
     device: &cpal::Device,
     supported_config: &cpal::SupportedStreamConfig,
-    mut stream: impl Stream + Send + 'static,
+    stream: impl Stream + Send + 'static,
 ) -> Result<cpal::Stream, anyhow::Error> {
     let error_callback = |err| log::error!("audio stream error: {}", err);
 
