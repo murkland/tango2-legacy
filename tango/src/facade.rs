@@ -32,7 +32,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
         joyflags: u16,
         custom_screen_state: u8,
         turn: Vec<u8>,
-    ) {
+    ) -> bool {
         let fastforwarder = self.fastforwarder.clone();
         let battle_number = self.guard.number;
 
@@ -46,7 +46,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
         let local_tick = current_tick + battle.local_delay();
         let remote_tick = battle.last_committed_remote_input().local_tick;
 
-        battle
+        if !battle
             .add_local_input(input::Input {
                 local_tick,
                 remote_tick,
@@ -54,7 +54,10 @@ impl<'a> BattleStateFacadeGuard<'a> {
                 custom_screen_state,
                 turn: turn.clone(),
             })
-            .await;
+            .await
+        {
+            return false;
+        }
 
         self.m
             .transport()
@@ -97,6 +100,8 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
         battle.set_committed_state(committed_state);
         battle.set_last_input(last_input);
+
+        true
     }
 
     pub fn set_committed_state(&mut self, state: mgba::state::State) {

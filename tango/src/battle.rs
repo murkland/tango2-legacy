@@ -481,7 +481,7 @@ impl Match {
         let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
-            iq: input::PairQueue::new(60, self.r#impl.input_delay),
+            iq: input::PairQueue::new(120, self.r#impl.input_delay),
             remote_delay: 0,
             is_accepting_input: false,
             last_committed_remote_input: input::Input {
@@ -615,14 +615,14 @@ impl Battle {
         (input_pairs, left)
     }
 
-    pub async fn add_local_input(&mut self, input: input::Input) {
+    pub async fn add_local_input(&mut self, input: input::Input) -> bool {
         log::debug!("local input: {:?}", input);
-        self.iq.add_local_input(input).await;
+        self.iq.add_local_input(input).await
     }
 
-    pub async fn add_remote_input(&mut self, input: input::Input) {
+    pub async fn add_remote_input(&mut self, input: input::Input) -> bool {
         log::debug!("remote input: {:?}", input);
-        self.iq.add_remote_input(input).await;
+        self.iq.add_remote_input(input).await
     }
 
     pub fn add_local_pending_turn(&mut self, marshaled: Vec<u8>) {

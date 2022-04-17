@@ -11,12 +11,8 @@ pub struct PairQueue<T>
 where
     T: Clone,
 {
-    local_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
-    remote_semaphore: std::sync::Arc<tokio::sync::Semaphore>,
-    queues: tokio::sync::Mutex<(
-        std::collections::VecDeque<(T, tokio::sync::OwnedSemaphorePermit)>,
-        std::collections::VecDeque<(T, tokio::sync::OwnedSemaphorePermit)>,
-    )>,
+    max_length: usize,
+    queues: tokio::sync::Mutex<(std::collections::VecDeque<T>, std::collections::VecDeque<T>)>,
     local_delay: u32,
 }
 
@@ -33,30 +29,33 @@ impl<T> PairQueue<T>
 where
     T: Clone,
 {
-    pub fn new(size: usize, local_delay: u32) -> Self {
+    pub fn new(max_length: usize, local_delay: u32) -> Self {
         PairQueue {
-            local_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
-            remote_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(size)),
+            max_length,
             queues: tokio::sync::Mutex::new((
-                std::collections::VecDeque::with_capacity(size),
-                std::collections::VecDeque::with_capacity(size),
+                std::collections::VecDeque::with_capacity(max_length),
+                std::collections::VecDeque::with_capacity(max_length),
             )),
             local_delay,
         }
     }
 
-    pub async fn add_local_input(&self, v: T) {
-        let sem = self.local_semaphore.clone();
-        let permit = sem.acquire_owned().await.expect("acquire semaphore permit");
+    pub async fn add_local_input(&self, v: T) -> bool {
         let mut queues = self.queues.lock().await;
-        queues.0.push_back((v, permit));
+        if queues.0.len() >= self.max_length {
+            return false;
+        }
+        queues.0.push_back(v);
+        true
     }
 
-    pub async fn add_remote_input(&self, v: T) {
-        let sem = self.remote_semaphore.clone();
-        let permit = sem.acquire_owned().await.expect("acquire semaphore permit");
+    pub async fn add_remote_input(&self, v: T) -> bool {
         let mut queues = self.queues.lock().await;
-        queues.1.push_back((v, permit));
+        if queues.1.len() >= self.max_length {
+            return false;
+        }
+        queues.1.push_back(v);
+        true
     }
 
     pub fn local_delay(&self) -> u32 {
@@ -90,7 +89,7 @@ where
                 let remotexs = remoteq.drain(..n as usize);
                 localxs
                     .zip(remotexs)
-                    .map(|((local, _), (remote, _))| Pair { local, remote })
+                    .map(|(local, remote)| Pair { local, remote })
                     .collect()
             }
         };
@@ -100,12 +99,7 @@ where
             if n < 0 {
                 vec![]
             } else {
-                queues
-                    .0
-                    .range(..n as usize)
-                    .map(|(inp, _)| inp)
-                    .cloned()
-                    .collect()
+                queues.0.range(..n as usize).cloned().collect()
             }
         };
 

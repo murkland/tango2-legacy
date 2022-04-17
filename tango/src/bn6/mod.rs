@@ -162,29 +162,27 @@ impl hooks::Hooks for BN6 {
 
                                     let current_tick = munger.current_tick(core);
                                     if !battle_state.has_committed_state() {
-                                        battle_state.set_committed_state(core.save_state().expect("save state"));
+                                        battle_state.set_committed_state(
+                                            core.save_state().expect("save state"),
+                                        );
                                         battle_state.fill_input_delay(current_tick).await;
                                         log::info!("battle state committed");
                                     }
 
                                     let turn = battle_state.take_local_pending_turn();
 
-                                    const TIMEOUT: std::time::Duration =
-                                        std::time::Duration::from_secs(5);
-                                    if let Err(_) = tokio::time::timeout(
-                                        TIMEOUT,
-                                        battle_state.add_local_input_and_fastforward(
+                                    if !battle_state
+                                        .add_local_input_and_fastforward(
                                             core,
                                             current_tick,
                                             facade.joyflags() as u16,
                                             munger.local_custom_screen_state(core),
-                                            turn.clone()
-                                        ),
-                                    )
-                                    .await {
-                                        log::error!("could not queue local input within {:?}, dropping connection", TIMEOUT);
+                                            turn.clone(),
+                                        )
+                                        .await
+                                    {
                                         break 'abort;
-                                    };
+                                    }
                                     return;
                                 }
                                 match_state.abort(core);
