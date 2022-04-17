@@ -5,7 +5,7 @@ pub struct MuxStream {
 
 impl MuxStream {
     pub fn new(streams: Vec<Box<dyn super::Stream + Send + 'static>>) -> MuxStream {
-        Self { streams, index: 1 }
+        Self { streams, index: 0 }
     }
 }
 

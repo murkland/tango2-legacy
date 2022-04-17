@@ -110,17 +110,6 @@ fn main() -> Result<(), anyhow::Error> {
     let supported_config = tango::audio::get_supported_config(&audio_device)?;
     log::info!("selected audio config: {:?}", supported_config);
 
-    let stream = tango::audio::open_stream(
-        &audio_device,
-        &supported_config,
-        tango::audio::timewarp_stream::TimewarpStream::new(
-            &core,
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ),
-    )?;
-    stream.play()?;
-
     let event_loop = winit::event_loop::EventLoop::new();
 
     let window = {
@@ -188,6 +177,17 @@ fn main() -> Result<(), anyhow::Error> {
         core.load_state(&replay.state).expect("load state");
     });
     thread.handle().unpause();
+
+    let stream = tango::audio::open_stream(
+        &audio_device,
+        &supported_config,
+        tango::audio::timewarp_stream::TimewarpStream::new(
+            &thread,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ),
+    )?;
+    stream.play()?;
 
     {
         let vbuf = vbuf.clone();
