@@ -31,7 +31,7 @@ unsafe extern "C" fn c_log<T>(
     category: i32,
     level: u32,
     fmt: *const std::os::raw::c_char,
-    args: *mut T,
+    args: T,
 ) {
     LOG_FUNC.lock().as_ref()(category, level, vsprintf::vsprintf(fmt, args).unwrap());
 }
