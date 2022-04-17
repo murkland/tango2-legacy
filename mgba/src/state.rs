@@ -8,7 +8,7 @@ unsafe impl Send for State {}
 
 impl State {
     pub fn rom_title(&self) -> String {
-        let title = unsafe { &*(&self.0.title as *const [i8] as *const [u8]) };
+        let title = unsafe { &*(&self.0.title as *const [std::os::raw::c_char] as *const [u8]) };
         let cstr = match std::ffi::CString::new(title) {
             Ok(r) => r,
             Err(err) => {

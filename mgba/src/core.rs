@@ -115,7 +115,10 @@ impl<'a> CoreRef<'a> {
     pub fn game_title(&self) -> String {
         let mut title = [0u8; 16];
         unsafe {
-            (*self.ptr).getGameTitle.unwrap()(self.ptr, title.as_mut_ptr() as *mut _ as *mut i8)
+            (*self.ptr).getGameTitle.unwrap()(
+                self.ptr,
+                title.as_mut_ptr() as *mut _ as *mut std::os::raw::c_char,
+            )
         }
         let cstr = match std::ffi::CString::new(title) {
             Ok(r) => r,
@@ -130,7 +133,10 @@ impl<'a> CoreRef<'a> {
     pub fn game_code(&self) -> String {
         let mut code = [0u8; 12];
         unsafe {
-            (*self.ptr).getGameCode.unwrap()(self.ptr, code.as_mut_ptr() as *mut _ as *mut i8)
+            (*self.ptr).getGameCode.unwrap()(
+                self.ptr,
+                code.as_mut_ptr() as *mut _ as *mut std::os::raw::c_char,
+            )
         }
         let cstr = match std::ffi::CString::new(code) {
             Ok(r) => r,
