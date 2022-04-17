@@ -133,10 +133,10 @@ fn main() -> Result<(), anyhow::Error> {
     };
     let hooks = tango::bn6::BN6::new(&core.as_ref().game_title()).unwrap();
     hooks.prepare_for_fastforward(core.as_mut());
-    let _trapper = {
+    {
         let ff_state = ff_state.clone();
-        hooks.install_fastforwarder_hooks(core.as_mut(), ff_state)
-    };
+        core.set_traps(hooks.get_fastforwarder_traps(ff_state));
+    }
 
     core.as_mut().load_state(&replay.state)?;
 
