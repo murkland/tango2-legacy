@@ -329,15 +329,15 @@ impl MatchImpl {
                         Some(b) => b,
                     };
 
-                    battle
-                        .add_remote_input(input::Input {
-                            local_tick: input.local_tick,
-                            remote_tick: input.remote_tick,
-                            joyflags: input.joyflags as u16,
-                            custom_screen_state: input.custom_screen_state as u8,
-                            turn: input.turn,
-                        })
-                        .await;
+                    if !battle.add_remote_input(input::Input {
+                        local_tick: input.local_tick,
+                        remote_tick: input.remote_tick,
+                        joyflags: input.joyflags as u16,
+                        custom_screen_state: input.custom_screen_state as u8,
+                        turn: input.turn,
+                    }) {
+                        anyhow::bail!("remote overflowed our input buffer");
+                    }
                 }
                 p => anyhow::bail!("unknown packet: {:?}", p),
             }
@@ -581,12 +581,12 @@ impl Battle {
         self.remote_delay
     }
 
-    pub async fn local_queue_length(&self) -> usize {
-        self.iq.local_queue_length().await
+    pub fn local_queue_length(&self) -> usize {
+        self.iq.local_queue_length()
     }
 
-    pub async fn remote_queue_length(&self) -> usize {
-        self.iq.remote_queue_length().await
+    pub fn remote_queue_length(&self) -> usize {
+        self.iq.remote_queue_length()
     }
 
     pub fn mark_accepting_input(&mut self) {
@@ -605,24 +605,24 @@ impl Battle {
         &self.committed_state
     }
 
-    pub async fn consume_and_peek_local(
+    pub fn consume_and_peek_local(
         &mut self,
     ) -> (Vec<input::Pair<input::Input>>, Vec<input::Input>) {
-        let (input_pairs, left) = self.iq.consume_and_peek_local().await;
+        let (input_pairs, left) = self.iq.consume_and_peek_local();
         if let Some(last) = input_pairs.last() {
             self.last_committed_remote_input = last.remote.clone();
         }
         (input_pairs, left)
     }
 
-    pub async fn add_local_input(&mut self, input: input::Input) -> bool {
+    pub fn add_local_input(&mut self, input: input::Input) -> bool {
         log::debug!("local input: {:?}", input);
-        self.iq.add_local_input(input).await
+        self.iq.add_local_input(input)
     }
 
-    pub async fn add_remote_input(&mut self, input: input::Input) -> bool {
+    pub fn add_remote_input(&mut self, input: input::Input) -> bool {
         log::debug!("remote input: {:?}", input);
-        self.iq.add_remote_input(input).await
+        self.iq.add_remote_input(input)
     }
 
     pub fn add_local_pending_turn(&mut self, marshaled: Vec<u8>) {

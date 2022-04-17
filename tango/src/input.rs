@@ -12,7 +12,8 @@ where
     T: Clone,
 {
     max_length: usize,
-    queues: tokio::sync::Mutex<(std::collections::VecDeque<T>, std::collections::VecDeque<T>)>,
+    local_queue: std::collections::VecDeque<T>,
+    remote_queue: std::collections::VecDeque<T>,
     local_delay: u32,
 }
 
@@ -32,29 +33,25 @@ where
     pub fn new(max_length: usize, local_delay: u32) -> Self {
         PairQueue {
             max_length,
-            queues: tokio::sync::Mutex::new((
-                std::collections::VecDeque::with_capacity(max_length),
-                std::collections::VecDeque::with_capacity(max_length),
-            )),
+            local_queue: std::collections::VecDeque::with_capacity(max_length),
+            remote_queue: std::collections::VecDeque::with_capacity(max_length),
             local_delay,
         }
     }
 
-    pub async fn add_local_input(&self, v: T) -> bool {
-        let mut queues = self.queues.lock().await;
-        if queues.0.len() >= self.max_length {
+    pub fn add_local_input(&mut self, v: T) -> bool {
+        if self.local_queue.len() >= self.max_length {
             return false;
         }
-        queues.0.push_back(v);
+        self.local_queue.push_back(v);
         true
     }
 
-    pub async fn add_remote_input(&self, v: T) -> bool {
-        let mut queues = self.queues.lock().await;
-        if queues.1.len() >= self.max_length {
+    pub fn add_remote_input(&mut self, v: T) -> bool {
+        if self.remote_queue.len() >= self.max_length {
             return false;
         }
-        queues.1.push_back(v);
+        self.remote_queue.push_back(v);
         true
     }
 
@@ -62,44 +59,39 @@ where
         self.local_delay
     }
 
-    pub async fn local_queue_length(&self) -> usize {
-        let queues = self.queues.lock().await;
-        queues.0.len()
+    pub fn local_queue_length(&self) -> usize {
+        self.local_queue.len()
     }
 
-    pub async fn remote_queue_length(&self) -> usize {
-        let queues = self.queues.lock().await;
-        queues.1.len()
+    pub fn remote_queue_length(&self) -> usize {
+        self.remote_queue.len()
     }
 
-    pub async fn consume_and_peek_local(&mut self) -> (Vec<Pair<T>>, Vec<T>) {
-        let mut queues = self.queues.lock().await;
-
+    pub fn consume_and_peek_local(&mut self) -> (Vec<Pair<T>>, Vec<T>) {
         let to_commit = {
-            let mut n = queues.0.len() as isize - self.local_delay as isize;
-            if (queues.1.len() as isize) < n {
-                n = queues.1.len() as isize;
+            let mut n = self.local_queue.len() as isize - self.local_delay as isize;
+            if (self.remote_queue.len() as isize) < n {
+                n = self.remote_queue.len() as isize;
             }
 
             if n < 0 {
                 vec![]
             } else {
-                let (ref mut localq, ref mut remoteq) = &mut *queues;
-                let localxs = localq.drain(..n as usize);
-                let remotexs = remoteq.drain(..n as usize);
-                localxs
-                    .zip(remotexs)
+                let local_inputs = self.local_queue.drain(..n as usize);
+                let remote_inputs = self.remote_queue.drain(..n as usize);
+                local_inputs
+                    .zip(remote_inputs)
                     .map(|(local, remote)| Pair { local, remote })
                     .collect()
             }
         };
 
         let peeked = {
-            let n = queues.0.len() as isize - self.local_delay as isize;
+            let n = self.local_queue.len() as isize - self.local_delay as isize;
             if n < 0 {
                 vec![]
             } else {
-                queues.0.range(..n as usize).cloned().collect()
+                self.local_queue.range(..n as usize).cloned().collect()
             }
         };
 

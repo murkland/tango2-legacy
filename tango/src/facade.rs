@@ -46,16 +46,13 @@ impl<'a> BattleStateFacadeGuard<'a> {
         let local_tick = current_tick + battle.local_delay();
         let remote_tick = battle.last_committed_remote_input().local_tick;
 
-        if !battle
-            .add_local_input(input::Input {
-                local_tick,
-                remote_tick,
-                joyflags,
-                custom_screen_state,
-                turn: turn.clone(),
-            })
-            .await
-        {
+        if !battle.add_local_input(input::Input {
+            local_tick,
+            remote_tick,
+            joyflags,
+            custom_screen_state,
+            turn: turn.clone(),
+        }) {
             return false;
         }
 
@@ -74,7 +71,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .await
             .expect("send input");
 
-        let (input_pairs, left) = battle.consume_and_peek_local().await;
+        let (input_pairs, left) = battle.consume_and_peek_local();
 
         for ip in &input_pairs {
             battle
@@ -126,26 +123,22 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .as_mut()
             .expect("attempted to get battle information while no battle was active!");
         for i in 0..battle.local_delay() {
-            battle
-                .add_local_input(input::Input {
-                    local_tick: current_tick + i,
-                    remote_tick: 0,
-                    joyflags: 0,
-                    custom_screen_state: 0,
-                    turn: vec![],
-                })
-                .await;
+            assert!(battle.add_local_input(input::Input {
+                local_tick: current_tick + i,
+                remote_tick: 0,
+                joyflags: 0,
+                custom_screen_state: 0,
+                turn: vec![],
+            }));
         }
         for i in 0..battle.remote_delay() {
-            battle
-                .add_remote_input(input::Input {
-                    local_tick: current_tick + i,
-                    remote_tick: 0,
-                    joyflags: 0,
-                    custom_screen_state: 0,
-                    turn: vec![],
-                })
-                .await;
+            assert!(battle.add_remote_input(input::Input {
+                local_tick: current_tick + i,
+                remote_tick: 0,
+                joyflags: 0,
+                custom_screen_state: 0,
+                turn: vec![],
+            }));
         }
     }
 

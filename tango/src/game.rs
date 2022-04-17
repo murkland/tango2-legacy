@@ -154,8 +154,8 @@ impl Game {
                                 match &battle_state.battle {
                                     Some(battle) => Some(gui::BattleDebugStats {
                                         local_player_index: battle.local_player_index(),
-                                        local_qlen: battle.local_queue_length().await,
-                                        remote_qlen: battle.remote_queue_length().await,
+                                        local_qlen: battle.local_queue_length(),
+                                        remote_qlen: battle.remote_queue_length(),
                                         local_delay: battle.local_delay(),
                                         remote_delay: battle.remote_delay(),
                                         tps_adjustment: battle.tps_adjustment(),
