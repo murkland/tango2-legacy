@@ -24,6 +24,7 @@ fn main() {
             println!("cargo:rustc-link-lib=ole32");
             println!("cargo:rustc-link-lib=uuid");
         }
+        "linux" => {}
         tos => panic!("unknown target os {:?}!", tos),
     }
     println!("cargo:rerun-if-changed=wrapper.h");
