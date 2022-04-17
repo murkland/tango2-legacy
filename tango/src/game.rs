@@ -308,9 +308,6 @@ impl Game {
                                     keys |= mgba::input::keys::SELECT;
                                 }
 
-                                loaded.thread_handle().run_on_core(move |mut core| {
-                                    core.set_keys(keys);
-                                });
                                 loaded.set_joyflags(keys);
                             } else {
                                 let gui_state = self.gui.state();

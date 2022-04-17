@@ -176,7 +176,7 @@ fn main() -> Result<(), anyhow::Error> {
     });
     {
         let vbuf = vbuf.clone();
-        thread.set_frame_callback(move |video_buffer| {
+        thread.set_frame_callback(move |_core, video_buffer| {
             let mut vbuf = vbuf.lock();
             vbuf.copy_from_slice(video_buffer);
             for i in (0..vbuf.len()).step_by(4) {

@@ -7,14 +7,20 @@ pub struct Thread(std::sync::Arc<parking_lot::Mutex<Box<ThreadImpl>>>);
 pub struct ThreadImpl {
     core: core::Core,
     raw: c::mCoreThread,
-    frame_callback: Option<Box<dyn Fn(&[u8]) + Send + 'static>>,
+    frame_callback: Option<Box<dyn Fn(core::CoreMutRef, &[u8]) + Send + 'static>>,
     current_callback: std::cell::RefCell<Option<Box<dyn Fn(crate::core::CoreMutRef<'_>)>>>,
 }
 
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     let t = &*((*ptr).userData as *mut ThreadImpl);
     if let Some(cb) = t.frame_callback.as_ref() {
-        cb(t.core.video_buffer().unwrap());
+        cb(
+            core::CoreMutRef {
+                ptr: t.raw.core,
+                _lifetime: std::marker::PhantomData,
+            },
+            t.core.video_buffer().unwrap(),
+        );
     }
 }
 
@@ -34,7 +40,7 @@ impl Thread {
         Thread(std::sync::Arc::new(parking_lot::Mutex::new(t)))
     }
 
-    pub fn set_frame_callback(&self, f: impl Fn(&[u8]) + Send + 'static) {
+    pub fn set_frame_callback(&self, f: impl Fn(core::CoreMutRef, &[u8]) + Send + 'static) {
         self.0.lock().frame_callback = Some(Box::new(f));
     }
 
