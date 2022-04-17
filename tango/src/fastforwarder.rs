@@ -37,7 +37,6 @@ pub struct Fastforwarder {
     core: mgba::core::Core,
     state: State,
     hooks: Box<dyn hooks::Hooks>,
-    _trapper: mgba::trapper::Trapper,
 }
 
 #[derive(Clone)]
@@ -149,18 +148,10 @@ impl Fastforwarder {
             std::cell::RefCell::<Option<InnerState>>::new(None),
         ));
 
-        let trapper = {
-            let trapper = hooks.install_fastforwarder_hooks(core.as_mut(), state.clone());
-            core.as_mut().reset();
-            trapper
-        };
+        core.set_traps(hooks.get_fastforwarder_traps(state.clone()));
+        core.as_mut().reset();
 
-        Ok(Fastforwarder {
-            core,
-            state,
-            hooks,
-            _trapper: trapper,
-        })
+        Ok(Fastforwarder { core, state, hooks })
     }
 
     pub fn fastforward(

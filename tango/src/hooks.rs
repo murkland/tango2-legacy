@@ -1,24 +1,21 @@
 use crate::{facade, fastforwarder};
 
 pub trait Hooks {
-    fn install_fastforwarder_hooks(
+    fn get_fastforwarder_traps(
         &self,
-        core: mgba::core::CoreMutRef,
         ff_state: fastforwarder::State,
-    ) -> mgba::trapper::Trapper;
+    ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
-    fn install_main_hooks(
+    fn get_primary_traps(
         &self,
-        core: mgba::core::CoreMutRef,
         handle: tokio::runtime::Handle,
         facade: facade::Facade,
-    ) -> mgba::trapper::Trapper;
+    ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
-    fn install_audio_hooks(
+    fn get_audio_traps(
         &self,
-        core: mgba::core::CoreMutRef,
         audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    ) -> mgba::trapper::Trapper;
+    ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);
 

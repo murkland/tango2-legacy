@@ -14,8 +14,6 @@ pub enum MatchState {
 pub struct Loaded {
     match_state: Arc<tokio::sync::Mutex<MatchState>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
-    _trapper: mgba::trapper::Trapper,
-    _audio_trapper: mgba::trapper::Trapper,
     thread: mgba::thread::Thread,
     _audio_core_thread: mgba::thread::Thread,
     _stream: cpal::Stream,
@@ -67,8 +65,7 @@ impl Loaded {
         audio_core.as_mut().load_rom(rom_vf)?;
         audio_core.as_mut().reset();
 
-        let audio_trapper =
-            bn6.install_audio_hooks(audio_core.as_mut(), audio_state_holder.clone());
+        audio_core.set_traps(bn6.get_audio_traps(audio_state_holder.clone()));
 
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
@@ -99,27 +96,23 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        let trapper = {
-            let fastforwarder =
-                fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?;
+        let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?;
 
-            bn6.install_main_hooks(
-                core.as_mut(),
+        core.set_traps(bn6.get_primary_traps(
+            handle.clone(),
+            facade::Facade::new(
                 handle.clone(),
-                facade::Facade::new(
-                    handle.clone(),
-                    match_state.clone(),
-                    joyflags.clone(),
-                    gui_state,
-                    config.clone(),
-                    audio_state_holder.clone(),
-                    audio_core_thread.handle(),
-                    primary_mux_handle,
-                    audio_core_mux_handle,
-                    Arc::new(parking_lot::Mutex::new(fastforwarder)),
-                ),
-            )
-        };
+                match_state.clone(),
+                joyflags.clone(),
+                gui_state,
+                config.clone(),
+                audio_state_holder.clone(),
+                audio_core_thread.handle(),
+                primary_mux_handle,
+                audio_core_mux_handle,
+                Arc::new(parking_lot::Mutex::new(fastforwarder)),
+            ),
+        ));
 
         let thread = mgba::thread::Thread::new(core);
         thread.start();
@@ -150,8 +143,6 @@ impl Loaded {
         Ok(Loaded {
             match_state,
             joyflags,
-            _trapper: trapper,
-            _audio_trapper: audio_trapper,
             thread,
             _audio_core_thread: audio_core_thread,
             _stream: stream,

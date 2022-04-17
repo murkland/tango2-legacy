@@ -2,12 +2,14 @@ use super::blip;
 use super::c;
 use super::gba;
 use super::state;
+use super::trapper;
 use super::vfile;
 use std::ffi::CString;
 
 pub struct Core {
     pub(super) ptr: *mut c::mCore,
     video_buffer: Option<Vec<u8>>,
+    trapper: Option<trapper::Trapper>,
 }
 
 unsafe impl Send for Core {}
@@ -36,6 +38,7 @@ impl Core {
         Ok(Core {
             ptr,
             video_buffer: None,
+            trapper: None,
         })
     }
 
@@ -68,6 +71,10 @@ impl Core {
 
     pub fn video_buffer(&self) -> Option<&[u8]> {
         self.video_buffer.as_deref()
+    }
+
+    pub fn set_traps(&mut self, traps: Vec<(u32, Box<dyn FnMut(CoreMutRef)>)>) {
+        self.trapper = Some(trapper::Trapper::new(self.as_mut(), traps));
     }
 
     pub unsafe fn raw_ptr(&self) -> *mut c::mCore {
