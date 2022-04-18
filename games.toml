@@ -35,12 +35,12 @@ title = "MEGAMAN6_GXX"
 crc32 = "9a4ce339"
 hooks = "bn6g"
 
-[games.bbn6f-v0.1]
+[games.bbn6f-v0_1]
 title = "MEGAMAN6_FXX"
 crc32 = "8d083638"
 hooks = "bn6f"
 
-[games.bbn6g-v0.1]
+[games.bbn6g-v0_1]
 title = "MEGAMAN6_GXX"
 crc32 = "8c860b42"
 hooks = "bn6g"
