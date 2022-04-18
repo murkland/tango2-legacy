@@ -530,7 +530,9 @@ impl Match {
         handle.spawn(async move {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {},
-                _ = r#impl.run() => {},
+                Err(e) = r#impl.run() => {
+                    log::info!("match thread ending: {:?}", e);
+                },
             };
             if let Negotiation::Negotiated { dc, peer_conn, .. } = &*r#impl.negotiation.lock().await
             {
