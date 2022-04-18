@@ -99,6 +99,11 @@ impl<'a> BattleStateFacadeGuard<'a> {
         battle.set_committed_state(committed_state);
         battle.set_last_input(last_input);
 
+        core.gba_mut()
+            .sync_mut()
+            .expect("set fps target")
+            .set_fps_target((loaded::EXPECTED_FPS as i32 + battle.tps_adjustment()) as f32);
+
         true
     }
 
