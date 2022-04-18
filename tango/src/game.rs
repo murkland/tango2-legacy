@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 pub struct Game {
     rt: tokio::runtime::Runtime,
-    compat: compat::Games,
+    compat: compat::CompatList,
     fps_counter: Arc<Mutex<tps::Counter>>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     audio_device: cpal::Device,
@@ -22,7 +22,7 @@ pub struct Game {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
-        let compat = toml::from_slice::<compat::Games>(&std::fs::read("compat.toml")?)?;
+        let compat = compat::load()?;
 
         log::info!(
             "wgpu adapters: {:?}",
