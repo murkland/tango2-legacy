@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 pub struct Game {
     rt: tokio::runtime::Runtime,
+    compat: compat::Games,
     fps_counter: Arc<Mutex<tps::Counter>>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     audio_device: cpal::Device,
@@ -173,6 +174,7 @@ impl Game {
 
         Ok(Game {
             rt,
+            compat,
             audio_device,
             config,
             fps_counter,
