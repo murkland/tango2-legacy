@@ -1,35 +1,24 @@
-[bn6f]
+compatibility = [
+  [ "bn6g", "bn6f", "bn6g-soundmod", "bn6f-soundmod" ],
+  [ "exe6g", "exe6f", "exe6g-soundmod", "exe6f-soundmod" ]
+]
+
+[games.bn6f]
 title = "MEGAMAN6_FXX"
 crc32 = "dee6f2a9"
 hooks = "bn6f"
-compatible_with = [
-    "bn6g",
-    "bn6f",
-]
 
-[bn6g]
+[games.bn6g]
 title = "MEGAMAN6_GXX"
 crc32 = "79452182"
 hooks = "bn6g"
-compatible_with = [
-    "bn6g",
-    "bn6f",
-]
 
-[exe6f]
+[games.exe6f]
 title = "ROCKEXE6_RXX"
 crc32 = "2dfb603e"
 hooks = "exe6f"
-compatible_with = [
-    "exe6g",
-    "exe6f",
-]
 
-[exe6g]
+[games.exe6g]
 title = "ROCKEXE6_GXX"
 hooks = "exe6g"
 crc32 = "6285918a"
-compatible_with = [
-    "exe6g",
-    "exe6f",
-]

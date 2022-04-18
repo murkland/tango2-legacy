@@ -21,24 +21,31 @@ pub struct Game {
     #[serde(deserialize_with = "from_hex", serialize_with = "to_hex")]
     pub crc32: u32,
     pub hooks: String,
-    pub compatible_with: std::collections::HashSet<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+struct Raw {
+    pub games: std::collections::HashMap<String, Game>,
+    pub compatibility: Vec<std::collections::HashSet<String>>,
 }
 
 pub struct CompatList {
     games: std::collections::HashMap<String, Game>,
     title_and_crc32_to_id: std::collections::HashMap<(String, u32), String>,
+    compatibility: Vec<std::collections::HashSet<String>>,
 }
 
 impl CompatList {
-    fn from_games(games: std::collections::HashMap<String, Game>) -> Self {
-        let title_and_crc32_to_id = games
+    fn from_raw(raw: Raw) -> Self {
+        let title_and_crc32_to_id = raw
+            .games
             .iter()
             .map(|(k, v)| ((v.title.clone(), v.crc32), k.clone()))
             .collect();
-        log::info!("{:?}", title_and_crc32_to_id);
         Self {
-            games,
+            games: raw.games,
             title_and_crc32_to_id,
+            compatibility: raw.compatibility,
         }
     }
 
@@ -49,12 +56,18 @@ impl CompatList {
     pub fn game_by_id(&self, id: &str) -> Option<&Game> {
         self.games.get(&id.to_string())
     }
+
+    pub fn is_compatible(&self, id1: &str, id2: &str) -> bool {
+        self.compatibility
+            .iter()
+            .any(|ids| ids.contains(id1) && ids.contains(id2))
+    }
 }
 
 const COMPAT_FILE: &str = "compat.toml";
 
 pub fn load() -> anyhow::Result<CompatList> {
-    Ok(CompatList::from_games(toml::from_slice(&std::fs::read(
+    Ok(CompatList::from_raw(toml::from_slice(&std::fs::read(
         COMPAT_FILE,
     )?)?))
 }
