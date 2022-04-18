@@ -53,6 +53,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
             custom_screen_state,
             turn: turn.clone(),
         }) {
+            log::warn!("local input buffer overflow!");
             return false;
         }
 
