@@ -489,7 +489,7 @@ impl Match {
                     "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
                 ))
                 .expect("format time"),
-            battle_state.number + 1,
+            battle_state.number,
             local_player_index + 1
         );
         let replay_file =
