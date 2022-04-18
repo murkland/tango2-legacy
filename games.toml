@@ -14,6 +14,16 @@ title = "MEGAMAN6_GXX"
 hooks = "bn6g"
 crc32 = "79452182"
 
+[games.bn6f-soundmod]
+title = "MEGAMAN6_FXX"
+hooks = "bn6g"
+crc32 = "692a4b1d"
+
+[games.bn6g-soundmod]
+title = "MEGAMAN6_GXX"
+hooks = "bn6g"
+crc32 = "d2d5105f"
+
 [games.exe6f]
 title = "ROCKEXE6_RXX"
 hooks = "exe6f"

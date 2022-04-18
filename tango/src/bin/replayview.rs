@@ -1,6 +1,5 @@
 use clap::Parser;
 use cpal::traits::{HostTrait, StreamTrait};
-use tango::hooks::Hooks;
 
 #[derive(clap::Parser)]
 struct Cli {
@@ -19,6 +18,8 @@ fn main() -> Result<(), anyhow::Error> {
     mgba::log::init();
 
     let args = Cli::parse();
+
+    let compat_list = std::sync::Arc::new(tango::compat::load()?);
 
     let path = match args.path {
         Some(path) => path,
@@ -42,7 +43,7 @@ fn main() -> Result<(), anyhow::Error> {
         }
     }
 
-    let rom_path = std::fs::read_dir("roms")?
+    let (id, rom_path) = std::fs::read_dir("roms")?
         .flat_map(|dirent| {
             let dirent = dirent.as_ref().expect("dirent");
             let mut core = mgba::core::Core::new_gba("tango").expect("new_gba");
@@ -85,12 +86,26 @@ fn main() -> Result<(), anyhow::Error> {
                 return vec![];
             }
 
-            return vec![dirent.path()];
+            let id = if let Some(id) = compat_list
+                .id_by_title_and_crc32(&core.as_ref().game_title(), core.as_ref().crc32())
+            {
+                id.to_string()
+            } else {
+                log::warn!(
+                    "could not find compatibility data for {} where title = {}, crc32 = {:08x}",
+                    dirent.path().display(),
+                    core.as_ref().game_title(),
+                    core.as_ref().crc32()
+                );
+                return vec![];
+            };
+
+            return vec![(id, dirent.path())];
         })
         .next()
         .ok_or_else(|| anyhow::format_err!("could not find eligible rom"))?;
 
-    log::info!("found rom: {}", rom_path.display());
+    log::info!("found rom {}: {}", id, rom_path.display());
 
     let mut core = mgba::core::Core::new_gba("tango")?;
     let vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
@@ -135,7 +150,9 @@ fn main() -> Result<(), anyhow::Error> {
     };
 
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let hooks = tango::bn6::BN6::new(&core.as_ref().game_title()).unwrap();
+    let hooks = tango::hooks::HOOKS
+        .get(&compat_list.game_by_id(&id).unwrap().hooks)
+        .unwrap();
     hooks.prepare_for_fastforward(core.as_mut());
 
     {

@@ -50,7 +50,9 @@ impl Loaded {
         )?;
         core.as_mut().load_save(save_vf)?;
 
-        let hooks = hooks::HOOKS.get(&id.to_string()).unwrap();
+        let hooks = hooks::HOOKS
+            .get(&compat_list.game_by_id(id).unwrap().hooks)
+            .unwrap();
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 

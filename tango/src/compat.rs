@@ -64,7 +64,7 @@ impl CompatList {
     }
 }
 
-const COMPAT_FILE: &str = "compat.toml";
+const COMPAT_FILE: &str = "games.toml";
 
 pub fn load() -> anyhow::Result<CompatList> {
     Ok(CompatList::from_raw(toml::from_slice(&std::fs::read(
