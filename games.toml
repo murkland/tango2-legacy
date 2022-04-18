@@ -6,50 +6,50 @@ compatibility = [
 
 [games.bn6f]
 title = "MEGAMAN6_FXX"
-hooks = "bn6f"
 crc32 = "dee6f2a9"
+hooks = "bn6f"
 
 [games.bn6g]
 title = "MEGAMAN6_GXX"
-hooks = "bn6g"
 crc32 = "79452182"
+hooks = "bn6g"
 
 [games.bn6f-soundmod]
 title = "MEGAMAN6_FXX"
-hooks = "bn6f"
 crc32 = "692a4b1d"
+hooks = "bn6f"
 
 [games.bn6g-soundmod]
 title = "MEGAMAN6_GXX"
-hooks = "bn6g"
 crc32 = "d2d5105f"
+hooks = "bn6g"
 
 [games.bn6f-allstars]
 title = "MEGAMAN6_FXX"
-hooks = "bn6f"
 crc32 = "1f22aaf3"
+hooks = "bn6f"
 
 [games.bn6g-allstars]
 title = "MEGAMAN6_GXX"
-hooks = "bn6g"
 crc32 = "9a4ce339"
+hooks = "bn6g"
 
 [games.exe6f]
 title = "ROCKEXE6_RXX"
-hooks = "exe6f"
 crc32 = "2dfb603e"
+hooks = "exe6f"
 
 [games.exe6g]
 title = "ROCKEXE6_GXX"
-hooks = "exe6g"
 crc32 = "6285918a"
+hooks = "exe6g"
 
 [games.exe6f-soundmod]
 title = "ROCKEXE6_RXX"
-hooks = "exe6f"
 crc32 = "37f05be3"
+hooks = "exe6f"
 
 [games.exe6g-soundmod]
 title = "ROCKEXE6_GXX"
-hooks = "exe6g"
 crc32 = "918f091e"
+hooks = "exe6g"
