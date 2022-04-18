@@ -74,18 +74,17 @@ impl Loaded {
 
         let mut muxer = audio::mux_stream::MuxStream::new();
 
-        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
-            &audio_core,
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ));
-
         let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
             &core,
             supported_config.sample_rate(),
             supported_config.channels(),
         ));
-        primary_mux_handle.switch();
+
+        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            &audio_core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
 
         let audio_core_thread = mgba::thread::Thread::new(audio_core);
         audio_core_thread.start();
