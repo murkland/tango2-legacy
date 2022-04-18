@@ -1,6 +1,6 @@
 compatibility = [
   [ "bn6g", "bn6f", "bn6g-soundmod", "bn6f-soundmod" ],
-  [ "exe6g", "exe6f", "exe6g-soundmod", "exe6f-soundmod" ],
+  [ "exe6g", "exe6f", "exe6g-soundmod", "exe6f-soundmod", "exe6g-idealexe", "exe6f-idealexe" ],
   [ "bn6g-allstars", "bn6f-allstars" ],
   [ "bbn6f-v0_1", "bbn6g-v0_1" ],
 ]
@@ -63,4 +63,14 @@ hooks = "exe6f"
 [games.exe6g-soundmod]
 title = "ROCKEXE6_GXX"
 crc32 = "918f091e"
+hooks = "exe6g"
+
+[games.exe6f-idealexe]
+title = "ROCKEXE6_RXX"
+crc32 = "bc8c697e"
+hooks = "exe6f"
+
+[games.exe6g-idealexe]
+title = "ROCKEXE6_GXX"
+crc32 = "0f1c6ba9"
 hooks = "exe6g"
