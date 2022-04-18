@@ -12,8 +12,8 @@ pub fn get_supported_config(device: &cpal::Device) -> anyhow::Result<cpal::Suppo
     supported_configs.sort_by_key(|x| {
         // Find the config that's closest to 2 channel 48000 Hz as we can.
         (
-            x.channels().abs_diff(2),
             x.max_sample_rate().0.abs_diff(48000),
+            x.channels().abs_diff(2),
         )
     });
 
