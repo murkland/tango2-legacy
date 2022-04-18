@@ -2,7 +2,7 @@ compatibility = [
   [ "bn6g", "bn6f", "bn6g-soundmod", "bn6f-soundmod" ],
   [ "exe6g", "exe6f", "exe6g-soundmod", "exe6f-soundmod" ],
   [ "bn6g-allstars", "bn6f-allstars" ],
-  [ "bbn6f-v0.1", "bbn6g-v0.1" ],
+  [ "bbn6f-v0_1", "bbn6g-v0_1" ],
 ]
 
 [games.bn6f]
