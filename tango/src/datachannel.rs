@@ -7,6 +7,7 @@ enum ReceiveState {
 
 pub struct DataChannel {
     dc: std::sync::Arc<webrtc::data_channel::RTCDataChannel>,
+    opened: std::sync::Arc<tokio::sync::Notify>,
     receive_state: tokio::sync::Mutex<ReceiveState>,
 }
 
@@ -15,9 +16,11 @@ impl DataChannel {
         dc: std::sync::Arc<webrtc::data_channel::RTCDataChannel>,
     ) -> std::sync::Arc<DataChannel> {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let opened = Arc::new(tokio::sync::Notify::new());
         let sender = std::sync::Arc::new(sender);
         let dc2 = std::sync::Arc::new(DataChannel {
             dc,
+            opened: opened.clone(),
             receive_state: tokio::sync::Mutex::new(ReceiveState::Receiver(receiver)),
         });
         {
@@ -47,24 +50,21 @@ impl DataChannel {
                 }))
                 .await;
         }
-        let notify = Arc::new(tokio::sync::Notify::new());
         {
             let dc2 = dc2.clone();
-            let notify = notify.clone();
             dc2.dc
                 .on_open(Box::new(move || {
-                    let notify = notify;
                     Box::pin(async move {
-                        notify.notify_one();
+                        opened.notify_one();
                     })
                 }))
                 .await;
         }
-        notify.notified().await;
         dc2
     }
 
     pub async fn send(&self, data: &[u8]) -> Result<usize, webrtc::Error> {
+        self.opened.notified().await;
         self.dc.send(&bytes::Bytes::copy_from_slice(data)).await
     }
 
