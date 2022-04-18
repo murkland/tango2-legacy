@@ -24,6 +24,16 @@ title = "MEGAMAN6_GXX"
 hooks = "bn6g"
 crc32 = "d2d5105f"
 
+[games.bn6f-allstars]
+title = "MEGAMAN6_FXX"
+hooks = "bn6f"
+crc32 = "1f22aaf3"
+
+[games.bn6g-allstars]
+title = "MEGAMAN6_GXX"
+hooks = "bn6g"
+crc32 = "9a4ce339"
+
 [games.exe6f]
 title = "ROCKEXE6_RXX"
 hooks = "exe6f"

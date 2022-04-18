@@ -231,6 +231,7 @@ impl MatchImpl {
             return Err(NegotiationError::IncompatibleGames);
         };
 
+        // THIS IS NOT AN ANTI-CHEAT MECHANISM. THIS IS NOT AN ANTI-CHEAT MECHANISM. THIS IS NOT AN ANTI-CHEAT MECHANISM.
         if !self.compat_list.is_compatible(my_game_id, their_game_id) {
             return Err(NegotiationError::IncompatibleGames);
         }
