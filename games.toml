@@ -33,3 +33,13 @@ crc32 = "2dfb603e"
 title = "ROCKEXE6_GXX"
 hooks = "exe6g"
 crc32 = "6285918a"
+
+[games.exe6f-soundmod]
+title = "ROCKEXE6_RXX"
+hooks = "exe6f"
+crc32 = "37f05be3"
+
+[games.exe6g-soundmod]
+title = "ROCKEXE6_GXX"
+hooks = "exe6g"
+crc32 = "918f091e"
