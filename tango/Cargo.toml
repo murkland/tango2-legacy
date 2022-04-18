@@ -1,6 +1,6 @@
 [package]
 name = "tango"
-version = "2.0.0-0.0.4"
+version = "2.0.0-0.0.5-newmoon22cycle7"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 default-run = "tango"
