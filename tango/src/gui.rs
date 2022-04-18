@@ -525,11 +525,12 @@ impl State {
                             }
                             battle::NegotiationStatus::Failed(failure) => {
                                 ui.label(match failure {
-                                    battle::NegotiationFailure::GameMismatch => locales::LOCALES
-                                        .lookup(
+                                    battle::NegotiationFailure::IncompatibleGames => {
+                                        locales::LOCALES.lookup(
                                             &locales::SYSTEM_LOCALE,
-                                            "connect.description-error-game-mismatch",
-                                        ),
+                                            "connect.description-error-incompatible-games",
+                                        )
+                                    }
                                     battle::NegotiationFailure::MatchTypeMismatch => {
                                         locales::LOCALES.lookup(
                                             &locales::SYSTEM_LOCALE,

@@ -1,4 +1,4 @@
-use crate::{audio, battle, config, fastforwarder, gui, input, loaded};
+use crate::{audio, battle, compat, config, fastforwarder, gui, input, loaded};
 
 pub struct BattleStateFacadeGuard<'a> {
     m: &'a battle::Match,
@@ -245,6 +245,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
+    compat_list: std::sync::Arc<compat::CompatList>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
@@ -288,6 +289,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
     ) {
         let config = self.config.lock();
         let m = battle::Match::new(
+            self.compat_list.clone(),
             s.code.to_string(),
             match_type,
             core.as_ref().game_title(),
@@ -388,6 +390,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct MatchStateFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+    compat_list: std::sync::Arc<compat::CompatList>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
@@ -400,6 +403,7 @@ impl MatchStateFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
+            compat_list: self.compat_list.clone(),
             audio_state_holder: self.audio_state_holder.clone(),
             fastforwarder: self.fastforwarder.clone(),
             audio_core_handle: self.audio_core_handle.clone(),
@@ -412,6 +416,7 @@ impl MatchStateFacade {
 
 struct InnerFacade {
     handle: tokio::runtime::Handle,
+    compat_list: std::sync::Arc<compat::CompatList>,
     match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
@@ -429,6 +434,7 @@ pub struct Facade(std::rc::Rc<std::cell::RefCell<InnerFacade>>);
 impl Facade {
     pub fn new(
         handle: tokio::runtime::Handle,
+        compat_list: std::sync::Arc<compat::CompatList>,
         match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
@@ -441,6 +447,7 @@ impl Facade {
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
             handle,
+            compat_list,
             match_state,
             joyflags,
             config,
@@ -455,6 +462,7 @@ impl Facade {
     pub fn match_state(&mut self) -> MatchStateFacade {
         MatchStateFacade {
             arc: self.0.borrow().match_state.clone(),
+            compat_list: self.0.borrow().compat_list.clone(),
             audio_state_holder: self.0.borrow().audio_state_holder.clone(),
             audio_core_handle: self.0.borrow().audio_core_handle.clone(),
             fastforwarder: self.0.borrow().fastforwarder.clone(),

@@ -1,3 +1,4 @@
+use crate::compat;
 use crate::datachannel;
 use crate::input;
 use crate::protocol;
@@ -38,6 +39,7 @@ pub struct Settings {
 }
 
 struct MatchImpl {
+    compat_list: std::sync::Arc<compat::CompatList>,
     negotiation: tokio::sync::Mutex<Negotiation>,
     start_time: std::time::SystemTime,
     session_id: String,
@@ -58,7 +60,7 @@ pub enum NegotiationError {
     IdenticalCommitment,
     ProtocolVersionMismatch,
     MatchTypeMismatch,
-    GameMismatch,
+    IncompatibleGames,
     InvalidCommitment,
     Other(anyhow::Error),
 }
@@ -89,7 +91,7 @@ impl std::fmt::Display for NegotiationError {
             NegotiationError::IdenticalCommitment => write!(f, "identical commitment"),
             NegotiationError::ProtocolVersionMismatch => write!(f, "protocol version mismatch"),
             NegotiationError::MatchTypeMismatch => write!(f, "match type mismatch"),
-            NegotiationError::GameMismatch => write!(f, "game mismatch"),
+            NegotiationError::IncompatibleGames => write!(f, "game mismatch"),
             NegotiationError::InvalidCommitment => write!(f, "invalid commitment"),
             NegotiationError::Other(e) => write!(f, "other error: {}", e),
         }
@@ -101,7 +103,7 @@ impl std::error::Error for NegotiationError {}
 pub enum NegotiationFailure {
     ProtocolVersionMismatch,
     MatchTypeMismatch,
-    GameMismatch,
+    IncompatibleGames,
     Unknown,
 }
 
@@ -215,8 +217,22 @@ impl MatchImpl {
             return Err(NegotiationError::MatchTypeMismatch);
         }
 
-        if hello.game_title[..8] != self.game_title[..8] {
-            return Err(NegotiationError::GameMismatch);
+        let my_game_id = self
+            .compat_list
+            .id_by_title_and_crc32(&self.game_title, self.game_crc32)
+            .unwrap();
+
+        let their_game_id = if let Some(id) = self
+            .compat_list
+            .id_by_title_and_crc32(&hello.game_title, hello.game_crc32)
+        {
+            id
+        } else {
+            return Err(NegotiationError::IncompatibleGames);
+        };
+
+        if !self.compat_list.is_compatible(my_game_id, their_game_id) {
+            return Err(NegotiationError::IncompatibleGames);
         }
 
         dc.send(
@@ -368,6 +384,7 @@ impl Drop for Match {
 
 impl Match {
     pub fn new(
+        compat_list: std::sync::Arc<compat::CompatList>,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -377,6 +394,7 @@ impl Match {
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
         let r#impl = std::sync::Arc::new(MatchImpl {
+            compat_list,
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                 NegotiationProgress::NotStarted,
             )),
@@ -413,8 +431,8 @@ impl Match {
         match &*self.r#impl.negotiation.lock().await {
             Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
             Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
-            Negotiation::Err(NegotiationError::GameMismatch) => {
-                NegotiationStatus::Failed(NegotiationFailure::GameMismatch)
+            Negotiation::Err(NegotiationError::IncompatibleGames) => {
+                NegotiationStatus::Failed(NegotiationFailure::IncompatibleGames)
             }
             Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
                 NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)

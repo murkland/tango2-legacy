@@ -1,4 +1,4 @@
-use crate::{audio, battle, config, facade, fastforwarder, gui, hooks, tps};
+use crate::{audio, battle, compat, config, facade, fastforwarder, gui, hooks, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -22,6 +22,7 @@ pub struct Loaded {
 impl Loaded {
     pub fn new(
         id: &str,
+        compat_list: Arc<compat::CompatList>,
         rom_filename: &std::path::Path,
         save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
@@ -101,6 +102,7 @@ impl Loaded {
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),
+                compat_list.clone(),
                 match_state.clone(),
                 joyflags.clone(),
                 gui_state,

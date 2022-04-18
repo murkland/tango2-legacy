@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 pub struct Game {
     rt: tokio::runtime::Runtime,
-    compat: compat::CompatList,
+    compat_list: Arc<compat::CompatList>,
     fps_counter: Arc<Mutex<tps::Counter>>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     audio_device: cpal::Device,
@@ -22,7 +22,7 @@ pub struct Game {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
-        let compat = compat::load()?;
+        let compat_list = std::sync::Arc::new(compat::load()?);
 
         log::info!(
             "wgpu adapters: {:?}",
@@ -174,7 +174,7 @@ impl Game {
 
         Ok(Game {
             rt,
-            compat,
+            compat_list,
             audio_device,
             config,
             fps_counter,
@@ -218,7 +218,7 @@ impl Game {
                 }
 
                 let id = if let Some(id) = self
-                    .compat
+                    .compat_list
                     .id_by_title_and_crc32(&core.as_ref().game_title(), core.as_ref().crc32())
                 {
                     id.to_string()
@@ -349,6 +349,7 @@ impl Game {
                                     *loaded = Some(
                                         loaded::Loaded::new(
                                             &selected_rom.id,
+                                            self.compat_list.clone(),
                                             &selected_rom.path,
                                             &save_filename,
                                             self.rt.handle().clone(),
