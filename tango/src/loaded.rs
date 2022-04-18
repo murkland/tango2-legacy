@@ -1,4 +1,4 @@
-use crate::{audio, battle, bn6, config, facade, fastforwarder, gui, hooks::Hooks, tps};
+use crate::{audio, battle, config, facade, fastforwarder, gui, hooks, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -21,6 +21,7 @@ pub struct Loaded {
 
 impl Loaded {
     pub fn new(
+        id: &str,
         rom_filename: &std::path::Path,
         save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
@@ -48,9 +49,7 @@ impl Loaded {
         )?;
         core.as_mut().load_save(save_vf)?;
 
-        log::info!("loaded game: {}", core.as_ref().game_title());
-
-        let bn6 = bn6::BN6::new(&core.as_ref().game_title()).unwrap();
+        let hooks = hooks::HOOKS.get(&id.to_string()).unwrap();
 
         let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
@@ -65,7 +64,7 @@ impl Loaded {
         audio_core.as_mut().load_rom(rom_vf)?;
         audio_core.as_mut().reset();
 
-        audio_core.set_traps(bn6.get_audio_traps(audio_state_holder.clone()));
+        audio_core.set_traps(hooks.get_audio_traps(audio_state_holder.clone()));
 
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
@@ -96,9 +95,9 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, Box::new(bn6.clone()))?;
+        let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
 
-        core.set_traps(bn6.get_primary_traps(
+        core.set_traps(hooks.get_primary_traps(
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),

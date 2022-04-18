@@ -1,5 +1,19 @@
 use crate::{facade, fastforwarder};
 
+mod bn6;
+
+lazy_static! {
+    pub static ref HOOKS: std::collections::HashMap<String, &'static Box<dyn Hooks + Send + Sync>> = {
+        let mut hooks =
+            std::collections::HashMap::<String, &'static Box<dyn Hooks + Send + Sync>>::new();
+        hooks.insert("bn6f".to_string(), &bn6::BN6F);
+        hooks.insert("bn6g".to_string(), &bn6::BN6G);
+        hooks.insert("exe6f".to_string(), &bn6::EXE6F);
+        hooks.insert("exe6g".to_string(), &bn6::EXE6G);
+        hooks
+    };
+}
+
 pub trait Hooks {
     fn get_fastforwarder_traps(
         &self,

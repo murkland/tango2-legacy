@@ -5,7 +5,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let s: &str = serde::Deserialize::deserialize(deserializer)?;
-    u32::from_str_radix(&s[2..], 16).map_err(D::Error::custom)
+    u32::from_str_radix(&s, 16).map_err(D::Error::custom)
 }
 
 fn to_hex<S>(v: &u32, serializer: S) -> Result<S::Ok, S::Error>
@@ -20,6 +20,7 @@ pub struct Game {
     pub title: String,
     #[serde(deserialize_with = "from_hex", serialize_with = "to_hex")]
     pub crc32: u32,
+    pub hooks: String,
     pub compatible_with: std::collections::HashSet<String>,
 }
 
@@ -34,6 +35,7 @@ impl CompatList {
             .iter()
             .map(|(k, v)| ((v.title.clone(), v.crc32), k.clone()))
             .collect();
+        log::info!("{:?}", title_and_crc32_to_id);
         Self {
             games,
             title_and_crc32_to_id,

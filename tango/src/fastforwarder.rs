@@ -36,7 +36,7 @@ impl InnerState {
 pub struct Fastforwarder {
     core: mgba::core::Core,
     state: State,
-    hooks: Box<dyn hooks::Hooks>,
+    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
 }
 
 #[derive(Clone)]
@@ -136,7 +136,10 @@ impl State {
 }
 
 impl Fastforwarder {
-    pub fn new(rom_path: &std::path::Path, hooks: Box<dyn hooks::Hooks>) -> anyhow::Result<Self> {
+    pub fn new(
+        rom_path: &std::path::Path,
+        hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
+    ) -> anyhow::Result<Self> {
         let mut core = {
             let mut core = mgba::core::Core::new_gba("tango")?;
             let rom_vf = mgba::vfile::VFile::open(rom_path, mgba::vfile::flags::O_RDONLY)?;

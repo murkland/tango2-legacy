@@ -178,7 +178,7 @@ pub struct ConnectRequest {
 #[derive(Clone, Debug)]
 pub struct ROMInfo {
     pub path: std::path::PathBuf,
-    pub title: String,
+    pub id: String,
 }
 
 pub struct State {
@@ -397,7 +397,7 @@ impl State {
                                             format!(
                                                 "{}: {}",
                                                 rom_info.path.to_string_lossy(),
-                                                rom_info.title
+                                                rom_info.id
                                             ),
                                         );
                                         if response.clicked() {

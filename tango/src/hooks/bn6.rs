@@ -9,14 +9,17 @@ pub struct BN6 {
     munger: munger::Munger,
 }
 
+lazy_static! {
+    pub static ref BN6F: Box<dyn hooks::Hooks + Send + Sync> = BN6::new(offsets::MEGAMAN6_FXX);
+    pub static ref BN6G: Box<dyn hooks::Hooks + Send + Sync> = BN6::new(offsets::MEGAMAN6_GXX);
+    pub static ref EXE6F: Box<dyn hooks::Hooks + Send + Sync> = BN6::new(offsets::ROCKEXE6_RXX);
+    pub static ref EXE6G: Box<dyn hooks::Hooks + Send + Sync> = BN6::new(offsets::ROCKEXE6_GXX);
+}
+
 impl BN6 {
-    pub fn new(title: &str) -> Option<BN6> {
-        let offsets = match offsets::offsets(title) {
-            Some(o) => o,
-            None => return None,
-        };
-        Some(BN6 {
-            offsets: offsets.clone(),
+    pub fn new(offsets: offsets::Offsets) -> Box<dyn hooks::Hooks + Send + Sync> {
+        Box::new(BN6 {
+            offsets,
             munger: munger::Munger { offsets },
         })
     }

@@ -1,4 +1,4 @@
-use crate::{bn6, compat, config, current_input, gui, loaded, tps};
+use crate::{compat, config, current_input, gui, loaded, tps};
 use cpal::traits::{DeviceTrait, HostTrait};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -217,10 +217,20 @@ impl Game {
                     return vec![];
                 }
 
-                let title = core.as_ref().game_title();
-                if bn6::BN6::new(&title).is_none() {
+                let id = if let Some(id) = self
+                    .compat
+                    .id_by_title_and_crc32(&core.as_ref().game_title(), core.as_ref().crc32())
+                {
+                    id.to_string()
+                } else {
+                    log::warn!(
+                        "could not find compatibility data for {} where title = {}, crc32 = {:08x}",
+                        dirent.path().display(),
+                        core.as_ref().game_title(),
+                        core.as_ref().crc32()
+                    );
                     return vec![];
-                }
+                };
 
                 vec![gui::ROMInfo {
                     path: dirent
@@ -228,7 +238,7 @@ impl Game {
                         .strip_prefix("roms")
                         .expect("strip prefix")
                         .to_owned(),
-                    title,
+                    id,
                 }]
             })
             .collect();
@@ -338,6 +348,7 @@ impl Game {
 
                                     *loaded = Some(
                                         loaded::Loaded::new(
+                                            &selected_rom.id,
                                             &selected_rom.path,
                                             &save_filename,
                                             self.rt.handle().clone(),
