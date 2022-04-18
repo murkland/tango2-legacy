@@ -20,12 +20,7 @@ pub struct Game {
     pub title: String,
     #[serde(deserialize_with = "from_hex", serialize_with = "to_hex")]
     pub crc32: u32,
+    pub compatible_with: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct Entry {
-    pub game: Game,
-    pub compatible_with: Vec<Game>,
-}
-
-pub type List = Vec<Entry>;
+pub type Games = std::collections::HashMap<String, Game>;

@@ -1,4 +1,4 @@
-use crate::{bn6, config, current_input, gui, loaded, tps};
+use crate::{bn6, compat, config, current_input, gui, loaded, tps};
 use cpal::traits::{DeviceTrait, HostTrait};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -21,6 +21,8 @@ pub struct Game {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
+        let compat = toml::from_slice::<compat::Games>(&std::fs::read("compat.toml")?)?;
+
         log::info!(
             "wgpu adapters: {:?}",
             wgpu::Instance::new(wgpu::Backends::all())

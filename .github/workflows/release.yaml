@@ -45,7 +45,7 @@ jobs:
                   mkdir tango/roms &&
                   mkdir tango/replays &&
                   mkdir tango/saves &&
-                  cp ../README.html ../target/x86_64-pc-windows-gnu/release/tango.exe tango &&
+                  cp ../README.html ../compat.toml ../target/x86_64-pc-windows-gnu/release/tango.exe tango &&
                   mv tango tango-${{ github.ref_name }} &&
                   zip -r tango-${{ github.ref_name }}-${{ matrix.target }}.zip tango-${{ github.ref_name }} &&
                   cp tango-${{ github.ref_name }}-${{ matrix.target }}.zip ..
