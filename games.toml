@@ -16,7 +16,7 @@ crc32 = "79452182"
 
 [games.bn6f-soundmod]
 title = "MEGAMAN6_FXX"
-hooks = "bn6g"
+hooks = "bn6f"
 crc32 = "692a4b1d"
 
 [games.bn6g-soundmod]
