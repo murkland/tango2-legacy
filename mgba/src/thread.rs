@@ -2,9 +2,9 @@ use super::c;
 use super::core;
 
 #[repr(transparent)]
-pub struct Thread(std::sync::Arc<parking_lot::Mutex<Box<ThreadImpl>>>);
+pub struct Thread(std::sync::Arc<parking_lot::Mutex<Box<InnerThread>>>);
 
-pub struct ThreadImpl {
+pub struct InnerThread {
     core: core::Core,
     raw: c::mCoreThread,
     frame_callback: Option<Box<dyn Fn(core::CoreMutRef, &[u8]) + Send + 'static>>,
@@ -12,7 +12,7 @@ pub struct ThreadImpl {
 }
 
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
-    let t = &*((*ptr).userData as *mut ThreadImpl);
+    let t = &*((*ptr).userData as *mut InnerThread);
     if let Some(cb) = t.frame_callback.as_ref() {
         cb(
             core::CoreMutRef {
@@ -24,10 +24,40 @@ unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     }
 }
 
+pub struct AudioGuard<'a> {
+    thread: parking_lot::MutexGuard<'a, Box<InnerThread>>,
+}
+
+impl<'a> AudioGuard<'a> {
+    pub fn core(&self) -> core::CoreRef<'a> {
+        core::CoreRef {
+            ptr: self.thread.raw.core,
+            _lifetime: std::marker::PhantomData::<&'a ()>,
+        }
+    }
+
+    pub fn core_mut(&mut self) -> core::CoreMutRef<'a> {
+        core::CoreMutRef {
+            ptr: self.thread.raw.core,
+            _lifetime: std::marker::PhantomData::<&'a ()>,
+        }
+    }
+}
+
+impl<'a> Drop for AudioGuard<'a> {
+    fn drop(&mut self) {
+        self.core_mut()
+            .gba_mut()
+            .sync_mut()
+            .unwrap()
+            .consume_audio()
+    }
+}
+
 impl Thread {
     pub fn new(core: core::Core) -> Self {
         let core_ptr = core.ptr;
-        let mut t = Box::new(ThreadImpl {
+        let mut t = Box::new(InnerThread {
             core,
             raw: unsafe { std::mem::zeroed::<c::mCoreThread>() },
             frame_callback: None,
@@ -66,12 +96,12 @@ impl Thread {
 
 #[derive(Clone)]
 pub struct Handle {
-    thread: std::sync::Arc<parking_lot::Mutex<Box<ThreadImpl>>>,
+    thread: std::sync::Arc<parking_lot::Mutex<Box<InnerThread>>>,
     ptr: *mut c::mCoreThread,
 }
 
 unsafe extern "C" fn c_run_function(ptr: *mut c::mCoreThread) {
-    let t = &mut *((*ptr).userData as *mut ThreadImpl);
+    let t = &mut *((*ptr).userData as *mut InnerThread);
     let mut cc = t.current_callback.borrow_mut();
     let cc = cc.as_mut().unwrap();
     cc(crate::core::CoreMutRef {
@@ -93,5 +123,15 @@ impl Handle {
         let thread = self.thread.lock();
         *thread.current_callback.borrow_mut() = Some(Box::new(f));
         unsafe { c::mCoreThreadRunFunction(self.ptr, Some(c_run_function)) }
+    }
+
+    pub fn lock_audio(&self) -> AudioGuard {
+        let thread = self.thread.lock();
+        let mut core = core::CoreMutRef {
+            ptr: thread.raw.core,
+            _lifetime: std::marker::PhantomData,
+        };
+        core.gba_mut().sync_mut().unwrap().lock_audio();
+        AudioGuard { thread }
     }
 }

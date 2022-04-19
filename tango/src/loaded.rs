@@ -68,18 +68,6 @@ impl Loaded {
 
         let mut muxer = audio::mux_stream::MuxStream::new();
 
-        let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
-            &core,
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ));
-
-        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
-            &audio_core,
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ));
-
         let audio_core_thread = mgba::thread::Thread::new(audio_core);
         audio_core_thread.start();
         audio_core_thread.handle().pause();
@@ -90,6 +78,12 @@ impl Loaded {
                 .expect("sync")
                 .set_fps_target(EXPECTED_FPS as f32);
         });
+
+        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            audio_core_thread.handle(),
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
 
         let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
 
@@ -104,7 +98,7 @@ impl Loaded {
                 config.clone(),
                 audio_state_holder.clone(),
                 audio_core_thread.handle(),
-                primary_mux_handle,
+                audio_core_mux_handle.clone(),
                 audio_core_mux_handle,
                 Arc::new(parking_lot::Mutex::new(fastforwarder)),
             ),
@@ -112,13 +106,15 @@ impl Loaded {
 
         let thread = mgba::thread::Thread::new(core);
         thread.start();
-        thread.handle().run_on_core(|mut core| {
-            core.gba_mut()
-                .sync_mut()
-                .as_mut()
-                .expect("sync")
-                .set_fps_target(EXPECTED_FPS as f32);
-        });
+        thread
+            .handle()
+            .lock_audio()
+            .core_mut()
+            .gba_mut()
+            .sync_mut()
+            .as_mut()
+            .unwrap()
+            .set_fps_target(EXPECTED_FPS as f32);
         {
             let joyflags = joyflags.clone();
             thread.set_frame_callback(move |mut core, video_buffer| {
@@ -133,7 +129,21 @@ impl Loaded {
             });
         }
 
-        let stream = audio::open_stream(audio_device, &supported_config, muxer)?;
+        // let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+        //     thread.handle(),
+        //     supported_config.sample_rate(),
+        //     supported_config.channels(),
+        // ));
+
+        let stream = audio::open_stream(
+            audio_device,
+            &supported_config,
+            audio::timewarp_stream::TimewarpStream::new(
+                thread.handle(),
+                supported_config.sample_rate(),
+                supported_config.channels(),
+            ),
+        )?;
         stream.play()?;
 
         Ok(Loaded {

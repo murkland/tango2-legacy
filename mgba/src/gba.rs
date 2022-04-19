@@ -20,7 +20,7 @@ impl<'a> GBARef<'a> {
         }
     }
 
-    pub fn sync(&mut self) -> Option<sync::SyncRef> {
+    pub fn sync(&self) -> Option<sync::SyncRef> {
         let sync_ptr = unsafe { (*self.ptr).sync };
         if sync_ptr.is_null() {
             None
