@@ -464,7 +464,11 @@ impl InProgress {
             committed_state: None,
             local_pending_turn: None,
             replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)?,
-            fastforwarder: fastforwarder::Fastforwarder::new(&self.rom_path, self.hooks)?,
+            fastforwarder: fastforwarder::Fastforwarder::new(
+                &self.rom_path,
+                self.hooks,
+                local_player_index,
+            )?,
         });
         Ok(())
     }

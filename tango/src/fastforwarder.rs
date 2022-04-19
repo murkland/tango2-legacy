@@ -37,6 +37,7 @@ pub struct Fastforwarder {
     core: mgba::core::Core,
     state: State,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
+    local_player_index: u8,
 }
 
 #[derive(Clone)]
@@ -135,6 +136,7 @@ impl Fastforwarder {
     pub fn new(
         rom_path: &std::path::Path,
         hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
+        local_player_index: u8,
     ) -> anyhow::Result<Self> {
         let mut core = {
             let mut core = mgba::core::Core::new_gba("tango")?;
@@ -150,13 +152,17 @@ impl Fastforwarder {
         core.set_traps(hooks.get_fastforwarder_traps(state.clone()));
         core.as_mut().reset();
 
-        Ok(Fastforwarder { core, state, hooks })
+        Ok(Fastforwarder {
+            core,
+            state,
+            hooks,
+            local_player_index,
+        })
     }
 
     pub fn fastforward(
         &mut self,
         state: &mgba::state::State,
-        local_player_index: u8,
         commit_pairs: &[input::Pair<input::Input>],
         last_committed_remote_input: input::Input,
         local_player_inputs_left: &[input::Input],
@@ -206,7 +212,7 @@ impl Fastforwarder {
         let dirty_time = start_current_tick + input_pairs.len() as u32 - 1;
 
         *self.state.0.lock() = Some(InnerState::new(
-            local_player_index,
+            self.local_player_index,
             input_pairs,
             commit_time,
             dirty_time,
