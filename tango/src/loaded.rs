@@ -67,6 +67,8 @@ impl Loaded {
         log::info!("selected audio config: {:?}", supported_config);
 
         let mut muxer = audio::mux_stream::MuxStream::new();
+        let primary_mux_handle = muxer.open_stream();
+        let audio_core_mux_handle = muxer.open_stream();
 
         let audio_core_thread = mgba::thread::Thread::new(audio_core);
         audio_core_thread.start();
@@ -79,7 +81,6 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        let audio_core_mux_handle = muxer.open_stream();
         audio_core_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
             audio_core_thread.handle(),
             supported_config.sample_rate(),
@@ -87,8 +88,6 @@ impl Loaded {
         ));
 
         let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
-
-        let primary_mux_handle = muxer.open_stream();
 
         core.set_traps(hooks.get_primary_traps(
             handle.clone(),
