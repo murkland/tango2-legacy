@@ -5,15 +5,9 @@ use std::sync::Arc;
 
 pub const EXPECTED_FPS: u32 = 60;
 
-pub enum MatchState {
-    NoMatch,
-    Aborted,
-    Match(battle::Match),
-}
-
 pub struct Loaded {
     _stream: cpal::Stream,
-    match_state: Arc<tokio::sync::Mutex<MatchState>>,
+    match_: Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
     _audio_core_thread: mgba::thread::Thread,
     thread: mgba::thread::Thread,
@@ -54,7 +48,7 @@ impl Loaded {
             .get(&compat_list.game_by_id(id).unwrap().hooks)
             .unwrap();
 
-        let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
+        let match_ = Arc::new(tokio::sync::Mutex::new(None));
 
         let emu_tps_counter = emu_tps_counter;
 
@@ -104,7 +98,7 @@ impl Loaded {
             facade::Facade::new(
                 handle.clone(),
                 compat_list.clone(),
-                match_state.clone(),
+                match_.clone(),
                 joyflags.clone(),
                 gui_state,
                 config.clone(),
@@ -143,7 +137,7 @@ impl Loaded {
         stream.play()?;
 
         Ok(Loaded {
-            match_state,
+            match_,
             joyflags,
             thread,
             _audio_core_thread: audio_core_thread,
@@ -155,8 +149,8 @@ impl Loaded {
         self.thread.handle()
     }
 
-    pub async fn lock_match_state(&self) -> tokio::sync::MutexGuard<'_, MatchState> {
-        self.match_state.lock().await
+    pub async fn lock_match(&self) -> tokio::sync::MutexGuard<'_, Option<battle::Match>> {
+        self.match_.lock().await
     }
 
     pub fn set_joyflags(&self, joyflags: u32) {

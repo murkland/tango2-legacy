@@ -29,7 +29,7 @@ enum Negotiation {
 
 pub struct Match {
     cancellation_token: tokio_util::sync::CancellationToken,
-    inner: std::sync::Arc<InnerMatch>,
+    in_progress: std::sync::Arc<tokio::sync::Mutex<Option<std::sync::Arc<InProgress>>>>,
 }
 
 pub struct Settings {
@@ -38,7 +38,7 @@ pub struct Settings {
         Box<dyn Fn() -> webrtc::peer_connection::configuration::RTCConfiguration + Send + Sync>,
 }
 
-struct InnerMatch {
+pub struct InProgress {
     compat_list: std::sync::Arc<compat::CompatList>,
     negotiation: tokio::sync::Mutex<Negotiation>,
     start_time: std::time::SystemTime,
@@ -120,7 +120,7 @@ pub enum NegotiationProgress {
     Handshaking,
 }
 
-impl InnerMatch {
+impl InProgress {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
@@ -362,6 +362,113 @@ impl InnerMatch {
 
         Ok(())
     }
+
+    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
+        self.battle_state.lock().await
+    }
+
+    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
+        let mut remote_init_receiver = self.remote_init_receiver.lock().await;
+        remote_init_receiver.recv().await
+    }
+
+    async fn poll_for_ready(&self) -> NegotiationStatus {
+        let negotiation = self.negotiation.lock().await;
+        match &*negotiation {
+            Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
+            Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
+            Negotiation::Err(NegotiationError::IncompatibleGames) => {
+                NegotiationStatus::Failed(NegotiationFailure::IncompatibleGames)
+            }
+            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)
+            }
+            Negotiation::Err(NegotiationError::ProtocolVersionMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::ProtocolVersionMismatch)
+            }
+            Negotiation::Err(_) => NegotiationStatus::Failed(NegotiationFailure::Unknown),
+        }
+    }
+
+    pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
+        let negotiation = self.negotiation.lock().await;
+        let dc = match &*negotiation {
+            Negotiation::Negotiated { dc, .. } => dc.clone(),
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        };
+        Ok(transport::Transport::new(dc))
+    }
+
+    pub async fn lock_rng(
+        &self,
+    ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
+        let negotiation = self.negotiation.lock().await;
+        match &*negotiation {
+            Negotiation::Negotiated { .. } => {
+                Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
+                    Negotiation::Negotiated { rng, .. } => rng,
+                    _ => unreachable!(),
+                }))
+            }
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        }
+    }
+
+    pub fn match_type(&self) -> u16 {
+        self.match_type
+    }
+
+    pub async fn start_battle(&self) {
+        let mut battle_state = self.battle_state.lock().await;
+        battle_state.number += 1;
+        let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
+        log::info!(
+            "starting battle: local_player_index = {}",
+            local_player_index
+        );
+        let replay_filename = format!(
+            "{}_battle{}_p{}.tangoreplay",
+            time::OffsetDateTime::from(self.start_time)
+                .format(time::macros::format_description!(
+                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
+                ))
+                .expect("format time"),
+            battle_state.number,
+            local_player_index + 1
+        );
+        let replay_file =
+            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
+                .expect("create replay file");
+        log::info!("opened replay: {}", replay_filename);
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        battle_state.battle = Some(Battle {
+            local_player_index,
+            iq: input::PairQueue::new(60, self.input_delay),
+            remote_delay: 0,
+            is_accepting_input: false,
+            last_committed_remote_input: input::Input {
+                local_tick: 0,
+                remote_tick: 0,
+                joyflags: 0,
+                custom_screen_state: 0,
+                turn: vec![],
+            },
+            last_input: None,
+            state_committed_tx: Some(tx),
+            state_committed_rx: Some(rx),
+            committed_state: None,
+            local_pending_turn: None,
+            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)
+                .expect("new replay writer"),
+        });
+    }
+
+    pub async fn end_battle(&self) {
+        self.battle_state.lock().await.battle = None;
+    }
 }
 
 fn make_rng_commitment(nonce: &[u8]) -> std::io::Result<[u8; 32]> {
@@ -394,151 +501,68 @@ impl Match {
         settings: Settings,
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
-        let inner = std::sync::Arc::new(InnerMatch {
-            compat_list,
-            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
-                NegotiationProgress::NotStarted,
-            )),
-            start_time: std::time::SystemTime::now(),
-            session_id,
-            match_type,
-            game_title,
-            game_crc32,
-            input_delay,
-            settings,
-            battle_state: tokio::sync::Mutex::new(BattleState {
-                number: 0,
-                battle: None,
-                won_last_battle: false,
-            }),
-            remote_init_sender,
-            remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
-        });
         Match {
             cancellation_token: tokio_util::sync::CancellationToken::new(),
-            inner,
+            in_progress: std::sync::Arc::new(tokio::sync::Mutex::new(Some(std::sync::Arc::new(
+                InProgress {
+                    compat_list,
+                    negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
+                        NegotiationProgress::NotStarted,
+                    )),
+                    start_time: std::time::SystemTime::now(),
+                    session_id,
+                    match_type,
+                    game_title,
+                    game_crc32,
+                    input_delay,
+                    settings,
+                    battle_state: tokio::sync::Mutex::new(BattleState {
+                        number: 0,
+                        battle: None,
+                        won_last_battle: false,
+                    }),
+                    remote_init_sender,
+                    remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
+                },
+            )))),
         }
     }
 
-    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
-        self.inner.battle_state.lock().await
-    }
-
-    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
-        self.inner.remote_init_receiver.lock().await.recv().await
+    pub async fn lock_in_progress(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, Option<std::sync::Arc<InProgress>>> {
+        self.in_progress.lock().await
     }
 
     pub async fn poll_for_ready(&self) -> NegotiationStatus {
-        match &*self.inner.negotiation.lock().await {
-            Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
-            Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
-            Negotiation::Err(NegotiationError::IncompatibleGames) => {
-                NegotiationStatus::Failed(NegotiationFailure::IncompatibleGames)
-            }
-            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
-                NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)
-            }
-            Negotiation::Err(NegotiationError::ProtocolVersionMismatch) => {
-                NegotiationStatus::Failed(NegotiationFailure::ProtocolVersionMismatch)
-            }
-            Negotiation::Err(_) => NegotiationStatus::Failed(NegotiationFailure::Unknown),
-        }
-    }
-
-    pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
-        let dc = match &*self.inner.negotiation.lock().await {
-            Negotiation::Negotiated { dc, .. } => dc.clone(),
-            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        let in_progress = self.lock_in_progress().await.clone();
+        let in_progress = if let Some(in_progress) = in_progress.as_ref() {
+            in_progress
+        } else {
+            return NegotiationStatus::Failed(NegotiationFailure::Unknown);
         };
-        Ok(transport::Transport::new(dc))
+        in_progress.poll_for_ready().await
     }
 
-    pub async fn lock_rng(
-        &self,
-    ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
-        let negotiation = self.inner.negotiation.lock().await;
-        match &*negotiation {
-            Negotiation::Negotiated { .. } => {
-                Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
-                    Negotiation::Negotiated { rng, .. } => rng,
-                    _ => unreachable!(),
-                }))
-            }
-            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
-        }
-    }
-
-    pub fn match_type(&self) -> u16 {
-        self.inner.match_type
-    }
-
-    pub async fn start_battle(&self) {
-        let mut battle_state = self.inner.battle_state.lock().await;
-        battle_state.number += 1;
-        let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
-        log::info!(
-            "starting battle: local_player_index = {}",
-            local_player_index
-        );
-        let replay_filename = format!(
-            "{}_battle{}_p{}.tangoreplay",
-            time::OffsetDateTime::from(self.inner.start_time)
-                .format(time::macros::format_description!(
-                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
-                ))
-                .expect("format time"),
-            battle_state.number,
-            local_player_index + 1
-        );
-        let replay_file =
-            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
-                .expect("create replay file");
-        log::info!("opened replay: {}", replay_filename);
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        battle_state.battle = Some(Battle {
-            local_player_index,
-            iq: input::PairQueue::new(120, self.inner.input_delay),
-            remote_delay: 0,
-            is_accepting_input: false,
-            last_committed_remote_input: input::Input {
-                local_tick: 0,
-                remote_tick: 0,
-                joyflags: 0,
-                custom_screen_state: 0,
-                turn: vec![],
-            },
-            last_input: None,
-            state_committed_tx: Some(tx),
-            state_committed_rx: Some(rx),
-            committed_state: None,
-            local_pending_turn: None,
-            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)
-                .expect("new replay writer"),
-        });
-    }
-
-    pub async fn end_battle(&self) {
-        self.inner.battle_state.lock().await.battle = None;
-    }
-
-    pub fn start(&self, handle: tokio::runtime::Handle) {
+    pub async fn start(&self, handle: tokio::runtime::Handle) {
         let cancellation_token = self.cancellation_token.clone();
-        let inner = self.inner.clone();
+        let in_progress = self.in_progress.clone();
         handle.spawn(async move {
+            let inner_in_progress = in_progress.lock().await.clone().unwrap();
             tokio::select! {
                 _ = cancellation_token.cancelled() => {},
-                Err(e) = inner.run() => {
+                Err(e) = inner_in_progress.run() => {
                     log::info!("match thread ending: {:?}", e);
                 },
             };
-            if let Negotiation::Negotiated { dc, peer_conn, .. } = &*inner.negotiation.lock().await
+            if let Negotiation::Negotiated { dc, peer_conn, .. } =
+                &*inner_in_progress.negotiation.lock().await
             {
                 let _ = dc.close().await;
                 let _ = peer_conn.close().await;
             }
+
+            *in_progress.lock().await = None;
         });
     }
 }

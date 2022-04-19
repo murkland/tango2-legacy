@@ -140,32 +140,35 @@ impl Game {
 
                     let emu_tps_counter = emu_tps_counter.lock();
                     let fps_counter = fps_counter.lock();
-                    let match_state = loaded.lock_match_state().await;
+                    let match_ = loaded.lock_match().await;
+                    // TODO: Avoid this double locking.
                     Some(gui::DebugStats {
                         fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
                         emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
-                        match_state: match &*match_state {
-                            loaded::MatchState::NoMatch => "none",
-                            loaded::MatchState::Aborted => "aborted",
-                            loaded::MatchState::Match(_) => "active",
-                        },
-                        battle_debug_stats: match &*match_state {
-                            loaded::MatchState::NoMatch => None,
-                            loaded::MatchState::Aborted => None,
-                            loaded::MatchState::Match(m) => {
-                                let battle_state = m.lock_battle_state().await;
-                                match &battle_state.battle {
-                                    Some(battle) => Some(gui::BattleDebugStats {
-                                        local_player_index: battle.local_player_index(),
-                                        local_qlen: battle.local_queue_length(),
-                                        remote_qlen: battle.remote_queue_length(),
-                                        local_delay: battle.local_delay(),
-                                        remote_delay: battle.remote_delay(),
-                                        tps_adjustment: battle.tps_adjustment(),
+                        match_: match &*match_ {
+                            None => None,
+                            Some(match_) => Some(gui::MatchDebugStats {
+                                in_progress: match &*match_.lock_in_progress().await {
+                                    Some(in_progress) => Some(gui::InProgressDebugStats {
+                                        battle: {
+                                            let battle_state =
+                                                in_progress.lock_battle_state().await;
+                                            match &battle_state.battle {
+                                                Some(battle) => Some(gui::BattleDebugStats {
+                                                    local_player_index: battle.local_player_index(),
+                                                    local_qlen: battle.local_queue_length(),
+                                                    remote_qlen: battle.remote_queue_length(),
+                                                    local_delay: battle.local_delay(),
+                                                    remote_delay: battle.remote_delay(),
+                                                    tps_adjustment: battle.tps_adjustment(),
+                                                }),
+                                                None => None,
+                                            }
+                                        },
                                     }),
                                     None => None,
-                                }
-                            }
+                                },
+                            }),
                         },
                     })
                 })

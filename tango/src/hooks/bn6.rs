@@ -57,9 +57,9 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_init_call_battle_copy_input_data,
                     Box::new(move |mut core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
@@ -78,14 +78,21 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_init_marshal_ret,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let mut match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let mut match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
                             'abort: loop {
-                                let mut battle_state = match_state.lock_battle_state().await;
+                                let in_progress = match match_.in_progress().await {
+                                    Some(in_progress) => in_progress,
+                                    None => {
+                                        return;
+                                    }
+                                };
+
+                                let mut battle_state = in_progress.lock_battle_state().await;
 
                                 let local_init = munger.local_marshaled_battle_state(core);
                                 battle_state.send_init(&local_init).await;
@@ -108,7 +115,7 @@ impl hooks::Hooks for BN6 {
                                 );
                                 return;
                             }
-                            match_state.abort(core);
+                            match_.abort(core).await;
                         });
                     }),
                 )
@@ -121,13 +128,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_turn_marshal_ret,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            let mut battle_state = match_state.lock_battle_state().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let mut battle_state = in_progress.lock_battle_state().await;
 
                             log::info!("turn data marshaled on {}", munger.current_tick(core));
                             let local_turn = munger.local_marshaled_battle_state(core);
@@ -144,14 +158,21 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.main_read_joyflags,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let mut match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let mut match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
                             'abort: loop {
-                                let mut battle_state = match_state.lock_battle_state().await;
+                                let in_progress = match match_.in_progress().await {
+                                    Some(in_progress) => in_progress,
+                                    None => {
+                                        return;
+                                    }
+                                };
+
+                                let mut battle_state = in_progress.lock_battle_state().await;
                                 if !battle_state.is_active() {
                                     return;
                                 }
@@ -185,7 +206,7 @@ impl hooks::Hooks for BN6 {
                                 }
                                 return;
                             }
-                            match_state.abort(core);
+                            match_.abort(core).await;
                         });
                     }),
                 )
@@ -198,9 +219,9 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_update_call_battle_copy_input_data,
                     Box::new(move |mut core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
@@ -208,7 +229,14 @@ impl hooks::Hooks for BN6 {
                             let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                             core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                            let mut battle_state = match_state.lock_battle_state().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let mut battle_state = in_progress.lock_battle_state().await;
                             if !battle_state.is_active() {
                                 return;
                             }
@@ -258,13 +286,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_run_unpaused_step_cmp_retval,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            let mut battle_state = match_state.lock_battle_state().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let mut battle_state = in_progress.lock_battle_state().await;
                             if !battle_state.is_active() {
                                 return;
                             }
@@ -289,13 +324,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_start_ret,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            match_state.start_battle(core).await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            in_progress.start_battle(core).await;
                         });
                     }),
                 )
@@ -307,13 +349,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_ending_ret,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            match_state.end_battle(core).await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            in_progress.end_battle(core).await;
                         });
                     }),
                 )
@@ -325,13 +374,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.battle_is_p2_tst,
                     Box::new(move |mut core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            let battle_state = match_state.lock_battle_state().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let battle_state = in_progress.lock_battle_state().await;
                             core.gba_mut()
                                 .cpu_mut()
                                 .set_gpr(0, battle_state.local_player_index() as i32);
@@ -346,13 +402,20 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.link_is_p2_ret,
                     Box::new(move |mut core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            let battle_state = match_state.lock_battle_state().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let battle_state = in_progress.lock_battle_state().await;
                             core.gba_mut()
                                 .cpu_mut()
                                 .set_gpr(0, battle_state.local_player_index() as i32);
@@ -367,9 +430,10 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.get_copy_data_input_state_ret,
                     Box::new(move |mut core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() && !match_state.is_aborted() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            let is_aborted = match_.is_aborted().await;
+                            if !match_.is_active() && !is_aborted {
                                 return;
                             }
 
@@ -378,7 +442,7 @@ impl hooks::Hooks for BN6 {
                                 log::warn!("expected r0 to be 2 but got {}", r0);
                             }
 
-                            if match_state.is_aborted() {
+                            if is_aborted {
                                 r0 = 4;
                             }
 
@@ -412,19 +476,19 @@ impl hooks::Hooks for BN6 {
                             let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                             core.gba_mut().cpu_mut().set_pc(r15 + 4);
 
-                            let match_state = facade.match_state();
+                            let match_ = facade.match_();
                             let negotiation_status = {
-                                let mut match_state = match_state.lock().await;
+                                let mut match_ = match_.lock().await;
 
-                                if match_state.is_aborted() {
+                                if match_.is_aborted().await {
                                     panic!("match was aborted without being started?")
                                 }
 
-                                if !match_state.is_active() {
+                                if !match_.is_active() {
                                     match facade.request_connect() {
                                         gui::ConnectStatus::Ready(s) => {
                                             let match_type = munger.match_type(core);
-                                            match_state.start(core, handle2, match_type, s);
+                                            match_.start(core, handle2, match_type, s).await;
                                         }
                                         gui::ConnectStatus::None => {
                                             munger.drop_matchmaking_from_comm_menu(core);
@@ -433,7 +497,7 @@ impl hooks::Hooks for BN6 {
                                     }
                                     return;
                                 }
-                                match_state.poll_for_ready().await
+                                match_.poll_for_ready().await
                             };
 
                             match negotiation_status {
@@ -445,8 +509,8 @@ impl hooks::Hooks for BN6 {
                                 battle::NegotiationStatus::Failed(_) => {
                                     if !facade.connect_dialog_is_open() {
                                         munger.drop_matchmaking_from_comm_menu(core);
-                                        let mut match_state = match_state.lock().await;
-                                        match_state.end();
+                                        let mut match_ = match_.lock().await;
+                                        match_.end();
                                     }
                                 }
                             }
@@ -462,18 +526,25 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.comm_menu_init_battle_entry,
                     Box::new(move |core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let match_state = match_state.lock().await;
-                            if !match_state.is_active() {
+                            let match_ = facade.match_();
+                            let match_ = match_.lock().await;
+                            if !match_.is_active() {
                                 return;
                             }
 
-                            let mut rng = match_state.lock_rng().await;
+                            let in_progress = match match_.in_progress().await {
+                                Some(in_progress) => in_progress,
+                                None => {
+                                    return;
+                                }
+                            };
+
+                            let mut rng = in_progress.lock_rng().await;
                             munger.set_link_battle_settings_and_background(
                                 core,
                                 random_battle_settings_and_background(
                                     &mut *rng,
-                                    (match_state.match_type() & 0xff) as u8,
+                                    (in_progress.match_type() & 0xff) as u8,
                                 ),
                             );
                         });
@@ -488,9 +559,9 @@ impl hooks::Hooks for BN6 {
                     Box::new(move |mut core| {
                         handle.block_on(async {
                             log::info!("match canceled by user");
-                            let match_state = facade.match_state();
-                            let mut match_state = match_state.lock().await;
-                            match_state.end();
+                            let match_ = facade.match_();
+                            let mut match_ = match_.lock().await;
+                            match_.end();
                             let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
                             core.gba_mut().cpu_mut().set_pc(r15 + 4);
                         });
@@ -503,9 +574,9 @@ impl hooks::Hooks for BN6 {
                     self.offsets.rom.comm_menu_end_battle_entry,
                     Box::new(move |_core| {
                         handle.block_on(async {
-                            let match_state = facade.match_state();
-                            let mut match_state = match_state.lock().await;
-                            match_state.end();
+                            let match_ = facade.match_();
+                            let mut match_ = match_.lock().await;
+                            match_.end();
                             log::info!("match ended");
                         });
                     }),

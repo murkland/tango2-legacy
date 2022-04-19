@@ -1,8 +1,8 @@
 use crate::{audio, battle, compat, config, fastforwarder, gui, input, loaded};
 
 pub struct BattleStateFacadeGuard<'a> {
-    m: &'a battle::Match,
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
+    in_progress: std::sync::Arc<battle::InProgress>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
@@ -57,7 +57,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
             return false;
         }
 
-        self.m
+        self.in_progress
             .transport()
             .await
             .expect("transport not available")
@@ -156,7 +156,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .expect("attempted to get battle information while no battle was active!")
             .local_delay();
 
-        self.m
+        self.in_progress
             .transport()
             .await
             .expect("no transport")
@@ -167,7 +167,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
     }
 
     pub async fn receive_init(&mut self) -> Option<Vec<u8>> {
-        let init = match self.m.receive_remote_init().await {
+        let init = match self.in_progress.receive_remote_init().await {
             Some(init) => init,
             None => {
                 return None;
@@ -249,8 +249,60 @@ impl<'a> BattleStateFacadeGuard<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct InProgressFacade {
+    arc: std::sync::Arc<battle::InProgress>,
+    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
+    audio_core_handle: mgba::thread::Handle,
+    primary_mux_handle: audio::mux_stream::MuxHandle,
+    audio_core_mux_handle: audio::mux_stream::MuxHandle,
+}
+
+impl InProgressFacade {
+    pub async fn lock_battle_state(&self) -> BattleStateFacadeGuard<'_> {
+        let guard = self.arc.lock_battle_state().await;
+        BattleStateFacadeGuard {
+            in_progress: self.arc.clone(),
+            guard,
+            audio_state_holder: self.audio_state_holder.clone(),
+            fastforwarder: self.fastforwarder.clone(),
+        }
+    }
+
+    pub async fn start_battle(&self, core: mgba::core::CoreMutRef<'_>) {
+        self.audio_core_handle.pause();
+        let save_state = core.save_state().expect("save state");
+        let audio_core_mux_handle = self.audio_core_mux_handle.clone();
+        self.audio_core_handle.run_on_core(move |mut core| {
+            core.load_state(&save_state).expect("load state");
+            audio_core_mux_handle.switch();
+        });
+        self.audio_core_handle.unpause();
+        self.arc.start_battle().await;
+    }
+
+    pub async fn end_battle(&self, mut core: mgba::core::CoreMutRef<'_>) {
+        core.gba_mut()
+            .sync_mut()
+            .expect("sync")
+            .set_fps_target(loaded::EXPECTED_FPS as f32);
+        self.primary_mux_handle.switch();
+        self.audio_core_handle.pause();
+        self.arc.end_battle().await;
+    }
+
+    pub async fn lock_rng(&self) -> tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64> {
+        self.arc.lock_rng().await.expect("rng")
+    }
+
+    pub fn match_type(&self) -> u16 {
+        self.arc.match_type()
+    }
+}
+
 pub struct MatchStateFacadeGuard<'a> {
-    guard: tokio::sync::MutexGuard<'a, loaded::MatchState>,
+    guard: tokio::sync::MutexGuard<'a, Option<battle::Match>>,
     compat_list: std::sync::Arc<compat::CompatList>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
@@ -262,23 +314,35 @@ pub struct MatchStateFacadeGuard<'a> {
 
 impl<'a> MatchStateFacadeGuard<'a> {
     pub fn is_active(&self) -> bool {
-        match &*self.guard {
-            loaded::MatchState::NoMatch => false,
-            loaded::MatchState::Aborted => false,
-            loaded::MatchState::Match(_) => true,
-        }
+        self.guard.is_some()
     }
 
-    pub fn is_aborted(&self) -> bool {
+    pub async fn in_progress(&self) -> Option<InProgressFacade> {
+        let in_progress = match &*self.guard.as_ref().unwrap().lock_in_progress().await {
+            Some(in_progress) => in_progress.clone(),
+            None => {
+                return None;
+            }
+        };
+        Some(InProgressFacade {
+            arc: in_progress,
+            audio_state_holder: self.audio_state_holder.clone(),
+            fastforwarder: self.fastforwarder.clone(),
+            audio_core_handle: self.audio_core_handle.clone(),
+            primary_mux_handle: self.primary_mux_handle.clone(),
+            audio_core_mux_handle: self.audio_core_mux_handle.clone(),
+        })
+    }
+
+    pub async fn is_aborted(&self) -> bool {
         match &*self.guard {
-            loaded::MatchState::NoMatch => false,
-            loaded::MatchState::Aborted => true,
-            loaded::MatchState::Match(_) => false,
+            None => false,
+            Some(m) => m.lock_in_progress().await.is_none(),
         }
     }
 
     pub async fn poll_for_ready(&self) -> battle::NegotiationStatus {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
+        let m = if let Some(m) = &*self.guard {
             m
         } else {
             unreachable!();
@@ -286,9 +350,9 @@ impl<'a> MatchStateFacadeGuard<'a> {
         m.poll_for_ready().await
     }
 
-    pub fn start(
+    pub async fn start(
         &mut self,
-        core: mgba::core::CoreMutRef,
+        core: mgba::core::CoreMutRef<'_>,
         handle: tokio::runtime::Handle,
         match_type: u16,
         s: gui::ConnectRequest,
@@ -309,93 +373,28 @@ impl<'a> MatchStateFacadeGuard<'a> {
                 },
             },
         );
-        m.start(handle);
-        *self.guard = loaded::MatchState::Match(m);
+        m.start(handle).await;
+        *self.guard = Some(m);
     }
 
-    pub fn abort(&mut self, mut core: mgba::core::CoreMutRef) {
+    pub async fn abort(&mut self, mut core: mgba::core::CoreMutRef<'_>) {
         core.gba_mut()
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
         self.primary_mux_handle.switch();
         self.audio_core_handle.pause();
-        *self.guard = loaded::MatchState::Aborted;
-    }
-
-    pub async fn lock_battle_state(&'a self) -> BattleStateFacadeGuard<'a> {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
-            m
-        } else {
-            unreachable!();
-        };
-        let guard = m.lock_battle_state().await;
-        BattleStateFacadeGuard {
-            m,
-            guard,
-            audio_state_holder: self.audio_state_holder.clone(),
-            fastforwarder: self.fastforwarder.clone(),
-        }
-    }
-
-    pub async fn start_battle(&self, core: mgba::core::CoreMutRef<'_>) {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
-            m
-        } else {
-            unreachable!();
-        };
-        self.audio_core_handle.pause();
-        let save_state = core.save_state().expect("save state");
-        let audio_core_mux_handle = self.audio_core_mux_handle.clone();
-        self.audio_core_handle.run_on_core(move |mut core| {
-            core.load_state(&save_state).expect("load state");
-            audio_core_mux_handle.switch();
-        });
-        self.audio_core_handle.unpause();
-        m.start_battle().await;
-    }
-
-    pub async fn end_battle(&self, mut core: mgba::core::CoreMutRef<'_>) {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
-            m
-        } else {
-            unreachable!();
-        };
-        core.gba_mut()
-            .sync_mut()
-            .expect("sync")
-            .set_fps_target(loaded::EXPECTED_FPS as f32);
-        self.primary_mux_handle.switch();
-        self.audio_core_handle.pause();
-        m.end_battle().await;
-    }
-
-    pub async fn lock_rng(&self) -> tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64> {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
-            m
-        } else {
-            unreachable!();
-        };
-        m.lock_rng().await.expect("rng")
-    }
-
-    pub fn match_type(&self) -> u16 {
-        let m = if let loaded::MatchState::Match(m) = &*self.guard {
-            m
-        } else {
-            unreachable!();
-        };
-        m.match_type()
+        *self.guard.as_mut().unwrap().lock_in_progress().await = None;
     }
 
     pub fn end(&mut self) {
-        *self.guard = loaded::MatchState::NoMatch;
+        *self.guard = None;
     }
 }
 
 #[derive(Clone)]
-pub struct MatchStateFacade {
-    arc: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+pub struct MatchFacade {
+    arc: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     compat_list: std::sync::Arc<compat::CompatList>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
@@ -405,7 +404,7 @@ pub struct MatchStateFacade {
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
-impl MatchStateFacade {
+impl MatchFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
@@ -423,7 +422,7 @@ impl MatchStateFacade {
 struct InnerFacade {
     handle: tokio::runtime::Handle,
     compat_list: std::sync::Arc<compat::CompatList>,
-    match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+    match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
@@ -441,7 +440,7 @@ impl Facade {
     pub fn new(
         handle: tokio::runtime::Handle,
         compat_list: std::sync::Arc<compat::CompatList>,
-        match_state: std::sync::Arc<tokio::sync::Mutex<loaded::MatchState>>,
+        match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
@@ -454,7 +453,7 @@ impl Facade {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
             handle,
             compat_list,
-            match_state,
+            match_,
             joyflags,
             config,
             gui_state,
@@ -465,9 +464,9 @@ impl Facade {
             fastforwarder,
         })))
     }
-    pub fn match_state(&mut self) -> MatchStateFacade {
-        MatchStateFacade {
-            arc: self.0.borrow().match_state.clone(),
+    pub fn match_(&mut self) -> MatchFacade {
+        MatchFacade {
+            arc: self.0.borrow().match_.clone(),
             compat_list: self.0.borrow().compat_list.clone(),
             audio_state_holder: self.0.borrow().audio_state_holder.clone(),
             audio_core_handle: self.0.borrow().audio_core_handle.clone(),
@@ -487,28 +486,28 @@ impl Facade {
 
     pub fn request_connect(&mut self) -> gui::ConnectStatus {
         let handle = self.0.borrow().handle.clone();
-        let match_state = self.match_state();
+        let match_ = self.match_();
         self.0.borrow().gui_state.request_connect(
             {
-                let match_state = match_state.clone();
+                let match_ = match_.clone();
                 let handle = handle.clone();
                 Box::new(move || {
                     handle.block_on(async {
-                        let mut match_state = match_state.lock().await;
-                        match_state.end();
+                        let mut match_ = match_.lock().await;
+                        match_.end();
                     });
                 })
             },
             {
-                let match_state = match_state.clone();
+                let match_ = match_.clone();
                 let handle = handle.clone();
                 Box::new(move || {
                     handle.block_on(async {
-                        let match_state = match_state.lock().await;
-                        if !match_state.is_active() {
+                        let match_ = match_.lock().await;
+                        if !match_.is_active() {
                             return None;
                         }
-                        Some(match_state.poll_for_ready().await)
+                        Some(match_.poll_for_ready().await)
                     })
                 })
             },

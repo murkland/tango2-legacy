@@ -31,7 +31,11 @@ impl super::Stream for TimewarpStream {
         let mut faux_clock = 1.0;
         if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
             sync.lock_audio();
-            faux_clock = mgba::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
+            let mut fps_target = sync.as_ref().fps_target();
+            if fps_target <= 0.0 {
+                fps_target = 1.0;
+            }
+            faux_clock = mgba::gba::audio_calculate_ratio(1.0, fps_target, 1.0);
         }
 
         let available = {
