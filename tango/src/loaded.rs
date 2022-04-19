@@ -79,13 +79,16 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+        let audio_core_mux_handle = muxer.open_stream();
+        audio_core_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
             audio_core_thread.handle(),
             supported_config.sample_rate(),
             supported_config.channels(),
         ));
 
         let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
+
+        let primary_mux_handle = muxer.open_stream();
 
         core.set_traps(hooks.get_primary_traps(
             handle.clone(),
@@ -98,7 +101,7 @@ impl Loaded {
                 config.clone(),
                 audio_state_holder.clone(),
                 audio_core_thread.handle(),
-                audio_core_mux_handle.clone(),
+                primary_mux_handle.clone(),
                 audio_core_mux_handle,
                 Arc::new(parking_lot::Mutex::new(fastforwarder)),
             ),
@@ -129,11 +132,11 @@ impl Loaded {
             });
         }
 
-        // let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
-        //     thread.handle(),
-        //     supported_config.sample_rate(),
-        //     supported_config.channels(),
-        // ));
+        primary_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
+            thread.handle(),
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
 
         let stream = audio::open_stream(
             audio_device,

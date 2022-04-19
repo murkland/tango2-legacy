@@ -2,6 +2,11 @@
 pub struct MuxHandle(std::sync::Arc<InnerMuxHandle>);
 
 impl MuxHandle {
+    pub fn set_stream(&self, stream: impl super::Stream + Send + 'static) {
+        let mut mux = self.0.mux.lock();
+        mux.streams.insert(self.0.id, Box::new(stream));
+    }
+
     pub fn switch(&self) {
         let mut mux = self.0.mux.lock();
         mux.current_id = self.0.id;
@@ -42,11 +47,10 @@ impl MuxStream {
         )))
     }
 
-    pub fn add(&mut self, stream: impl super::Stream + Send + 'static) -> MuxHandle {
+    pub fn open_stream(&mut self) -> MuxHandle {
         let mut mux = self.0.lock();
         let id = mux.next_id;
         mux.next_id += 1;
-        mux.streams.insert(id, Box::new(stream));
         MuxHandle(std::sync::Arc::new(InnerMuxHandle {
             id,
             mux: self.0.clone(),
