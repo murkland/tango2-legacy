@@ -1,4 +1,4 @@
-use crate::{audio, battle, compat, config, facade, fastforwarder, gui, hooks, tps};
+use crate::{audio, battle, compat, config, facade, gui, hooks, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -91,13 +91,13 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
-
         core.set_traps(hooks.get_primary_traps(
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),
                 compat_list.clone(),
+                rom_path.to_owned(),
+                hooks,
                 match_.clone(),
                 joyflags.clone(),
                 gui_state,
@@ -106,7 +106,6 @@ impl Loaded {
                 audio_core_thread.handle(),
                 primary_mux_handle,
                 audio_core_mux_handle,
-                Arc::new(parking_lot::Mutex::new(fastforwarder)),
             ),
         ));
 

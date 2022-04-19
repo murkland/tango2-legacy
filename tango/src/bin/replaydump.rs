@@ -129,7 +129,7 @@ fn main() -> Result<(), anyhow::Error> {
     core.as_mut().load_rom(vf)?;
     core.as_mut().reset();
 
-    let done = std::rc::Rc::new(std::cell::RefCell::new(false));
+    let done = std::sync::Arc::new(parking_lot::Mutex::new(false));
 
     let ff_state = {
         let done = done.clone();
@@ -139,7 +139,7 @@ fn main() -> Result<(), anyhow::Error> {
             0,
             0,
             Box::new(move || {
-                *done.borrow_mut() = true;
+                *done.lock() = true;
             }),
         )
     };
@@ -195,7 +195,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut samples = vec![0i16; SAMPLE_RATE as usize];
     let mut vbuf = vec![0u8; (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4) as usize];
     let bar = indicatif::ProgressBar::new(ff_state.inputs_pairs_left() as u64);
-    while !*done.borrow() {
+    while !*done.lock() {
         bar.inc(1);
         core.as_mut().run_frame();
         let clock_rate = core.as_ref().frequency();

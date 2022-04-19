@@ -1,5 +1,7 @@
 use crate::compat;
 use crate::datachannel;
+use crate::fastforwarder;
+use crate::hooks;
 use crate::input;
 use crate::protocol;
 use crate::replay;
@@ -40,6 +42,8 @@ pub struct Settings {
 
 pub struct InProgress {
     compat_list: std::sync::Arc<compat::CompatList>,
+    rom_path: std::path::PathBuf,
+    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     negotiation: tokio::sync::Mutex<Negotiation>,
     start_time: std::time::SystemTime,
     session_id: String,
@@ -420,7 +424,7 @@ impl InProgress {
         self.match_type
     }
 
-    pub async fn start_battle(&self) {
+    pub async fn start_battle(&self) -> anyhow::Result<()> {
         let mut battle_state = self.battle_state.lock().await;
         battle_state.number += 1;
         let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
@@ -433,14 +437,12 @@ impl InProgress {
             time::OffsetDateTime::from(self.start_time)
                 .format(time::macros::format_description!(
                     "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
-                ))
-                .expect("format time"),
+                ))?,
             battle_state.number,
             local_player_index + 1
         );
         let replay_file =
-            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
-                .expect("create replay file");
+            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))?;
         log::info!("opened replay: {}", replay_filename);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -461,9 +463,10 @@ impl InProgress {
             state_committed_rx: Some(rx),
             committed_state: None,
             local_pending_turn: None,
-            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)
-                .expect("new replay writer"),
+            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)?,
+            fastforwarder: fastforwarder::Fastforwarder::new(&self.rom_path, self.hooks)?,
         });
+        Ok(())
     }
 
     pub async fn end_battle(&self) {
@@ -493,6 +496,8 @@ impl Drop for Match {
 impl Match {
     pub fn new(
         compat_list: std::sync::Arc<compat::CompatList>,
+        rom_path: std::path::PathBuf,
+        hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -506,6 +511,8 @@ impl Match {
             in_progress: std::sync::Arc::new(tokio::sync::Mutex::new(Some(std::sync::Arc::new(
                 InProgress {
                     compat_list,
+                    rom_path,
+                    hooks,
                     negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                         NegotiationProgress::NotStarted,
                     )),
@@ -584,9 +591,14 @@ pub struct Battle {
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
+    fastforwarder: fastforwarder::Fastforwarder,
 }
 
 impl Battle {
+    pub fn fastforwarder(&mut self) -> &mut fastforwarder::Fastforwarder {
+        &mut self.fastforwarder
+    }
+
     pub fn replay_writer(&mut self) -> &mut replay::Writer {
         &mut self.replay_writer
     }
