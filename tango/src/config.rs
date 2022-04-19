@@ -99,7 +99,13 @@ impl Default for Matchmaking {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Logging {
+    pub filters: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Config {
+    pub logging: Logging,
     pub keymapping: Keymapping,
     pub matchmaking: Matchmaking,
     pub webrtc: WebRTC,
