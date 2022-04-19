@@ -1,10 +1,9 @@
-use crate::{audio, battle, compat, config, fastforwarder, gui, input, loaded};
+use crate::{audio, battle, compat, config, gui, hooks, input, loaded};
 
 pub struct BattleStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
     in_progress: std::sync::Arc<battle::InProgress>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
 impl<'a> BattleStateFacadeGuard<'a> {
@@ -33,7 +32,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
         custom_screen_state: u8,
         turn: Vec<u8>,
     ) -> bool {
-        let fastforwarder = self.fastforwarder.clone();
         let battle_number = self.guard.number;
 
         let battle = self
@@ -81,13 +79,20 @@ impl<'a> BattleStateFacadeGuard<'a> {
                 .expect("write input");
         }
 
-        let mut fastforwarder = fastforwarder.lock();
-        let (committed_state, dirty_state, last_input) = fastforwarder
+        let committed_state = battle
+            .committed_state()
+            .as_ref()
+            .expect("committed state")
+            .clone();
+        let last_committed_remote_input = battle.last_committed_remote_input();
+
+        let (committed_state, dirty_state, last_input) = battle
+            .fastforwarder()
             .fastforward(
-                battle.committed_state().as_ref().expect("committed state"),
-                battle.local_player_index(),
+                &committed_state,
+                local_player_index,
                 &input_pairs,
-                battle.last_committed_remote_input(),
+                last_committed_remote_input,
                 &left,
             )
             .expect("fastforward");
@@ -253,7 +258,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
 pub struct InProgressFacade {
     arc: std::sync::Arc<battle::InProgress>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
     primary_mux_handle: audio::mux_stream::MuxHandle,
     audio_core_mux_handle: audio::mux_stream::MuxHandle,
@@ -266,7 +270,6 @@ impl InProgressFacade {
             in_progress: self.arc.clone(),
             guard,
             audio_state_holder: self.audio_state_holder.clone(),
-            fastforwarder: self.fastforwarder.clone(),
         }
     }
 
@@ -279,7 +282,7 @@ impl InProgressFacade {
             audio_core_mux_handle.switch();
         });
         self.audio_core_handle.unpause();
-        self.arc.start_battle().await;
+        self.arc.start_battle().await.expect("start battle");
     }
 
     pub async fn end_battle(&self, mut core: mgba::core::CoreMutRef<'_>) {
@@ -304,8 +307,9 @@ impl InProgressFacade {
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, Option<battle::Match>>,
     compat_list: std::sync::Arc<compat::CompatList>,
+    rom_path: std::path::PathBuf,
+    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
     primary_mux_handle: audio::mux_stream::MuxHandle,
     audio_core_mux_handle: audio::mux_stream::MuxHandle,
@@ -327,7 +331,6 @@ impl<'a> MatchStateFacadeGuard<'a> {
         Some(InProgressFacade {
             arc: in_progress,
             audio_state_holder: self.audio_state_holder.clone(),
-            fastforwarder: self.fastforwarder.clone(),
             audio_core_handle: self.audio_core_handle.clone(),
             primary_mux_handle: self.primary_mux_handle.clone(),
             audio_core_mux_handle: self.audio_core_mux_handle.clone(),
@@ -360,6 +363,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
         let config = self.config.lock();
         let m = battle::Match::new(
             self.compat_list.clone(),
+            self.rom_path.clone(),
+            self.hooks,
             s.code.to_string(),
             match_type,
             core.as_ref().game_title(),
@@ -396,8 +401,9 @@ impl<'a> MatchStateFacadeGuard<'a> {
 pub struct MatchFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     compat_list: std::sync::Arc<compat::CompatList>,
+    rom_path: std::path::PathBuf,
+    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     audio_core_handle: mgba::thread::Handle,
     primary_mux_handle: audio::mux_stream::MuxHandle,
     audio_core_mux_handle: audio::mux_stream::MuxHandle,
@@ -408,9 +414,10 @@ impl MatchFacade {
     pub async fn lock(&self) -> MatchStateFacadeGuard<'_> {
         MatchStateFacadeGuard {
             guard: self.arc.lock().await,
+            rom_path: self.rom_path.clone(),
+            hooks: self.hooks,
             compat_list: self.compat_list.clone(),
             audio_state_holder: self.audio_state_holder.clone(),
-            fastforwarder: self.fastforwarder.clone(),
             audio_core_handle: self.audio_core_handle.clone(),
             primary_mux_handle: self.primary_mux_handle.clone(),
             audio_core_mux_handle: self.audio_core_mux_handle.clone(),
@@ -422,6 +429,8 @@ impl MatchFacade {
 struct InnerFacade {
     handle: tokio::runtime::Handle,
     compat_list: std::sync::Arc<compat::CompatList>,
+    rom_path: std::path::PathBuf,
+    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
@@ -430,7 +439,6 @@ struct InnerFacade {
     audio_core_handle: mgba::thread::Handle,
     primary_mux_handle: audio::mux_stream::MuxHandle,
     audio_core_mux_handle: audio::mux_stream::MuxHandle,
-    fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
 }
 
 #[derive(Clone)]
@@ -440,6 +448,8 @@ impl Facade {
     pub fn new(
         handle: tokio::runtime::Handle,
         compat_list: std::sync::Arc<compat::CompatList>,
+        rom_path: std::path::PathBuf,
+        hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
         match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
@@ -448,11 +458,12 @@ impl Facade {
         audio_core_handle: mgba::thread::Handle,
         primary_mux_handle: audio::mux_stream::MuxHandle,
         audio_core_mux_handle: audio::mux_stream::MuxHandle,
-        fastforwarder: std::sync::Arc<parking_lot::Mutex<fastforwarder::Fastforwarder>>,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
             handle,
             compat_list,
+            rom_path,
+            hooks,
             match_,
             joyflags,
             config,
@@ -461,16 +472,16 @@ impl Facade {
             audio_core_handle,
             primary_mux_handle,
             audio_core_mux_handle,
-            fastforwarder,
         })))
     }
     pub fn match_(&mut self) -> MatchFacade {
         MatchFacade {
             arc: self.0.borrow().match_.clone(),
             compat_list: self.0.borrow().compat_list.clone(),
+            rom_path: self.0.borrow().rom_path.clone(),
+            hooks: self.0.borrow().hooks,
             audio_state_holder: self.0.borrow().audio_state_holder.clone(),
             audio_core_handle: self.0.borrow().audio_core_handle.clone(),
-            fastforwarder: self.0.borrow().fastforwarder.clone(),
             primary_mux_handle: self.0.borrow().primary_mux_handle.clone(),
             audio_core_mux_handle: self.0.borrow().audio_core_mux_handle.clone(),
             config: self.0.borrow().config.clone(),
