@@ -1,5 +1,5 @@
 enum ReceiveState {
-    Receiver(tokio::sync::mpsc::Receiver<Vec<u8>>),
+    Ready(tokio::sync::mpsc::Receiver<Vec<u8>>),
     Closed,
 }
 
@@ -24,7 +24,7 @@ impl DataChannel {
         let dc2 = std::sync::Arc::new(DataChannel {
             dc,
             send_state: tokio::sync::Mutex::new(SendState::Waiting(send_state)),
-            receive_state: tokio::sync::Mutex::new(ReceiveState::Receiver(receiver)),
+            receive_state: tokio::sync::Mutex::new(ReceiveState::Ready(receiver)),
         });
         {
             let dc2 = dc2.clone();
@@ -81,7 +81,7 @@ impl DataChannel {
     pub async fn receive(&self) -> Option<Vec<u8>> {
         match &mut *self.receive_state.lock().await {
             ReceiveState::Closed => None,
-            ReceiveState::Receiver(receiver) => receiver.recv().await,
+            ReceiveState::Ready(receiver) => receiver.recv().await,
         }
     }
 
