@@ -61,7 +61,7 @@ impl Loaded {
         audio_core.as_mut().load_rom(rom_vf)?;
         audio_core.as_mut().reset();
 
-        audio_core.set_traps(hooks.get_audio_traps(audio_state_holder.clone()));
+        audio_core.set_traps(hooks.audio_traps(audio_state_holder.clone()));
 
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
@@ -91,7 +91,7 @@ impl Loaded {
                 .set_fps_target(EXPECTED_FPS as f32);
         });
 
-        core.set_traps(hooks.get_primary_traps(
+        core.set_traps(hooks.primary_traps(
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),
