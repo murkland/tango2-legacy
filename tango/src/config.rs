@@ -104,7 +104,13 @@ pub struct Logging {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Graphics {
+    pub backends: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Config {
+    pub graphics: Graphics,
     pub logging: Logging,
     pub keymapping: Keymapping,
     pub matchmaking: Matchmaking,

@@ -93,6 +93,12 @@ impl Game {
         let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
 
         let (pixels, gui) = {
+            let backends_str = &config.lock().graphics.backends;
+            let wgpu_backends = if !backends_str.is_empty() {
+                wgpu::util::parse_backends_from_comma_list(&backends_str)
+            } else {
+                wgpu::Backends::PRIMARY
+            };
             let config = config.clone();
             let window_size = window.inner_size();
             let surface_texture =
@@ -102,6 +108,7 @@ impl Game {
                 mgba::gba::SCREEN_HEIGHT,
                 surface_texture,
             )
+            .wgpu_backend(wgpu_backends)
             .request_adapter_options(wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
