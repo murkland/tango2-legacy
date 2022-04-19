@@ -67,10 +67,10 @@ hooks = "exe6g"
 
 [games.exe6f-idealexe]
 title = "ROCKEXE6_RXX"
-crc32 = "bc8c697e"
+crc32 = "cae274cd"
 hooks = "exe6f"
 
 [games.exe6g-idealexe]
 title = "ROCKEXE6_GXX"
-crc32 = "0f1c6ba9"
+crc32 = "d1682777"
 hooks = "exe6g"
