@@ -93,9 +93,9 @@ impl Game {
         let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
 
         let (pixels, gui) = {
-            let backends_str = &config.lock().graphics.backends;
-            let wgpu_backends = if !backends_str.is_empty() {
-                wgpu::util::parse_backends_from_comma_list(&backends_str)
+            let backends = &config.lock().graphics.backends;
+            let wgpu_backends = if !backends.is_empty() {
+                wgpu::util::parse_backends_from_comma_list(&backends.join(","))
             } else {
                 wgpu::Backends::PRIMARY
             };

@@ -105,7 +105,7 @@ pub struct Logging {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Graphics {
-    pub backends: String,
+    pub backends: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
