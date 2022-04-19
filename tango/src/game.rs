@@ -141,7 +141,6 @@ impl Game {
                     let emu_tps_counter = emu_tps_counter.lock();
                     let fps_counter = fps_counter.lock();
                     let match_ = loaded.lock_match().await;
-                    // TODO: Avoid this double locking.
                     Some(gui::DebugStats {
                         fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
                         emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
