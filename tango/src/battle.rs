@@ -29,7 +29,7 @@ enum Negotiation {
 
 pub struct Match {
     cancellation_token: tokio_util::sync::CancellationToken,
-    r#impl: std::sync::Arc<MatchImpl>,
+    inner: std::sync::Arc<InnerMatch>,
 }
 
 pub struct Settings {
@@ -38,7 +38,7 @@ pub struct Settings {
         Box<dyn Fn() -> webrtc::peer_connection::configuration::RTCConfiguration + Send + Sync>,
 }
 
-struct MatchImpl {
+struct InnerMatch {
     compat_list: std::sync::Arc<compat::CompatList>,
     negotiation: tokio::sync::Mutex<Negotiation>,
     start_time: std::time::SystemTime,
@@ -120,7 +120,7 @@ pub enum NegotiationProgress {
     Handshaking,
 }
 
-impl MatchImpl {
+impl InnerMatch {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
@@ -394,7 +394,7 @@ impl Match {
         settings: Settings,
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
-        let r#impl = std::sync::Arc::new(MatchImpl {
+        let inner = std::sync::Arc::new(InnerMatch {
             compat_list,
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                 NegotiationProgress::NotStarted,
@@ -416,20 +416,20 @@ impl Match {
         });
         Match {
             cancellation_token: tokio_util::sync::CancellationToken::new(),
-            r#impl,
+            inner,
         }
     }
 
     pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
-        self.r#impl.battle_state.lock().await
+        self.inner.battle_state.lock().await
     }
 
     pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
-        self.r#impl.remote_init_receiver.lock().await.recv().await
+        self.inner.remote_init_receiver.lock().await.recv().await
     }
 
     pub async fn poll_for_ready(&self) -> NegotiationStatus {
-        match &*self.r#impl.negotiation.lock().await {
+        match &*self.inner.negotiation.lock().await {
             Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
             Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
             Negotiation::Err(NegotiationError::IncompatibleGames) => {
@@ -446,7 +446,7 @@ impl Match {
     }
 
     pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
-        let dc = match &*self.r#impl.negotiation.lock().await {
+        let dc = match &*self.inner.negotiation.lock().await {
             Negotiation::Negotiated { dc, .. } => dc.clone(),
             Negotiation::NotReady(_) => anyhow::bail!("not ready"),
             Negotiation::Err(e) => anyhow::bail!("{}", e),
@@ -457,7 +457,7 @@ impl Match {
     pub async fn lock_rng(
         &self,
     ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
-        let negotiation = self.r#impl.negotiation.lock().await;
+        let negotiation = self.inner.negotiation.lock().await;
         match &*negotiation {
             Negotiation::Negotiated { .. } => {
                 Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
@@ -471,11 +471,11 @@ impl Match {
     }
 
     pub fn match_type(&self) -> u16 {
-        self.r#impl.match_type
+        self.inner.match_type
     }
 
     pub async fn start_battle(&self) {
-        let mut battle_state = self.r#impl.battle_state.lock().await;
+        let mut battle_state = self.inner.battle_state.lock().await;
         battle_state.number += 1;
         let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
         log::info!(
@@ -484,7 +484,7 @@ impl Match {
         );
         let replay_filename = format!(
             "{}_battle{}_p{}.tangoreplay",
-            time::OffsetDateTime::from(self.r#impl.start_time)
+            time::OffsetDateTime::from(self.inner.start_time)
                 .format(time::macros::format_description!(
                     "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
                 ))
@@ -500,7 +500,7 @@ impl Match {
         let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
-            iq: input::PairQueue::new(120, self.r#impl.input_delay),
+            iq: input::PairQueue::new(120, self.inner.input_delay),
             remote_delay: 0,
             is_accepting_input: false,
             last_committed_remote_input: input::Input {
@@ -521,20 +521,20 @@ impl Match {
     }
 
     pub async fn end_battle(&self) {
-        self.r#impl.battle_state.lock().await.battle = None;
+        self.inner.battle_state.lock().await.battle = None;
     }
 
     pub fn start(&self, handle: tokio::runtime::Handle) {
         let cancellation_token = self.cancellation_token.clone();
-        let r#impl = self.r#impl.clone();
+        let inner = self.inner.clone();
         handle.spawn(async move {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {},
-                Err(e) = r#impl.run() => {
+                Err(e) = inner.run() => {
                     log::info!("match thread ending: {:?}", e);
                 },
             };
-            if let Negotiation::Negotiated { dc, peer_conn, .. } = &*r#impl.negotiation.lock().await
+            if let Negotiation::Negotiated { dc, peer_conn, .. } = &*inner.negotiation.lock().await
             {
                 let _ = dc.close().await;
                 let _ = peer_conn.close().await;
