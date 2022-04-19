@@ -90,7 +90,6 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .fastforwarder()
             .fastforward(
                 &committed_state,
-                local_player_index,
                 &input_pairs,
                 last_committed_remote_input,
                 &left,
