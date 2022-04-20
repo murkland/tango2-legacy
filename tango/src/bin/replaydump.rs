@@ -149,7 +149,7 @@ fn main() -> Result<(), anyhow::Error> {
     hooks.prepare_for_fastforward(core.as_mut());
     {
         let ff_state = ff_state.clone();
-        core.set_traps(hooks.get_fastforwarder_traps(ff_state));
+        core.set_traps(hooks.fastforwarder_traps(ff_state));
     }
 
     core.as_mut().load_state(&replay.state)?;

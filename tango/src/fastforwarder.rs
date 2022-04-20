@@ -151,7 +151,7 @@ impl Fastforwarder {
             std::cell::RefCell::<Option<InnerState>>::new(None),
         ));
 
-        core.set_traps(hooks.get_fastforwarder_traps(state.clone()));
+        core.set_traps(hooks.fastforwarder_traps(state.clone()));
         core.as_mut().reset();
 
         Ok(Fastforwarder { core, state, hooks })

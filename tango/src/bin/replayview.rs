@@ -157,17 +157,15 @@ fn main() -> Result<(), anyhow::Error> {
 
     {
         let done = done.clone();
-        core.set_traps(
-            hooks.get_fastforwarder_traps(tango::fastforwarder::State::new(
-                replay.local_player_index,
-                replay.input_pairs,
-                0,
-                0,
-                Box::new(move || {
-                    done.store(true, std::sync::atomic::Ordering::Relaxed);
-                }),
-            )),
-        );
+        core.set_traps(hooks.fastforwarder_traps(tango::fastforwarder::State::new(
+            replay.local_player_index,
+            replay.input_pairs,
+            0,
+            0,
+            Box::new(move || {
+                done.store(true, std::sync::atomic::Ordering::Relaxed);
+            }),
+        )));
     }
 
     let thread = mgba::thread::Thread::new(core);
