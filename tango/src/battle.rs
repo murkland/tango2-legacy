@@ -510,6 +510,7 @@ impl InProgress {
                 self.hooks,
                 local_player_index,
             )?,
+            audio_save_state_holder: self.audio_save_state_holder.clone(),
             _audio_core_thread: audio_core_thread,
             _audio_core_mux_handle: audio_core_mux_handle,
         });
@@ -645,6 +646,7 @@ pub struct Battle {
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
     fastforwarder: fastforwarder::Fastforwarder,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     _audio_core_thread: mgba::thread::Thread,
     _audio_core_mux_handle: audio::mux_stream::MuxHandle,
 }
@@ -774,5 +776,11 @@ impl Battle {
             - (self.last_committed_remote_input.remote_tick as i32
                 - self.last_committed_remote_input.local_tick as i32
                 - self.remote_delay() as i32)
+    }
+}
+
+impl Drop for Battle {
+    fn drop(&mut self) {
+        *self.audio_save_state_holder.lock() = None;
     }
 }

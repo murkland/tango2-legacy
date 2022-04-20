@@ -543,9 +543,3 @@ impl AudioFacade {
         self.local_player_index
     }
 }
-
-impl Drop for AudioFacade {
-    fn drop(&mut self) {
-        *self.audio_save_state_holder.lock() = None;
-    }
-}
