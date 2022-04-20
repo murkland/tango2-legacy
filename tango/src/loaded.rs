@@ -56,8 +56,6 @@ impl Loaded {
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
 
-        let audio_save_state_holder = Arc::new(parking_lot::Mutex::new(None));
-
         let audio_mux = audio::mux_stream::MuxStream::new();
         let primary_mux_handle = audio_mux.open_stream();
 
@@ -74,7 +72,6 @@ impl Loaded {
                 gui_state,
                 config.clone(),
                 audio_mux.clone(),
-                audio_save_state_holder.clone(),
                 primary_mux_handle.clone(),
             ),
         ));

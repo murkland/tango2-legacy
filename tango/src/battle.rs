@@ -60,7 +60,6 @@ pub struct InProgress {
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
     audio_mux: audio::mux_stream::MuxStream,
-    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
 }
 
 #[derive(Debug)]
@@ -452,11 +451,14 @@ impl InProgress {
         log::info!("opened replay: {}", replay_filename);
 
         let mut audio_core = mgba::core::Core::new_gba("tango")?;
+        let audio_save_state_holder = std::sync::Arc::new(parking_lot::Mutex::new(None));
+        let (audio_rendezvous_tx, audio_rendezvous_rx) = std::sync::mpsc::sync_channel(0);
         let rom_vf = mgba::vfile::VFile::open(&self.rom_path, mgba::vfile::flags::O_RDONLY)?;
         audio_core.as_mut().load_rom(rom_vf)?;
         audio_core.as_mut().reset();
         audio_core.set_traps(self.hooks.audio_traps(facade::AudioFacade::new(
-            self.audio_save_state_holder.clone(),
+            audio_save_state_holder.clone(),
+            std::sync::Arc::new(audio_rendezvous_rx),
             local_player_index,
         )));
 
@@ -486,7 +488,7 @@ impl InProgress {
         }
         audio_core_handle.unpause();
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (state_committed_tx, state_committed_rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
             iq: input::PairQueue::new(60, self.input_delay),
@@ -500,8 +502,9 @@ impl InProgress {
                 turn: vec![],
             },
             last_input: None,
-            state_committed_tx: Some(tx),
-            state_committed_rx: Some(rx),
+            state_committed_tx: Some(state_committed_tx),
+            state_committed_rx: Some(state_committed_rx),
+            audio_rendezvous_tx,
             committed_state: None,
             local_pending_turn: None,
             replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)?,
@@ -510,7 +513,7 @@ impl InProgress {
                 self.hooks,
                 local_player_index,
             )?,
-            audio_save_state_holder: self.audio_save_state_holder.clone(),
+            audio_save_state_holder,
             _audio_core_thread: audio_core_thread,
             _audio_core_mux_handle: audio_core_mux_handle,
         });
@@ -548,7 +551,6 @@ impl Match {
         rom_path: std::path::PathBuf,
         hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
         audio_mux: audio::mux_stream::MuxStream,
-        audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -583,7 +585,6 @@ impl Match {
                     remote_init_sender,
                     remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
                     audio_mux,
-                    audio_save_state_holder,
                 },
             )))),
         }
@@ -642,6 +643,7 @@ pub struct Battle {
     last_input: Option<input::Pair<input::Input>>,
     state_committed_tx: Option<tokio::sync::oneshot::Sender<()>>,
     state_committed_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    audio_rendezvous_tx: std::sync::mpsc::SyncSender<()>,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
@@ -673,6 +675,15 @@ impl Battle {
         if let Some(tx) = self.state_committed_tx.take() {
             let _ = tx.send(());
         }
+    }
+
+    pub fn set_audio_save_state(&mut self, state: mgba::state::State) {
+        *self.audio_save_state_holder.lock() = Some(state);
+    }
+
+    pub fn wait_for_audio_rendezvous(&mut self) -> anyhow::Result<()> {
+        self.audio_rendezvous_tx.send(())?;
+        Ok(())
     }
 
     pub fn set_last_input(&mut self, inp: input::Pair<input::Input>) {
@@ -776,11 +787,5 @@ impl Battle {
             - (self.last_committed_remote_input.remote_tick as i32
                 - self.last_committed_remote_input.local_tick as i32
                 - self.remote_delay() as i32)
-    }
-}
-
-impl Drop for Battle {
-    fn drop(&mut self) {
-        *self.audio_save_state_holder.lock() = None;
     }
 }

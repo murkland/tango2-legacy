@@ -781,7 +781,7 @@ impl hooks::Hooks for BN6 {
     ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)> {
         vec![
             {
-                let facade = facade.clone();
+                let mut facade = facade.clone();
                 (
                     self.offsets.rom.main_read_joyflags,
                     Box::new(move |mut core| {
