@@ -521,11 +521,13 @@ impl InProgress {
             _audio_core_thread: audio_core_thread,
             _audio_core_mux_handle: audio_core_mux_handle,
         });
+        log::info!("battle has started");
         Ok(())
     }
 
     pub async fn end_battle(&self) {
         self.battle_state.lock().await.battle = None;
+        log::info!("battle has ended");
     }
 }
 
