@@ -3574,7 +3574,7 @@ dependencies = [
 
 [[package]]
 name = "tango"
-version = "2.0.0-0.0.5-newmoon22cycle7"
+version = "2.0.0-0.0.6"
 dependencies = [
  "anyhow",
  "bincode",
