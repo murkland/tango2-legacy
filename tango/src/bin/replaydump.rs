@@ -13,7 +13,7 @@ struct Cli {
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
 
-    #[clap(short('a'), long, default_value = "-c:a aac -ar 48000 -b:a 320k -ac 2")]
+    #[clap(short('a'), long, default_value = "-c:a aac -ar 48000 -b:a 384k -ac 2")]
     ffmpeg_audio_flags: String,
 
     #[clap(
