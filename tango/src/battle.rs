@@ -1,8 +1,11 @@
+use crate::audio;
 use crate::compat;
 use crate::datachannel;
+use crate::facade;
 use crate::fastforwarder;
 use crate::hooks;
 use crate::input;
+use crate::loaded;
 use crate::protocol;
 use crate::replay;
 use crate::transport;
@@ -41,7 +44,8 @@ pub struct Settings {
 }
 
 pub struct InProgress {
-    compat_list: std::sync::Arc<compat::CompatList>,
+    compat_list: compat::CompatList,
+    audio_supported_config: cpal::SupportedStreamConfig,
     rom_path: std::path::PathBuf,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     negotiation: tokio::sync::Mutex<Negotiation>,
@@ -55,6 +59,8 @@ pub struct InProgress {
     battle_state: tokio::sync::Mutex<BattleState>,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
+    audio_mux: audio::mux_stream::MuxStream,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
 }
 
 #[derive(Debug)]
@@ -424,7 +430,7 @@ impl InProgress {
         self.match_type
     }
 
-    pub async fn start_battle(&self) -> anyhow::Result<()> {
+    pub async fn start_battle(&self, core: mgba::core::CoreMutRef<'_>) -> anyhow::Result<()> {
         let mut battle_state = self.battle_state.lock().await;
         battle_state.number += 1;
         let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
@@ -444,6 +450,41 @@ impl InProgress {
         let replay_file =
             std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))?;
         log::info!("opened replay: {}", replay_filename);
+
+        let mut audio_core = mgba::core::Core::new_gba("tango")?;
+        let rom_vf = mgba::vfile::VFile::open(&self.rom_path, mgba::vfile::flags::O_RDONLY)?;
+        audio_core.as_mut().load_rom(rom_vf)?;
+        audio_core.as_mut().reset();
+        audio_core.set_traps(self.hooks.audio_traps(facade::AudioFacade::new(
+            self.audio_save_state_holder.clone(),
+            local_player_index,
+        )));
+
+        let audio_core_thread = mgba::thread::Thread::new(audio_core);
+        audio_core_thread.start();
+
+        let audio_core_handle = audio_core_thread.handle();
+        audio_core_handle.pause();
+        let audio_core_mux_handle = self.audio_mux.open_stream();
+        audio_core_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
+            audio_core_handle.clone(),
+            self.audio_supported_config.sample_rate(),
+            self.audio_supported_config.channels(),
+        ));
+        {
+            let audio_core_mux_handle = audio_core_mux_handle.clone();
+            let save_state = core.save_state().expect("save state");
+            audio_core_handle.run_on_core(move |mut core| {
+                core.gba_mut()
+                    .sync_mut()
+                    .as_mut()
+                    .expect("sync")
+                    .set_fps_target(loaded::EXPECTED_FPS as f32);
+                core.load_state(&save_state).expect("load state");
+                audio_core_mux_handle.switch();
+            });
+        }
+        audio_core_handle.unpause();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
@@ -469,6 +510,8 @@ impl InProgress {
                 self.hooks,
                 local_player_index,
             )?,
+            _audio_core_thread: audio_core_thread,
+            _audio_core_mux_handle: audio_core_mux_handle,
         });
         Ok(())
     }
@@ -499,9 +542,12 @@ impl Drop for Match {
 
 impl Match {
     pub fn new(
-        compat_list: std::sync::Arc<compat::CompatList>,
+        compat_list: compat::CompatList,
+        audio_supported_config: cpal::SupportedStreamConfig,
         rom_path: std::path::PathBuf,
         hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
+        audio_mux: audio::mux_stream::MuxStream,
+        audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -515,6 +561,7 @@ impl Match {
             in_progress: std::sync::Arc::new(tokio::sync::Mutex::new(Some(std::sync::Arc::new(
                 InProgress {
                     compat_list,
+                    audio_supported_config,
                     rom_path,
                     hooks,
                     negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
@@ -534,6 +581,8 @@ impl Match {
                     }),
                     remote_init_sender,
                     remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
+                    audio_mux,
+                    audio_save_state_holder,
                 },
             )))),
         }
@@ -596,6 +645,8 @@ pub struct Battle {
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
     fastforwarder: fastforwarder::Fastforwarder,
+    _audio_core_thread: mgba::thread::Thread,
+    _audio_core_mux_handle: audio::mux_stream::MuxHandle,
 }
 
 impl Battle {

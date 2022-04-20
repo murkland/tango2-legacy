@@ -23,14 +23,15 @@ impl Drop for InnerMuxHandle {
     }
 }
 
-pub struct InnerMuxHandle {
+struct InnerMuxHandle {
     id: usize,
     mux: std::sync::Arc<parking_lot::Mutex<InnerMuxStream>>,
 }
 
+#[derive(Clone)]
 pub struct MuxStream(std::sync::Arc<parking_lot::Mutex<InnerMuxStream>>);
 
-pub struct InnerMuxStream {
+struct InnerMuxStream {
     streams: std::collections::HashMap<usize, Box<dyn super::Stream + Send + 'static>>,
     current_id: usize,
     next_id: usize,
@@ -47,7 +48,7 @@ impl MuxStream {
         )))
     }
 
-    pub fn open_stream(&mut self) -> MuxHandle {
+    pub fn open_stream(&self) -> MuxHandle {
         let mut mux = self.0.lock();
         let id = mux.next_id;
         mux.next_id += 1;

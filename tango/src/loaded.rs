@@ -9,14 +9,13 @@ pub struct Loaded {
     _stream: cpal::Stream,
     match_: Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
-    _audio_core_thread: mgba::thread::Thread,
     thread: mgba::thread::Thread,
 }
 
 impl Loaded {
     pub fn new(
         id: &str,
-        compat_list: Arc<compat::CompatList>,
+        compat_list: compat::CompatList,
         rom_filename: &std::path::Path,
         save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
@@ -54,54 +53,29 @@ impl Loaded {
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-        let audio_state_holder = Arc::new(parking_lot::Mutex::new(None));
-
-        let mut audio_core = mgba::core::Core::new_gba("tango")?;
-        let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
-        audio_core.as_mut().load_rom(rom_vf)?;
-        audio_core.as_mut().reset();
-
-        audio_core.set_traps(hooks.audio_traps(audio_state_holder.clone()));
-
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
 
-        let mut muxer = audio::mux_stream::MuxStream::new();
-        let primary_mux_handle = muxer.open_stream();
-        let audio_core_mux_handle = muxer.open_stream();
+        let audio_save_state_holder = Arc::new(parking_lot::Mutex::new(None));
 
-        let audio_core_thread = mgba::thread::Thread::new(audio_core);
-        audio_core_thread.start();
-        audio_core_thread.handle().pause();
-        audio_core_thread.handle().run_on_core(|mut core| {
-            core.gba_mut()
-                .sync_mut()
-                .as_mut()
-                .expect("sync")
-                .set_fps_target(EXPECTED_FPS as f32);
-        });
-
-        audio_core_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
-            audio_core_thread.handle(),
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ));
+        let audio_mux = audio::mux_stream::MuxStream::new();
+        let primary_mux_handle = audio_mux.open_stream();
 
         core.set_traps(hooks.primary_traps(
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),
                 compat_list.clone(),
+                supported_config.clone(),
                 rom_path.to_owned(),
                 hooks,
                 match_.clone(),
                 joyflags.clone(),
                 gui_state,
                 config.clone(),
-                audio_state_holder.clone(),
-                audio_core_thread.handle(),
+                audio_mux.clone(),
+                audio_save_state_holder.clone(),
                 primary_mux_handle.clone(),
-                audio_core_mux_handle,
             ),
         ));
 
@@ -136,22 +110,13 @@ impl Loaded {
             supported_config.channels(),
         ));
 
-        let stream = audio::open_stream(
-            audio_device,
-            &supported_config,
-            audio::timewarp_stream::TimewarpStream::new(
-                thread.handle(),
-                supported_config.sample_rate(),
-                supported_config.channels(),
-            ),
-        )?;
+        let stream = audio::open_stream(audio_device, &supported_config, audio_mux)?;
         stream.play()?;
 
         Ok(Loaded {
             match_,
             joyflags,
             thread,
-            _audio_core_thread: audio_core_thread,
             _stream: stream,
         })
     }

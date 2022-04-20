@@ -8,8 +8,11 @@ pub struct InnerThread {
     core: core::Core,
     raw: c::mCoreThread,
     frame_callback: Option<Box<dyn Fn(core::CoreMutRef, &[u8]) + Send + 'static>>,
-    current_callback: std::cell::RefCell<Option<Box<dyn Fn(crate::core::CoreMutRef<'_>)>>>,
+    current_callback:
+        std::cell::RefCell<Option<Box<dyn Fn(crate::core::CoreMutRef<'_>) + Send + Sync>>>,
 }
+
+unsafe impl Send for InnerThread {}
 
 unsafe extern "C" fn c_frame_callback(ptr: *mut c::mCoreThread) {
     let t = &*((*ptr).userData as *mut InnerThread);

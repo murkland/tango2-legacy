@@ -3,7 +3,7 @@ use crate::{audio, battle, compat, config, gui, hooks, input, loaded};
 pub struct BattleStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, battle::BattleState>,
     in_progress: std::sync::Arc<battle::InProgress>,
-    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
 }
 
 impl<'a> BattleStateFacadeGuard<'a> {
@@ -98,7 +98,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
 
         core.load_state(&dirty_state).expect("load dirty state");
 
-        *self.audio_state_holder.lock() = Some(dirty_state);
+        *self.audio_save_state_holder.lock() = Some(dirty_state);
 
         battle.set_committed_state(committed_state);
         battle.set_last_input(last_input);
@@ -256,10 +256,8 @@ impl<'a> BattleStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct InProgressFacade {
     arc: std::sync::Arc<battle::InProgress>,
-    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    audio_core_handle: mgba::thread::Handle,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     primary_mux_handle: audio::mux_stream::MuxHandle,
-    audio_core_mux_handle: audio::mux_stream::MuxHandle,
 }
 
 impl InProgressFacade {
@@ -268,30 +266,21 @@ impl InProgressFacade {
         BattleStateFacadeGuard {
             in_progress: self.arc.clone(),
             guard,
-            audio_state_holder: self.audio_state_holder.clone(),
+            audio_save_state_holder: self.audio_save_state_holder.clone(),
         }
     }
 
     pub async fn start_battle(&self, core: mgba::core::CoreMutRef<'_>) {
-        self.audio_core_handle.pause();
-        let save_state = core.save_state().expect("save state");
-        let audio_core_mux_handle = self.audio_core_mux_handle.clone();
-        self.audio_core_handle.run_on_core(move |mut core| {
-            core.load_state(&save_state).expect("load state");
-            audio_core_mux_handle.switch();
-        });
-        self.audio_core_handle.unpause();
-        self.arc.start_battle().await.expect("start battle");
+        self.arc.start_battle(core).await.expect("start battle");
     }
 
     pub async fn end_battle(&self, mut core: mgba::core::CoreMutRef<'_>) {
+        self.arc.end_battle().await;
         core.gba_mut()
             .sync_mut()
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
         self.primary_mux_handle.switch();
-        self.audio_core_handle.pause();
-        self.arc.end_battle().await;
     }
 
     pub async fn lock_rng(&self) -> tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64> {
@@ -305,13 +294,13 @@ impl InProgressFacade {
 
 pub struct MatchStateFacadeGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, Option<battle::Match>>,
-    compat_list: std::sync::Arc<compat::CompatList>,
+    compat_list: compat::CompatList,
+    audio_supported_config: cpal::SupportedStreamConfig,
     rom_path: std::path::PathBuf,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
-    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    audio_core_handle: mgba::thread::Handle,
+    audio_mux: audio::mux_stream::MuxStream,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     primary_mux_handle: audio::mux_stream::MuxHandle,
-    audio_core_mux_handle: audio::mux_stream::MuxHandle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
@@ -329,10 +318,8 @@ impl<'a> MatchStateFacadeGuard<'a> {
         };
         Some(InProgressFacade {
             arc: in_progress,
-            audio_state_holder: self.audio_state_holder.clone(),
-            audio_core_handle: self.audio_core_handle.clone(),
+            audio_save_state_holder: self.audio_save_state_holder.clone(),
             primary_mux_handle: self.primary_mux_handle.clone(),
-            audio_core_mux_handle: self.audio_core_mux_handle.clone(),
         })
     }
 
@@ -362,8 +349,11 @@ impl<'a> MatchStateFacadeGuard<'a> {
         let config = self.config.lock();
         let m = battle::Match::new(
             self.compat_list.clone(),
+            self.audio_supported_config.clone(),
             self.rom_path.clone(),
             self.hooks,
+            self.audio_mux.clone(),
+            self.audio_save_state_holder.clone(),
             s.code.to_string(),
             match_type,
             core.as_ref().game_title(),
@@ -387,7 +377,6 @@ impl<'a> MatchStateFacadeGuard<'a> {
             .expect("sync")
             .set_fps_target(loaded::EXPECTED_FPS as f32);
         self.primary_mux_handle.switch();
-        self.audio_core_handle.pause();
         *self.guard.as_mut().unwrap().lock_in_progress().await = None;
     }
 
@@ -399,13 +388,13 @@ impl<'a> MatchStateFacadeGuard<'a> {
 #[derive(Clone)]
 pub struct MatchFacade {
     arc: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
-    compat_list: std::sync::Arc<compat::CompatList>,
+    compat_list: compat::CompatList,
+    audio_supported_config: cpal::SupportedStreamConfig,
     rom_path: std::path::PathBuf,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
-    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    audio_core_handle: mgba::thread::Handle,
+    audio_mux: audio::mux_stream::MuxStream,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     primary_mux_handle: audio::mux_stream::MuxHandle,
-    audio_core_mux_handle: audio::mux_stream::MuxHandle,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
 }
 
@@ -416,10 +405,10 @@ impl MatchFacade {
             rom_path: self.rom_path.clone(),
             hooks: self.hooks,
             compat_list: self.compat_list.clone(),
-            audio_state_holder: self.audio_state_holder.clone(),
-            audio_core_handle: self.audio_core_handle.clone(),
+            audio_supported_config: self.audio_supported_config.clone(),
+            audio_mux: self.audio_mux.clone(),
+            audio_save_state_holder: self.audio_save_state_holder.clone(),
             primary_mux_handle: self.primary_mux_handle.clone(),
-            audio_core_mux_handle: self.audio_core_mux_handle.clone(),
             config: self.config.clone(),
         }
     }
@@ -427,17 +416,17 @@ impl MatchFacade {
 
 struct InnerFacade {
     handle: tokio::runtime::Handle,
-    compat_list: std::sync::Arc<compat::CompatList>,
+    compat_list: compat::CompatList,
+    audio_supported_config: cpal::SupportedStreamConfig,
     rom_path: std::path::PathBuf,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
     joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
     gui_state: std::sync::Arc<gui::State>,
     config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-    audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    audio_core_handle: mgba::thread::Handle,
+    audio_mux: audio::mux_stream::MuxStream,
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     primary_mux_handle: audio::mux_stream::MuxHandle,
-    audio_core_mux_handle: audio::mux_stream::MuxHandle,
 }
 
 #[derive(Clone)]
@@ -446,43 +435,43 @@ pub struct Facade(std::rc::Rc<std::cell::RefCell<InnerFacade>>);
 impl Facade {
     pub fn new(
         handle: tokio::runtime::Handle,
-        compat_list: std::sync::Arc<compat::CompatList>,
+        compat_list: compat::CompatList,
+        audio_supported_config: cpal::SupportedStreamConfig,
         rom_path: std::path::PathBuf,
         hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
         match_: std::sync::Arc<tokio::sync::Mutex<Option<battle::Match>>>,
         joyflags: std::sync::Arc<std::sync::atomic::AtomicU32>,
         gui_state: std::sync::Arc<gui::State>,
         config: std::sync::Arc<parking_lot::Mutex<config::Config>>,
-        audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-        audio_core_handle: mgba::thread::Handle,
+        audio_mux: audio::mux_stream::MuxStream,
+        audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
         primary_mux_handle: audio::mux_stream::MuxHandle,
-        audio_core_mux_handle: audio::mux_stream::MuxHandle,
     ) -> Self {
         Self(std::rc::Rc::new(std::cell::RefCell::new(InnerFacade {
             handle,
             compat_list,
+            audio_supported_config,
             rom_path,
             hooks,
             match_,
             joyflags,
             config,
             gui_state,
-            audio_state_holder,
-            audio_core_handle,
+            audio_mux,
+            audio_save_state_holder,
             primary_mux_handle,
-            audio_core_mux_handle,
         })))
     }
     pub fn match_(&mut self) -> MatchFacade {
         MatchFacade {
             arc: self.0.borrow().match_.clone(),
             compat_list: self.0.borrow().compat_list.clone(),
+            audio_supported_config: self.0.borrow().audio_supported_config.clone(),
             rom_path: self.0.borrow().rom_path.clone(),
             hooks: self.0.borrow().hooks,
-            audio_state_holder: self.0.borrow().audio_state_holder.clone(),
-            audio_core_handle: self.0.borrow().audio_core_handle.clone(),
+            audio_mux: self.0.borrow().audio_mux.clone(),
+            audio_save_state_holder: self.0.borrow().audio_save_state_holder.clone(),
             primary_mux_handle: self.0.borrow().primary_mux_handle.clone(),
-            audio_core_mux_handle: self.0.borrow().audio_core_mux_handle.clone(),
             config: self.0.borrow().config.clone(),
         }
     }
@@ -526,5 +515,37 @@ impl Facade {
 
     pub fn connect_dialog_is_open(&self) -> bool {
         self.0.borrow().gui_state.connect_dialog_is_open()
+    }
+}
+
+#[derive(Clone)]
+pub struct AudioFacade {
+    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+    local_player_index: u8,
+}
+
+impl AudioFacade {
+    pub fn new(
+        audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+        local_player_index: u8,
+    ) -> Self {
+        Self {
+            audio_save_state_holder,
+            local_player_index,
+        }
+    }
+
+    pub fn take_audio_save_state(&self) -> Option<mgba::state::State> {
+        self.audio_save_state_holder.lock().take()
+    }
+
+    pub fn local_player_index(&self) -> u8 {
+        self.local_player_index
+    }
+}
+
+impl Drop for AudioFacade {
+    fn drop(&mut self) {
+        *self.audio_save_state_holder.lock() = None;
     }
 }

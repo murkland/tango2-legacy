@@ -777,21 +777,75 @@ impl hooks::Hooks for BN6 {
 
     fn audio_traps(
         &self,
-        audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
+        facade: facade::AudioFacade,
     ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)> {
-        vec![{
-            (
-                self.offsets.rom.main_read_joyflags,
-                Box::new(move |mut core| {
-                    let state = if let Some(state) = audio_state_holder.lock().take() {
-                        state
-                    } else {
-                        return;
-                    };
-                    core.load_state(&state).expect("loaded state");
-                }),
-            )
-        }]
+        vec![
+            {
+                let facade = facade.clone();
+                (
+                    self.offsets.rom.main_read_joyflags,
+                    Box::new(move |mut core| {
+                        let state = if let Some(state) = facade.take_audio_save_state() {
+                            state
+                        } else {
+                            return;
+                        };
+                        core.load_state(&state).expect("loaded state");
+                    }),
+                )
+            },
+            {
+                (
+                    self.offsets.rom.battle_update_call_battle_copy_input_data,
+                    Box::new(move |mut core| {
+                        core.gba_mut().cpu_mut().set_gpr(0, 0);
+                        let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
+                        core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                    }),
+                )
+            },
+            {
+                let facade = facade.clone();
+                (
+                    self.offsets.rom.battle_is_p2_tst,
+                    Box::new(move |mut core| {
+                        core.gba_mut()
+                            .cpu_mut()
+                            .set_gpr(0, facade.local_player_index() as i32);
+                    }),
+                )
+            },
+            {
+                let facade = facade.clone();
+                (
+                    self.offsets.rom.link_is_p2_ret,
+                    Box::new(move |mut core| {
+                        core.gba_mut()
+                            .cpu_mut()
+                            .set_gpr(0, facade.local_player_index() as i32);
+                    }),
+                )
+            },
+            {
+                (
+                    self.offsets
+                        .rom
+                        .comm_menu_in_battle_call_comm_menu_handle_link_cable_input,
+                    Box::new(move |mut core| {
+                        let r15 = core.as_ref().gba().cpu().gpr(15) as u32;
+                        core.gba_mut().cpu_mut().set_pc(r15 + 4);
+                    }),
+                )
+            },
+            {
+                (
+                    self.offsets.rom.get_copy_data_input_state_ret,
+                    Box::new(move |mut core| {
+                        core.gba_mut().cpu_mut().set_gpr(0, 2);
+                    }),
+                )
+            },
+        ]
     }
 
     fn prepare_for_fastforward(&self, mut core: mgba::core::CoreMutRef) {
