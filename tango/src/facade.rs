@@ -54,7 +54,8 @@ impl<'a> BattleStateFacadeGuard<'a> {
             return false;
         }
 
-        self.in_progress
+        if let Err(e) = self
+            .in_progress
             .transport()
             .await
             .expect("transport not available")
@@ -67,7 +68,10 @@ impl<'a> BattleStateFacadeGuard<'a> {
                 turn,
             )
             .await
-            .expect("send input");
+        {
+            log::warn!("failed to send input: {}", e);
+            return false;
+        }
 
         let (input_pairs, left) = battle.consume_and_peek_local();
 
