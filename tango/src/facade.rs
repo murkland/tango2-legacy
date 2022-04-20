@@ -43,6 +43,12 @@ impl<'a> BattleStateFacadeGuard<'a> {
         let local_tick = current_tick + battle.local_delay();
         let remote_tick = battle.last_committed_remote_input().local_tick;
 
+        // We do it in this order such that:
+        // 1. We make sure that the input buffer does not overflow if we were to add an input.
+        // 2. We try to send it to the peer: if it fails, we don't end up desyncing the opponent as we haven't added the input ourselves yet.
+        // 3. We add the input to our buffer: no overflow is guaranteed because we already checked ahead of time.
+        //
+        // This is all done while the battle is locked, so there are no TOCTTOU issues.
         if !battle.can_add_local_input() {
             log::warn!("local input buffer overflow!");
             return false;
