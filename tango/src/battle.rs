@@ -464,11 +464,11 @@ impl InProgress {
             committed_state: None,
             local_pending_turn: None,
             replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)?,
-            fastforwarder: send_wrapper::SendWrapper::new(fastforwarder::Fastforwarder::new(
+            fastforwarder: fastforwarder::Fastforwarder::new(
                 &self.rom_path,
                 self.hooks,
                 local_player_index,
-            )?),
+            )?,
         });
         Ok(())
     }
@@ -595,7 +595,7 @@ pub struct Battle {
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
-    fastforwarder: send_wrapper::SendWrapper<fastforwarder::Fastforwarder>,
+    fastforwarder: fastforwarder::Fastforwarder,
 }
 
 impl Battle {

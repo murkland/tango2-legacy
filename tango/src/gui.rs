@@ -452,7 +452,7 @@ impl State {
                         response.request_focus();
 
                         ui.add(
-                            egui::Slider::new(&mut s.input_delay, 3..=10).text(
+                            egui::Slider::new(&mut s.input_delay, 0..=10).text(
                                 locales::LOCALES
                                     .lookup(&locales::SYSTEM_LOCALE, "connect.input-input-delay"),
                             ),

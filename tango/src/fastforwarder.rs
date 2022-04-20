@@ -41,7 +41,7 @@ pub struct Fastforwarder {
 }
 
 #[derive(Clone)]
-pub struct State(std::rc::Rc<std::cell::RefCell<Option<InnerState>>>);
+pub struct State(std::sync::Arc<parking_lot::Mutex<Option<InnerState>>>);
 
 impl State {
     pub fn new(
@@ -51,44 +51,40 @@ impl State {
         dirty_time: u32,
         on_battle_ended: Box<dyn Fn() + Send>,
     ) -> State {
-        State(std::rc::Rc::new(
-            std::cell::RefCell::<Option<InnerState>>::new(Some(InnerState::new(
+        State(std::sync::Arc::new(parking_lot::Mutex::new(Some(
+            InnerState::new(
                 local_player_index,
                 input_pairs,
                 commit_time,
                 dirty_time,
                 on_battle_ended,
-            ))),
-        ))
+            ),
+        ))))
     }
 
     pub fn commit_time(&self) -> u32 {
-        self.0.borrow().as_ref().expect("commit time").commit_time
+        self.0.lock().as_ref().expect("commit time").commit_time
     }
 
     pub fn set_committed_state(&self, state: mgba::state::State) {
         self.0
-            .borrow_mut()
+            .lock()
             .as_mut()
             .expect("committed state")
             .committed_state = Some(state);
     }
 
     pub fn dirty_time(&self) -> u32 {
-        self.0.borrow().as_ref().expect("dirty time").dirty_time
+        self.0.lock().as_ref().expect("dirty time").dirty_time
     }
 
     pub fn set_dirty_state(&self, state: mgba::state::State) {
-        self.0
-            .borrow_mut()
-            .as_mut()
-            .expect("dirty state")
-            .dirty_state = Some(state);
+        self.0.lock().as_mut().expect("dirty state").dirty_state = Some(state);
     }
 
     pub fn peek_input_pair(&self) -> Option<input::Pair<input::Input>> {
         self.0
-            .borrow()
+            .lock()
             .as_ref()
             .expect("input pairs")
             .input_pairs
@@ -98,7 +94,7 @@ impl State {
 
     pub fn pop_input_pair(&self) -> Option<input::Pair<input::Input>> {
         self.0
-            .borrow_mut()
+            .lock()
             .as_mut()
             .expect("input pairs")
             .input_pairs
@@ -106,12 +102,12 @@ impl State {
     }
 
     pub fn set_anyhow_error(&self, err: anyhow::Error) {
-        self.0.borrow_mut().as_mut().expect("error").result = Err(err);
+        self.0.lock().as_mut().expect("error").result = Err(err);
     }
 
     pub fn local_player_index(&self) -> u8 {
         self.0
-            .borrow()
+            .lock()
             .as_ref()
             .expect("local player index")
             .local_player_index
@@ -120,7 +116,7 @@ impl State {
     pub fn on_battle_ended(&self) {
         (self
             .0
-            .borrow_mut()
+            .lock()
             .as_mut()
             .expect("on battle ended")
             .on_battle_ended)();
@@ -128,7 +124,7 @@ impl State {
 
     pub fn inputs_pairs_left(&self) -> usize {
         self.0
-            .borrow()
+            .lock()
             .as_ref()
             .expect("input pairs")
             .input_pairs
@@ -149,9 +145,7 @@ impl Fastforwarder {
             core
         };
 
-        let state = State(std::rc::Rc::new(
-            std::cell::RefCell::<Option<InnerState>>::new(None),
-        ));
+        let state = State(std::sync::Arc::new(parking_lot::Mutex::new(None)));
 
         core.set_traps(hooks.fastforwarder_traps(state.clone()));
         core.as_mut().reset();
@@ -215,7 +209,7 @@ impl Fastforwarder {
         let commit_time = start_current_tick + commit_pairs.len() as u32;
         let dirty_time = start_current_tick + input_pairs.len() as u32 - 1;
 
-        *self.state.0.borrow_mut() = Some(InnerState::new(
+        *self.state.0.lock() = Some(InnerState::new(
             self.local_player_index,
             input_pairs,
             commit_time,
@@ -223,44 +217,26 @@ impl Fastforwarder {
             Box::new(|| {}),
         ));
 
-        while self
-            .state
-            .0
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .committed_state
-            .is_none()
-            || self
-                .state
-                .0
-                .borrow()
-                .as_ref()
-                .expect("state")
-                .dirty_state
-                .is_none()
-        {
-            self.state.0.borrow_mut().as_mut().expect("state").result = Ok(());
-            self.core.as_mut().run_frame();
-            if self
-                .state
-                .0
-                .borrow()
-                .as_ref()
-                .expect("state")
-                .result
-                .is_err()
+        loop {
             {
-                let state = self.state.0.take().expect("state");
+                let mut inner_state_guard = self.state.0.lock();
+                let mut inner_state = inner_state_guard.as_mut().unwrap();
+                if inner_state.committed_state.is_some() && inner_state.dirty_state.is_some() {
+                    let state = inner_state_guard.take().expect("state");
+                    return Ok((
+                        state.committed_state.expect("committed state"),
+                        state.dirty_state.expect("dirty state"),
+                        last_input,
+                    ));
+                }
+                inner_state.result = Ok(());
+            }
+            self.core.as_mut().run_frame();
+            let mut inner_state = self.state.0.lock();
+            if inner_state.as_ref().expect("state").result.is_err() {
+                let state = inner_state.take().expect("state");
                 return Err(state.result.expect_err("state result err"));
             }
         }
-
-        let state = self.state.0.take().expect("state");
-        Ok((
-            state.committed_state.expect("committed state"),
-            state.dirty_state.expect("dirty state"),
-            last_input,
-        ))
     }
 }

@@ -3598,7 +3598,6 @@ dependencies = [
  "pixels",
  "rand",
  "rand_pcg",
- "send_wrapper",
  "serde",
  "sha3",
  "shell-words",
