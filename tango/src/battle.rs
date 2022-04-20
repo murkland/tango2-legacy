@@ -129,6 +129,8 @@ pub enum NegotiationProgress {
     Handshaking,
 }
 
+const MAX_QUEUE_LENGTH: usize = 60;
+
 impl InProgress {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
@@ -355,15 +357,17 @@ impl InProgress {
                         Some(b) => b,
                     };
 
-                    if !battle.add_remote_input(input::Input {
+                    if !battle.can_add_remote_input() {
+                        anyhow::bail!("remote overflowed our input buffer");
+                    }
+
+                    battle.add_remote_input(input::Input {
                         local_tick: input.local_tick,
                         remote_tick: input.remote_tick,
                         joyflags: input.joyflags as u16,
                         custom_screen_state: input.custom_screen_state as u8,
                         turn: input.turn,
-                    }) {
-                        anyhow::bail!("remote overflowed our input buffer");
-                    }
+                    });
                 }
                 p => anyhow::bail!("unknown packet: {:?}", p),
             }
@@ -491,7 +495,7 @@ impl InProgress {
         let (state_committed_tx, state_committed_rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
             local_player_index,
-            iq: input::PairQueue::new(60, self.input_delay),
+            iq: input::PairQueue::new(MAX_QUEUE_LENGTH, self.input_delay),
             remote_delay: 0,
             is_accepting_input: false,
             last_committed_remote_input: input::Input {
@@ -740,14 +744,22 @@ impl Battle {
         (input_pairs, left)
     }
 
-    pub fn add_local_input(&mut self, input: input::Input) -> bool {
-        log::debug!("local input: {:?}", input);
-        self.iq.add_local_input(input)
+    pub fn can_add_local_input(&mut self) -> bool {
+        self.iq.local_queue_length() < MAX_QUEUE_LENGTH
     }
 
-    pub fn add_remote_input(&mut self, input: input::Input) -> bool {
+    pub fn add_local_input(&mut self, input: input::Input) {
+        log::debug!("local input: {:?}", input);
+        self.iq.add_local_input(input);
+    }
+
+    pub fn can_add_remote_input(&mut self) -> bool {
+        self.iq.remote_queue_length() < MAX_QUEUE_LENGTH
+    }
+
+    pub fn add_remote_input(&mut self, input: input::Input) {
         log::debug!("remote input: {:?}", input);
-        self.iq.add_remote_input(input)
+        self.iq.add_remote_input(input);
     }
 
     pub fn add_local_pending_turn(&mut self, marshaled: Vec<u8>) {

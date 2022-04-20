@@ -43,13 +43,7 @@ impl<'a> BattleStateFacadeGuard<'a> {
         let local_tick = current_tick + battle.local_delay();
         let remote_tick = battle.last_committed_remote_input().local_tick;
 
-        if !battle.add_local_input(input::Input {
-            local_tick,
-            remote_tick,
-            joyflags,
-            custom_screen_state,
-            turn: turn.clone(),
-        }) {
+        if !battle.can_add_local_input() {
             log::warn!("local input buffer overflow!");
             return false;
         }
@@ -65,13 +59,21 @@ impl<'a> BattleStateFacadeGuard<'a> {
                 remote_tick,
                 joyflags,
                 custom_screen_state,
-                turn,
+                turn.clone(),
             )
             .await
         {
             log::warn!("failed to send input: {}", e);
             return false;
         }
+
+        battle.add_local_input(input::Input {
+            local_tick,
+            remote_tick,
+            joyflags,
+            custom_screen_state,
+            turn,
+        });
 
         let (input_pairs, left) = battle.consume_and_peek_local();
 
@@ -143,22 +145,22 @@ impl<'a> BattleStateFacadeGuard<'a> {
             .as_mut()
             .expect("attempted to get battle information while no battle was active!");
         for i in 0..battle.local_delay() {
-            assert!(battle.add_local_input(input::Input {
+            battle.add_local_input(input::Input {
                 local_tick: current_tick + i,
                 remote_tick: 0,
                 joyflags: 0,
                 custom_screen_state: 0,
                 turn: vec![],
-            }));
+            });
         }
         for i in 0..battle.remote_delay() {
-            assert!(battle.add_remote_input(input::Input {
+            battle.add_remote_input(input::Input {
                 local_tick: current_tick + i,
                 remote_tick: 0,
                 joyflags: 0,
                 custom_screen_state: 0,
                 turn: vec![],
-            }));
+            });
         }
     }
 
