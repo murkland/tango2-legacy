@@ -296,6 +296,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
         let config = self.config.lock();
         let m = battle::Match::new(
             self.compat_list.clone(),
+            s.replay_folder_name,
             s.code.to_string(),
             match_type,
             core.as_ref().game_title(),

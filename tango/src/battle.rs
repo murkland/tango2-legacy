@@ -41,7 +41,7 @@ pub struct Settings {
 struct MatchImpl {
     compat_list: std::sync::Arc<compat::CompatList>,
     negotiation: tokio::sync::Mutex<Negotiation>,
-    start_time: std::time::SystemTime,
+    replay_folder_name: std::path::PathBuf,
     session_id: String,
     match_type: u16,
     game_title: String,
@@ -386,6 +386,7 @@ impl Drop for Match {
 impl Match {
     pub fn new(
         compat_list: std::sync::Arc<compat::CompatList>,
+        replay_folder_name: std::path::PathBuf,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -399,7 +400,7 @@ impl Match {
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                 NegotiationProgress::NotStarted,
             )),
-            start_time: std::time::SystemTime::now(),
+            replay_folder_name,
             session_id,
             match_type,
             game_title,
@@ -482,20 +483,11 @@ impl Match {
             "starting battle: local_player_index = {}",
             local_player_index
         );
-        let replay_filename = format!(
-            "{}_battle{}_p{}.tangoreplay",
-            time::OffsetDateTime::from(self.r#impl.start_time)
-                .format(time::macros::format_description!(
-                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
-                ))
-                .expect("format time"),
-            battle_state.number,
-            local_player_index + 1
-        );
-        let replay_file =
-            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
-                .expect("create replay file");
-        log::info!("opened replay: {}", replay_filename);
+        let replay_filename = std::path::Path::new("replays")
+            .join(&self.r#impl.replay_folder_name)
+            .join(&format!("battle{}.tangoreplay", battle_state.number));
+        let replay_file = std::fs::File::create(&replay_filename).expect("new replay file");
+        log::info!("opened replay: {}", replay_filename.display());
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         battle_state.battle = Some(Battle {
