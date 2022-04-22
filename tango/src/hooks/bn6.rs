@@ -480,10 +480,6 @@ impl hooks::Hooks for BN6 {
                             let negotiation_status = {
                                 let mut match_ = match_.lock().await;
 
-                                if match_.is_aborted().await {
-                                    panic!("match was aborted without being started?")
-                                }
-
                                 if !match_.is_active() {
                                     match facade.request_connect() {
                                         gui::ConnectStatus::Ready(s) => {
