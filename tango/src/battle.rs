@@ -49,7 +49,7 @@ pub struct InProgress {
     rom_path: std::path::PathBuf,
     hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
     negotiation: tokio::sync::Mutex<Negotiation>,
-    start_time: std::time::SystemTime,
+    replay_folder_name: std::path::PathBuf,
     session_id: String,
     match_type: u16,
     game_title: String,
@@ -441,18 +441,11 @@ impl InProgress {
             "starting battle: local_player_index = {}",
             local_player_index
         );
-        let replay_filename = format!(
-            "{}_battle{}_p{}.tangoreplay",
-            time::OffsetDateTime::from(self.start_time)
-                .format(time::macros::format_description!(
-                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
-                ))?,
-            battle_state.number,
-            local_player_index + 1
-        );
-        let replay_file =
-            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))?;
-        log::info!("opened replay: {}", replay_filename);
+        let replay_filename = std::path::Path::new("replays")
+            .join(&self.replay_folder_name)
+            .join(&format!("battle{}.tangoreplay", battle_state.number));
+        let replay_file = std::fs::File::create(&replay_filename)?;
+        log::info!("opened replay: {}", replay_filename.display());
 
         let mut audio_core = mgba::core::Core::new_gba("tango")?;
         let audio_save_state_holder = std::sync::Arc::new(parking_lot::Mutex::new(None));
@@ -555,6 +548,7 @@ impl Match {
         compat_list: compat::CompatList,
         audio_supported_config: cpal::SupportedStreamConfig,
         rom_path: std::path::PathBuf,
+        replay_folder_name: std::path::PathBuf,
         hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
         audio_mux: audio::mux_stream::MuxStream,
         session_id: String,
@@ -565,6 +559,8 @@ impl Match {
         settings: Settings,
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
+        let _ =
+            std::fs::create_dir(std::path::Path::new("replays").join(replay_folder_name.clone()));
         Match {
             cancellation_token: tokio_util::sync::CancellationToken::new(),
             in_progress: std::sync::Arc::new(tokio::sync::Mutex::new(Some(std::sync::Arc::new(
@@ -576,7 +572,7 @@ impl Match {
                     negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
                         NegotiationProgress::NotStarted,
                     )),
-                    start_time: std::time::SystemTime::now(),
+                    replay_folder_name,
                     session_id,
                     match_type,
                     game_title,
@@ -629,7 +625,6 @@ impl Match {
                 let _ = dc.close().await;
                 let _ = peer_conn.close().await;
             }
-
             *in_progress.lock().await = None;
         });
     }

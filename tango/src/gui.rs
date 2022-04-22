@@ -172,6 +172,7 @@ pub enum DialogState<T> {
 #[derive(Clone, Debug)]
 pub struct ConnectRequest {
     pub code: String,
+    pub replay_folder_name: std::path::PathBuf,
     pub input_delay: u32,
 }
 
@@ -286,6 +287,7 @@ impl State {
         if let ConnectDialogState::None = &*connect_state {
             *connect_state = ConnectDialogState::PendingInput(ConnectRequest {
                 code: "".to_owned(),
+                replay_folder_name: std::path::PathBuf::new(),
                 input_delay: 3,
             });
         }
@@ -446,10 +448,9 @@ impl State {
                             ),
                         );
                         s.code = s.code.to_lowercase().trim().to_string();
-                        let text_ok = response.lost_focus()
-                            && ui.input().key_pressed(egui::Key::Enter)
-                            && !s.code.is_empty();
-                        response.request_focus();
+                        if s.code.is_empty() {
+                            response.request_focus();
+                        }
 
                         ui.add(
                             egui::Slider::new(&mut s.input_delay, 0..=10).text(
@@ -457,6 +458,21 @@ impl State {
                                     .lookup(&locales::SYSTEM_LOCALE, "connect.input-input-delay"),
                             ),
                         );
+
+                        let mut replay_folder_name =
+                            s.replay_folder_name.to_string_lossy().to_string();
+                        ui.add(
+                            egui::TextEdit::singleline(&mut replay_folder_name).hint_text(
+                                locales::LOCALES.lookup(
+                                    &locales::SYSTEM_LOCALE,
+                                    "connect.input-replay-folder-name",
+                                ),
+                            ),
+                        );
+                        s.replay_folder_name = std::path::PathBuf::from(replay_folder_name);
+                        let text_ok = ui.input().key_pressed(egui::Key::Enter)
+                            && !s.code.is_empty()
+                            && !s.replay_folder_name.as_os_str().is_empty();
 
                         ui.separator();
                         let (button_ok, cancel) = ui

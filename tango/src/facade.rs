@@ -365,6 +365,7 @@ impl<'a> MatchStateFacadeGuard<'a> {
             self.compat_list.clone(),
             self.audio_supported_config.clone(),
             self.rom_path.clone(),
+            s.replay_folder_name,
             self.hooks,
             self.audio_mux.clone(),
             s.code.to_string(),

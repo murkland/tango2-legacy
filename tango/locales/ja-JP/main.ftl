@@ -21,6 +21,7 @@ debug = デバッグ
 connect = 接続
     .input-link-code = リンクコード
     .input-input-delay = 入力遅延
+    .input-replay-folder-name = リプレイフォルダ名
     .description = お互いに接続するために、あなたと相手が決めたリンクコードを以下に入力してください。
     .description-not-started = 接続中...
     .description-signalling = 対戦相手を待機中...
