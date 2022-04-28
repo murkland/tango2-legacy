@@ -172,7 +172,6 @@ pub enum DialogState<T> {
 #[derive(Clone, Debug)]
 pub struct ConnectRequest {
     pub code: String,
-    pub replay_folder_name: std::path::PathBuf,
     pub input_delay: u32,
 }
 
@@ -203,18 +202,11 @@ pub struct BattleDebugStats {
     pub tps_adjustment: i32,
 }
 
-pub struct MatchDebugStats {
-    pub in_progress: Option<InProgressDebugStats>,
-}
-
-pub struct InProgressDebugStats {
-    pub battle: Option<BattleDebugStats>,
-}
-
 pub struct DebugStats {
     pub fps: f32,
     pub emu_tps: f32,
-    pub match_: Option<MatchDebugStats>,
+    pub match_state: &'static str,
+    pub battle_debug_stats: Option<BattleDebugStats>,
 }
 
 fn keybinder(
@@ -287,7 +279,6 @@ impl State {
         if let ConnectDialogState::None = &*connect_state {
             *connect_state = ConnectDialogState::PendingInput(ConnectRequest {
                 code: "".to_owned(),
-                replay_folder_name: std::path::PathBuf::new(),
                 input_delay: 3,
             });
         }
@@ -448,31 +439,17 @@ impl State {
                             ),
                         );
                         s.code = s.code.to_lowercase().trim().to_string();
-                        if s.code.is_empty() {
-                            response.request_focus();
-                        }
+                        let text_ok = response.lost_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                            && !s.code.is_empty();
+                        response.request_focus();
 
                         ui.add(
-                            egui::Slider::new(&mut s.input_delay, 0..=10).text(
+                            egui::Slider::new(&mut s.input_delay, 3..=10).text(
                                 locales::LOCALES
                                     .lookup(&locales::SYSTEM_LOCALE, "connect.input-input-delay"),
                             ),
                         );
-
-                        let mut replay_folder_name =
-                            s.replay_folder_name.to_string_lossy().to_string();
-                        ui.add(
-                            egui::TextEdit::singleline(&mut replay_folder_name).hint_text(
-                                locales::LOCALES.lookup(
-                                    &locales::SYSTEM_LOCALE,
-                                    "connect.input-replay-folder-name",
-                                ),
-                            ),
-                        );
-                        s.replay_folder_name = std::path::PathBuf::from(replay_folder_name);
-                        let text_ok = ui.input().key_pressed(egui::Key::Enter)
-                            && !s.code.is_empty()
-                            && !s.replay_folder_name.as_os_str().is_empty();
 
                         ui.separator();
                         let (button_ok, cancel) = ui
@@ -760,40 +737,28 @@ impl State {
                             ui.label(format!("{:.0}", debug_stats.emu_tps));
                             ui.end_row();
 
-                            if let Some(match_debug_stats) = debug_stats.match_ {
-                                ui.label("Match state");
-                                ui.label(if match_debug_stats.in_progress.is_some() {
-                                    "active"
-                                } else {
-                                    "aborted "
-                                });
+                            ui.label("Match state");
+                            ui.label(debug_stats.match_state);
+                            ui.end_row();
+
+                            if let Some(battle_debug_stats) = debug_stats.battle_debug_stats {
+                                ui.label("Player index");
+                                ui.label(format!("{:.0}", battle_debug_stats.local_player_index));
                                 ui.end_row();
 
-                                if let Some(InProgressDebugStats {
-                                    battle: Some(battle_debug_stats),
-                                }) = match_debug_stats.in_progress
-                                {
-                                    ui.label("Player index");
-                                    ui.label(format!(
-                                        "{:.0}",
-                                        battle_debug_stats.local_player_index
-                                    ));
-                                    ui.end_row();
+                                ui.label("TPS adjustment");
+                                ui.label(format!("{:}", battle_debug_stats.tps_adjustment));
+                                ui.end_row();
 
-                                    ui.label("TPS adjustment");
-                                    ui.label(format!("{:}", battle_debug_stats.tps_adjustment));
-                                    ui.end_row();
-
-                                    ui.label("Queue length");
-                                    ui.label(format!(
-                                        "{} (-{}) vs {} (-{})",
-                                        battle_debug_stats.local_qlen,
-                                        battle_debug_stats.local_delay,
-                                        battle_debug_stats.remote_qlen,
-                                        battle_debug_stats.remote_delay,
-                                    ));
-                                    ui.end_row();
-                                }
+                                ui.label("Queue length");
+                                ui.label(format!(
+                                    "{} (-{}) vs {} (-{})",
+                                    battle_debug_stats.local_qlen,
+                                    battle_debug_stats.local_delay,
+                                    battle_debug_stats.remote_qlen,
+                                    battle_debug_stats.remote_delay,
+                                ));
+                                ui.end_row();
                             }
                         });
                     }

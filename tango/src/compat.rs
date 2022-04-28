@@ -29,7 +29,6 @@ struct Raw {
     pub compatibility: Vec<std::collections::HashSet<String>>,
 }
 
-#[derive(Clone)]
 pub struct CompatList {
     games: std::collections::HashMap<String, Game>,
     title_and_crc32_to_id: std::collections::HashMap<(String, u32), String>,

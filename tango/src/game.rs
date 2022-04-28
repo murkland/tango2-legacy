@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 pub struct Game {
     rt: tokio::runtime::Runtime,
-    compat_list: compat::CompatList,
+    compat_list: Arc<compat::CompatList>,
     fps_counter: Arc<Mutex<tps::Counter>>,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     audio_device: cpal::Device,
@@ -22,7 +22,7 @@ pub struct Game {
 
 impl Game {
     pub fn new(config: config::Config) -> Result<Game, anyhow::Error> {
-        let compat_list = compat::load()?;
+        let compat_list = std::sync::Arc::new(compat::load()?);
 
         log::info!(
             "wgpu adapters: {:?}",
@@ -93,12 +93,6 @@ impl Game {
         let emu_tps_counter = Arc::new(Mutex::new(tps::Counter::new(10)));
 
         let (pixels, gui) = {
-            let backends = &config.lock().graphics.backends;
-            let wgpu_backends = if !backends.is_empty() {
-                wgpu::util::parse_backends_from_comma_list(&backends.join(","))
-            } else {
-                wgpu::Backends::PRIMARY
-            };
             let config = config.clone();
             let window_size = window.inner_size();
             let surface_texture =
@@ -108,7 +102,11 @@ impl Game {
                 mgba::gba::SCREEN_HEIGHT,
                 surface_texture,
             )
-            .wgpu_backend(wgpu_backends)
+            .request_adapter_options(wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })
             .build()?;
             let gui = gui::Gui::new(
                 config,
@@ -142,34 +140,32 @@ impl Game {
 
                     let emu_tps_counter = emu_tps_counter.lock();
                     let fps_counter = fps_counter.lock();
-                    let match_ = loaded.lock_match().await;
+                    let match_state = loaded.lock_match_state().await;
                     Some(gui::DebugStats {
                         fps: 1.0 / fps_counter.mean_duration().as_secs_f32(),
                         emu_tps: 1.0 / emu_tps_counter.mean_duration().as_secs_f32(),
-                        match_: match &*match_ {
-                            None => None,
-                            Some(match_) => Some(gui::MatchDebugStats {
-                                in_progress: match &*match_.lock_in_progress().await {
-                                    Some(in_progress) => Some(gui::InProgressDebugStats {
-                                        battle: {
-                                            let battle_state =
-                                                in_progress.lock_battle_state().await;
-                                            match &battle_state.battle {
-                                                Some(battle) => Some(gui::BattleDebugStats {
-                                                    local_player_index: battle.local_player_index(),
-                                                    local_qlen: battle.local_queue_length(),
-                                                    remote_qlen: battle.remote_queue_length(),
-                                                    local_delay: battle.local_delay(),
-                                                    remote_delay: battle.remote_delay(),
-                                                    tps_adjustment: battle.tps_adjustment(),
-                                                }),
-                                                None => None,
-                                            }
-                                        },
+                        match_state: match &*match_state {
+                            loaded::MatchState::NoMatch => "none",
+                            loaded::MatchState::Aborted => "aborted",
+                            loaded::MatchState::Match(_) => "active",
+                        },
+                        battle_debug_stats: match &*match_state {
+                            loaded::MatchState::NoMatch => None,
+                            loaded::MatchState::Aborted => None,
+                            loaded::MatchState::Match(m) => {
+                                let battle_state = m.lock_battle_state().await;
+                                match &battle_state.battle {
+                                    Some(battle) => Some(gui::BattleDebugStats {
+                                        local_player_index: battle.local_player_index(),
+                                        local_qlen: battle.local_queue_length(),
+                                        remote_qlen: battle.remote_queue_length(),
+                                        local_delay: battle.local_delay(),
+                                        remote_delay: battle.remote_delay(),
+                                        tps_adjustment: battle.tps_adjustment(),
                                     }),
                                     None => None,
-                                },
-                            }),
+                                }
+                            }
                         },
                     })
                 })

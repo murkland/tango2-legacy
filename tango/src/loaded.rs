@@ -1,21 +1,28 @@
-use crate::{audio, battle, compat, config, facade, gui, hooks, tps};
+use crate::{audio, battle, compat, config, facade, fastforwarder, gui, hooks, tps};
 use cpal::traits::StreamTrait;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
 pub const EXPECTED_FPS: u32 = 60;
 
+pub enum MatchState {
+    NoMatch,
+    Aborted,
+    Match(battle::Match),
+}
+
 pub struct Loaded {
     _stream: cpal::Stream,
-    match_: Arc<tokio::sync::Mutex<Option<battle::Match>>>,
+    match_state: Arc<tokio::sync::Mutex<MatchState>>,
     joyflags: Arc<std::sync::atomic::AtomicU32>,
+    _audio_core_thread: mgba::thread::Thread,
     thread: mgba::thread::Thread,
 }
 
 impl Loaded {
     pub fn new(
         id: &str,
-        compat_list: compat::CompatList,
+        compat_list: Arc<compat::CompatList>,
         rom_filename: &std::path::Path,
         save_filename: &std::path::Path,
         handle: tokio::runtime::Handle,
@@ -47,46 +54,77 @@ impl Loaded {
             .get(&compat_list.game_by_id(id).unwrap().hooks)
             .unwrap();
 
-        let match_ = Arc::new(tokio::sync::Mutex::new(None));
+        let match_state = Arc::new(tokio::sync::Mutex::new(MatchState::NoMatch));
 
         let emu_tps_counter = emu_tps_counter;
 
         let joyflags = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
+        let audio_state_holder = Arc::new(parking_lot::Mutex::new(None));
+
+        let mut audio_core = mgba::core::Core::new_gba("tango")?;
+        let rom_vf = mgba::vfile::VFile::open(&rom_path, mgba::vfile::flags::O_RDONLY)?;
+        audio_core.as_mut().load_rom(rom_vf)?;
+        audio_core.as_mut().reset();
+
+        audio_core.set_traps(hooks.get_audio_traps(audio_state_holder.clone()));
+
         let supported_config = audio::get_supported_config(audio_device)?;
         log::info!("selected audio config: {:?}", supported_config);
 
-        let audio_mux = audio::mux_stream::MuxStream::new();
-        let primary_mux_handle = audio_mux.open_stream();
+        let mut muxer = audio::mux_stream::MuxStream::new();
 
-        core.set_traps(hooks.primary_traps(
+        let primary_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            &core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
+
+        let audio_core_mux_handle = muxer.add(audio::timewarp_stream::TimewarpStream::new(
+            &audio_core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ));
+
+        let audio_core_thread = mgba::thread::Thread::new(audio_core);
+        audio_core_thread.start();
+        audio_core_thread.handle().pause();
+        audio_core_thread.handle().run_on_core(|mut core| {
+            core.gba_mut()
+                .sync_mut()
+                .as_mut()
+                .expect("sync")
+                .set_fps_target(EXPECTED_FPS as f32);
+        });
+
+        let fastforwarder = fastforwarder::Fastforwarder::new(&rom_path, hooks)?;
+
+        core.set_traps(hooks.get_primary_traps(
             handle.clone(),
             facade::Facade::new(
                 handle.clone(),
                 compat_list.clone(),
-                supported_config.clone(),
-                rom_path.to_owned(),
-                hooks,
-                match_.clone(),
+                match_state.clone(),
                 joyflags.clone(),
                 gui_state,
                 config.clone(),
-                audio_mux.clone(),
-                primary_mux_handle.clone(),
+                audio_state_holder.clone(),
+                audio_core_thread.handle(),
+                primary_mux_handle,
+                audio_core_mux_handle,
+                Arc::new(parking_lot::Mutex::new(fastforwarder)),
             ),
         ));
 
         let thread = mgba::thread::Thread::new(core);
         thread.start();
-        thread
-            .handle()
-            .lock_audio()
-            .core_mut()
-            .gba_mut()
-            .sync_mut()
-            .as_mut()
-            .unwrap()
-            .set_fps_target(EXPECTED_FPS as f32);
+        thread.handle().run_on_core(|mut core| {
+            core.gba_mut()
+                .sync_mut()
+                .as_mut()
+                .expect("sync")
+                .set_fps_target(EXPECTED_FPS as f32);
+        });
         {
             let joyflags = joyflags.clone();
             thread.set_frame_callback(move |mut core, video_buffer| {
@@ -101,19 +139,14 @@ impl Loaded {
             });
         }
 
-        primary_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
-            thread.handle(),
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ));
-
-        let stream = audio::open_stream(audio_device, &supported_config, audio_mux)?;
+        let stream = audio::open_stream(audio_device, &supported_config, muxer)?;
         stream.play()?;
 
         Ok(Loaded {
-            match_,
+            match_state,
             joyflags,
             thread,
+            _audio_core_thread: audio_core_thread,
             _stream: stream,
         })
     }
@@ -122,8 +155,8 @@ impl Loaded {
         self.thread.handle()
     }
 
-    pub async fn lock_match(&self) -> tokio::sync::MutexGuard<'_, Option<battle::Match>> {
-        self.match_.lock().await
+    pub async fn lock_match_state(&self) -> tokio::sync::MutexGuard<'_, MatchState> {
+        self.match_state.lock().await
     }
 
     pub fn set_joyflags(&self, joyflags: u32) {

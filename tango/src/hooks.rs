@@ -15,20 +15,20 @@ lazy_static! {
 }
 
 pub trait Hooks {
-    fn fastforwarder_traps(
+    fn get_fastforwarder_traps(
         &self,
         ff_state: fastforwarder::State,
     ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
-    fn primary_traps(
+    fn get_primary_traps(
         &self,
         handle: tokio::runtime::Handle,
         facade: facade::Facade,
     ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
-    fn audio_traps(
+    fn get_audio_traps(
         &self,
-        facade: facade::AudioFacade,
+        audio_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
     ) -> Vec<(u32, Box<dyn FnMut(mgba::core::CoreMutRef)>)>;
 
     fn prepare_for_fastforward(&self, core: mgba::core::CoreMutRef);

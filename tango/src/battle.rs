@@ -1,11 +1,6 @@
-use crate::audio;
 use crate::compat;
 use crate::datachannel;
-use crate::facade;
-use crate::fastforwarder;
-use crate::hooks;
 use crate::input;
-use crate::loaded;
 use crate::protocol;
 use crate::replay;
 use crate::transport;
@@ -34,7 +29,7 @@ enum Negotiation {
 
 pub struct Match {
     cancellation_token: tokio_util::sync::CancellationToken,
-    in_progress: std::sync::Arc<tokio::sync::Mutex<Option<std::sync::Arc<InProgress>>>>,
+    r#impl: std::sync::Arc<MatchImpl>,
 }
 
 pub struct Settings {
@@ -43,13 +38,10 @@ pub struct Settings {
         Box<dyn Fn() -> webrtc::peer_connection::configuration::RTCConfiguration + Send + Sync>,
 }
 
-pub struct InProgress {
-    compat_list: compat::CompatList,
-    audio_supported_config: cpal::SupportedStreamConfig,
-    rom_path: std::path::PathBuf,
-    hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
+struct MatchImpl {
+    compat_list: std::sync::Arc<compat::CompatList>,
     negotiation: tokio::sync::Mutex<Negotiation>,
-    replay_folder_name: std::path::PathBuf,
+    start_time: std::time::SystemTime,
     session_id: String,
     match_type: u16,
     game_title: String,
@@ -59,7 +51,6 @@ pub struct InProgress {
     battle_state: tokio::sync::Mutex<BattleState>,
     remote_init_sender: tokio::sync::mpsc::Sender<protocol::Init>,
     remote_init_receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<protocol::Init>>,
-    audio_mux: audio::mux_stream::MuxStream,
 }
 
 #[derive(Debug)]
@@ -129,9 +120,7 @@ pub enum NegotiationProgress {
     Handshaking,
 }
 
-const MAX_QUEUE_LENGTH: usize = 60;
-
-impl InProgress {
+impl MatchImpl {
     async fn negotiate(&self) -> Result<(), NegotiationError> {
         log::info!("negotiating match, session_id = {}", self.session_id);
 
@@ -357,170 +346,21 @@ impl InProgress {
                         Some(b) => b,
                     };
 
-                    if !battle.can_add_remote_input() {
-                        anyhow::bail!("remote overflowed our input buffer");
-                    }
-
-                    battle.add_remote_input(input::Input {
+                    if !battle.add_remote_input(input::Input {
                         local_tick: input.local_tick,
                         remote_tick: input.remote_tick,
                         joyflags: input.joyflags as u16,
                         custom_screen_state: input.custom_screen_state as u8,
                         turn: input.turn,
-                    });
+                    }) {
+                        anyhow::bail!("remote overflowed our input buffer");
+                    }
                 }
                 p => anyhow::bail!("unknown packet: {:?}", p),
             }
         }
 
         Ok(())
-    }
-
-    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
-        self.battle_state.lock().await
-    }
-
-    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
-        let mut remote_init_receiver = self.remote_init_receiver.lock().await;
-        remote_init_receiver.recv().await
-    }
-
-    async fn poll_for_ready(&self) -> NegotiationStatus {
-        let negotiation = self.negotiation.lock().await;
-        match &*negotiation {
-            Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
-            Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
-            Negotiation::Err(NegotiationError::IncompatibleGames) => {
-                NegotiationStatus::Failed(NegotiationFailure::IncompatibleGames)
-            }
-            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
-                NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)
-            }
-            Negotiation::Err(NegotiationError::ProtocolVersionMismatch) => {
-                NegotiationStatus::Failed(NegotiationFailure::ProtocolVersionMismatch)
-            }
-            Negotiation::Err(_) => NegotiationStatus::Failed(NegotiationFailure::Unknown),
-        }
-    }
-
-    pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
-        let negotiation = self.negotiation.lock().await;
-        let dc = match &*negotiation {
-            Negotiation::Negotiated { dc, .. } => dc.clone(),
-            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
-        };
-        Ok(transport::Transport::new(dc))
-    }
-
-    pub async fn lock_rng(
-        &self,
-    ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
-        let negotiation = self.negotiation.lock().await;
-        match &*negotiation {
-            Negotiation::Negotiated { .. } => {
-                Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
-                    Negotiation::Negotiated { rng, .. } => rng,
-                    _ => unreachable!(),
-                }))
-            }
-            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
-            Negotiation::Err(e) => anyhow::bail!("{}", e),
-        }
-    }
-
-    pub fn match_type(&self) -> u16 {
-        self.match_type
-    }
-
-    pub async fn start_battle(&self, core: mgba::core::CoreMutRef<'_>) -> anyhow::Result<()> {
-        let mut battle_state = self.battle_state.lock().await;
-        battle_state.number += 1;
-        let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
-        log::info!(
-            "starting battle: local_player_index = {}",
-            local_player_index
-        );
-        let replay_filename = std::path::Path::new("replays")
-            .join(&self.replay_folder_name)
-            .join(&format!("battle{}.tangoreplay", battle_state.number));
-        let replay_file = std::fs::File::create(&replay_filename)?;
-        log::info!("opened replay: {}", replay_filename.display());
-
-        let mut audio_core = mgba::core::Core::new_gba("tango")?;
-        let audio_save_state_holder = std::sync::Arc::new(parking_lot::Mutex::new(None));
-        let (audio_rendezvous_tx, audio_rendezvous_rx) = std::sync::mpsc::sync_channel(0);
-        let rom_vf = mgba::vfile::VFile::open(&self.rom_path, mgba::vfile::flags::O_RDONLY)?;
-        audio_core.as_mut().load_rom(rom_vf)?;
-        audio_core.as_mut().reset();
-        audio_core.set_traps(self.hooks.audio_traps(facade::AudioFacade::new(
-            audio_save_state_holder.clone(),
-            std::sync::Arc::new(audio_rendezvous_rx),
-            local_player_index,
-        )));
-
-        let audio_core_thread = mgba::thread::Thread::new(audio_core);
-        audio_core_thread.start();
-
-        let audio_core_handle = audio_core_thread.handle();
-        audio_core_handle.pause();
-        let audio_core_mux_handle = self.audio_mux.open_stream();
-        audio_core_mux_handle.set_stream(audio::timewarp_stream::TimewarpStream::new(
-            audio_core_handle.clone(),
-            self.audio_supported_config.sample_rate(),
-            self.audio_supported_config.channels(),
-        ));
-        {
-            let audio_core_mux_handle = audio_core_mux_handle.clone();
-            let save_state = core.save_state().expect("save state");
-            audio_core_handle.run_on_core(move |mut core| {
-                core.gba_mut()
-                    .sync_mut()
-                    .as_mut()
-                    .expect("sync")
-                    .set_fps_target(loaded::EXPECTED_FPS as f32);
-                core.load_state(&save_state).expect("load state");
-                audio_core_mux_handle.switch();
-            });
-        }
-        audio_core_handle.unpause();
-
-        let (state_committed_tx, state_committed_rx) = tokio::sync::oneshot::channel();
-        battle_state.battle = Some(Battle {
-            local_player_index,
-            iq: input::PairQueue::new(MAX_QUEUE_LENGTH, self.input_delay),
-            remote_delay: 0,
-            is_accepting_input: false,
-            last_committed_remote_input: input::Input {
-                local_tick: 0,
-                remote_tick: 0,
-                joyflags: 0,
-                custom_screen_state: 0,
-                turn: vec![],
-            },
-            last_input: None,
-            state_committed_tx: Some(state_committed_tx),
-            state_committed_rx: Some(state_committed_rx),
-            audio_rendezvous_tx,
-            committed_state: None,
-            local_pending_turn: None,
-            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)?,
-            fastforwarder: fastforwarder::Fastforwarder::new(
-                &self.rom_path,
-                self.hooks,
-                local_player_index,
-            )?,
-            audio_save_state_holder,
-            _audio_core_thread: audio_core_thread,
-            _audio_core_mux_handle: audio_core_mux_handle,
-        });
-        log::info!("battle has started");
-        Ok(())
-    }
-
-    pub async fn end_battle(&self) {
-        self.battle_state.lock().await.battle = None;
-        log::info!("battle has ended");
     }
 }
 
@@ -545,12 +385,7 @@ impl Drop for Match {
 
 impl Match {
     pub fn new(
-        compat_list: compat::CompatList,
-        audio_supported_config: cpal::SupportedStreamConfig,
-        rom_path: std::path::PathBuf,
-        replay_folder_name: std::path::PathBuf,
-        hooks: &'static Box<dyn hooks::Hooks + Send + Sync>,
-        audio_mux: audio::mux_stream::MuxStream,
+        compat_list: std::sync::Arc<compat::CompatList>,
         session_id: String,
         match_type: u16,
         game_title: String,
@@ -559,73 +394,151 @@ impl Match {
         settings: Settings,
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
-        let _ =
-            std::fs::create_dir(std::path::Path::new("replays").join(replay_folder_name.clone()));
+        let r#impl = std::sync::Arc::new(MatchImpl {
+            compat_list,
+            negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
+                NegotiationProgress::NotStarted,
+            )),
+            start_time: std::time::SystemTime::now(),
+            session_id,
+            match_type,
+            game_title,
+            game_crc32,
+            input_delay,
+            settings,
+            battle_state: tokio::sync::Mutex::new(BattleState {
+                number: 0,
+                battle: None,
+                won_last_battle: false,
+            }),
+            remote_init_sender,
+            remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
+        });
         Match {
             cancellation_token: tokio_util::sync::CancellationToken::new(),
-            in_progress: std::sync::Arc::new(tokio::sync::Mutex::new(Some(std::sync::Arc::new(
-                InProgress {
-                    compat_list,
-                    audio_supported_config,
-                    rom_path,
-                    hooks,
-                    negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
-                        NegotiationProgress::NotStarted,
-                    )),
-                    replay_folder_name,
-                    session_id,
-                    match_type,
-                    game_title,
-                    game_crc32,
-                    input_delay,
-                    settings,
-                    battle_state: tokio::sync::Mutex::new(BattleState {
-                        number: 0,
-                        battle: None,
-                        won_last_battle: false,
-                    }),
-                    remote_init_sender,
-                    remote_init_receiver: tokio::sync::Mutex::new(remote_init_receiver),
-                    audio_mux,
-                },
-            )))),
+            r#impl,
         }
     }
 
-    pub async fn lock_in_progress(
-        &self,
-    ) -> tokio::sync::MutexGuard<'_, Option<std::sync::Arc<InProgress>>> {
-        self.in_progress.lock().await
+    pub async fn lock_battle_state(&self) -> tokio::sync::MutexGuard<'_, BattleState> {
+        self.r#impl.battle_state.lock().await
+    }
+
+    pub async fn receive_remote_init(&self) -> Option<protocol::Init> {
+        self.r#impl.remote_init_receiver.lock().await.recv().await
     }
 
     pub async fn poll_for_ready(&self) -> NegotiationStatus {
-        let in_progress = self.lock_in_progress().await.clone();
-        let in_progress = if let Some(in_progress) = in_progress.as_ref() {
-            in_progress
-        } else {
-            return NegotiationStatus::Failed(NegotiationFailure::Unknown);
-        };
-        in_progress.poll_for_ready().await
+        match &*self.r#impl.negotiation.lock().await {
+            Negotiation::Negotiated { .. } => NegotiationStatus::Ready,
+            Negotiation::NotReady(p) => NegotiationStatus::NotReady(p.clone()),
+            Negotiation::Err(NegotiationError::IncompatibleGames) => {
+                NegotiationStatus::Failed(NegotiationFailure::IncompatibleGames)
+            }
+            Negotiation::Err(NegotiationError::MatchTypeMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::MatchTypeMismatch)
+            }
+            Negotiation::Err(NegotiationError::ProtocolVersionMismatch) => {
+                NegotiationStatus::Failed(NegotiationFailure::ProtocolVersionMismatch)
+            }
+            Negotiation::Err(_) => NegotiationStatus::Failed(NegotiationFailure::Unknown),
+        }
     }
 
-    pub async fn start(&self, handle: tokio::runtime::Handle) {
+    pub async fn transport(&self) -> anyhow::Result<transport::Transport> {
+        let dc = match &*self.r#impl.negotiation.lock().await {
+            Negotiation::Negotiated { dc, .. } => dc.clone(),
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        };
+        Ok(transport::Transport::new(dc))
+    }
+
+    pub async fn lock_rng(
+        &self,
+    ) -> anyhow::Result<tokio::sync::MappedMutexGuard<'_, rand_pcg::Mcg128Xsl64>> {
+        let negotiation = self.r#impl.negotiation.lock().await;
+        match &*negotiation {
+            Negotiation::Negotiated { .. } => {
+                Ok(tokio::sync::MutexGuard::map(negotiation, |n| match n {
+                    Negotiation::Negotiated { rng, .. } => rng,
+                    _ => unreachable!(),
+                }))
+            }
+            Negotiation::NotReady(_) => anyhow::bail!("not ready"),
+            Negotiation::Err(e) => anyhow::bail!("{}", e),
+        }
+    }
+
+    pub fn match_type(&self) -> u16 {
+        self.r#impl.match_type
+    }
+
+    pub async fn start_battle(&self) {
+        let mut battle_state = self.r#impl.battle_state.lock().await;
+        battle_state.number += 1;
+        let local_player_index = if battle_state.won_last_battle { 0 } else { 1 };
+        log::info!(
+            "starting battle: local_player_index = {}",
+            local_player_index
+        );
+        let replay_filename = format!(
+            "{}_battle{}_p{}.tangoreplay",
+            time::OffsetDateTime::from(self.r#impl.start_time)
+                .format(time::macros::format_description!(
+                    "[year padding:zero][month padding:zero repr:numerical][day padding:zero][hour padding:zero][minute padding:zero][second padding:zero]"
+                ))
+                .expect("format time"),
+            battle_state.number,
+            local_player_index + 1
+        );
+        let replay_file =
+            std::fs::File::create(std::path::Path::new("replays").join(&replay_filename))
+                .expect("create replay file");
+        log::info!("opened replay: {}", replay_filename);
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        battle_state.battle = Some(Battle {
+            local_player_index,
+            iq: input::PairQueue::new(120, self.r#impl.input_delay),
+            remote_delay: 0,
+            is_accepting_input: false,
+            last_committed_remote_input: input::Input {
+                local_tick: 0,
+                remote_tick: 0,
+                joyflags: 0,
+                custom_screen_state: 0,
+                turn: vec![],
+            },
+            last_input: None,
+            state_committed_tx: Some(tx),
+            state_committed_rx: Some(rx),
+            committed_state: None,
+            local_pending_turn: None,
+            replay_writer: replay::Writer::new(Box::new(replay_file), local_player_index)
+                .expect("new replay writer"),
+        });
+    }
+
+    pub async fn end_battle(&self) {
+        self.r#impl.battle_state.lock().await.battle = None;
+    }
+
+    pub fn start(&self, handle: tokio::runtime::Handle) {
         let cancellation_token = self.cancellation_token.clone();
-        let in_progress = self.in_progress.clone();
+        let r#impl = self.r#impl.clone();
         handle.spawn(async move {
-            let inner_in_progress = in_progress.lock().await.clone().unwrap();
             tokio::select! {
                 _ = cancellation_token.cancelled() => {},
-                Err(e) = inner_in_progress.run() => {
+                Err(e) = r#impl.run() => {
                     log::info!("match thread ending: {:?}", e);
                 },
             };
-            if let Negotiation::Negotiated { dc, peer_conn, .. } =
-                &*inner_in_progress.negotiation.lock().await
+            if let Negotiation::Negotiated { dc, peer_conn, .. } = &*r#impl.negotiation.lock().await
             {
                 let _ = dc.close().await;
                 let _ = peer_conn.close().await;
             }
-            *in_progress.lock().await = None;
         });
     }
 }
@@ -644,21 +557,12 @@ pub struct Battle {
     last_input: Option<input::Pair<input::Input>>,
     state_committed_tx: Option<tokio::sync::oneshot::Sender<()>>,
     state_committed_rx: Option<tokio::sync::oneshot::Receiver<()>>,
-    audio_rendezvous_tx: std::sync::mpsc::SyncSender<()>,
     committed_state: Option<mgba::state::State>,
     local_pending_turn: Option<LocalPendingTurn>,
     replay_writer: replay::Writer,
-    fastforwarder: fastforwarder::Fastforwarder,
-    audio_save_state_holder: std::sync::Arc<parking_lot::Mutex<Option<mgba::state::State>>>,
-    _audio_core_thread: mgba::thread::Thread,
-    _audio_core_mux_handle: audio::mux_stream::MuxHandle,
 }
 
 impl Battle {
-    pub fn fastforwarder(&mut self) -> &mut fastforwarder::Fastforwarder {
-        &mut self.fastforwarder
-    }
-
     pub fn replay_writer(&mut self) -> &mut replay::Writer {
         &mut self.replay_writer
     }
@@ -676,15 +580,6 @@ impl Battle {
         if let Some(tx) = self.state_committed_tx.take() {
             let _ = tx.send(());
         }
-    }
-
-    pub fn set_audio_save_state(&mut self, state: mgba::state::State) {
-        *self.audio_save_state_holder.lock() = Some(state);
-    }
-
-    pub fn wait_for_audio_rendezvous(&mut self) -> anyhow::Result<()> {
-        self.audio_rendezvous_tx.send(())?;
-        Ok(())
     }
 
     pub fn set_last_input(&mut self, inp: input::Pair<input::Input>) {
@@ -741,22 +636,14 @@ impl Battle {
         (input_pairs, left)
     }
 
-    pub fn can_add_local_input(&mut self) -> bool {
-        self.iq.local_queue_length() < MAX_QUEUE_LENGTH
-    }
-
-    pub fn add_local_input(&mut self, input: input::Input) {
+    pub fn add_local_input(&mut self, input: input::Input) -> bool {
         log::debug!("local input: {:?}", input);
-        self.iq.add_local_input(input);
+        self.iq.add_local_input(input)
     }
 
-    pub fn can_add_remote_input(&mut self) -> bool {
-        self.iq.remote_queue_length() < MAX_QUEUE_LENGTH
-    }
-
-    pub fn add_remote_input(&mut self, input: input::Input) {
+    pub fn add_remote_input(&mut self, input: input::Input) -> bool {
         log::debug!("remote input: {:?}", input);
-        self.iq.add_remote_input(input);
+        self.iq.add_remote_input(input)
     }
 
     pub fn add_local_pending_turn(&mut self, marshaled: Vec<u8>) {

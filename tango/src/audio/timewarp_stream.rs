@@ -1,5 +1,5 @@
 pub struct TimewarpStream {
-    handle: mgba::thread::Handle,
+    core: *mut mgba::c::mCore,
     sample_rate: cpal::SampleRate,
     channels: u16,
 }
@@ -8,12 +8,12 @@ unsafe impl Send for TimewarpStream {}
 
 impl TimewarpStream {
     pub fn new(
-        handle: mgba::thread::Handle,
+        core: &mgba::core::Core,
         sample_rate: cpal::SampleRate,
         channels: u16,
     ) -> TimewarpStream {
         Self {
-            handle,
+            core: unsafe { core.raw_ptr() },
             sample_rate,
             channels,
         }
@@ -22,19 +22,17 @@ impl TimewarpStream {
 
 impl super::Stream for TimewarpStream {
     fn fill(&self, buf: &mut [i16]) -> usize {
-        let mut audio_guard = self.handle.lock_audio();
-
-        let mut core = audio_guard.core_mut();
+        let mut core = unsafe { mgba::core::CoreMutRef::from_ptr(self.core) };
         let frame_count = (buf.len() / self.channels as usize) as i32;
         let stereo = self.channels > 1;
 
         let clock_rate = core.as_ref().frequency();
 
-        let mut fps_target = core.as_ref().gba().sync().unwrap().fps_target();
-        if fps_target <= 0.0 {
-            fps_target = 1.0;
+        let mut faux_clock = 1.0;
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
+            sync.lock_audio();
+            faux_clock = mgba::gba::audio_calculate_ratio(1.0, sync.as_ref().fps_target(), 1.0);
         }
-        let faux_clock = mgba::gba::audio_calculate_ratio(1.0, fps_target, 1.0);
 
         let available = {
             let mut left = core.audio_channel(0);
@@ -57,6 +55,10 @@ impl super::Stream for TimewarpStream {
                 self.sample_rate.0 as f64 * faux_clock as f64,
             );
             right.read_samples(&mut buf[1..], available, stereo);
+        }
+
+        if let Some(sync) = core.gba_mut().sync_mut().as_mut() {
+            sync.consume_audio();
         }
 
         available as usize * self.channels as usize

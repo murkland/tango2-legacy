@@ -76,6 +76,10 @@ impl Core {
     pub fn set_traps(&mut self, traps: Vec<(u32, Box<dyn FnMut(CoreMutRef)>)>) {
         self.trapper = Some(trapper::Trapper::new(self.as_mut(), traps));
     }
+
+    pub unsafe fn raw_ptr(&self) -> *mut c::mCore {
+        self.ptr
+    }
 }
 
 impl Drop for Core {

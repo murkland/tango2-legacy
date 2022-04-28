@@ -157,16 +157,29 @@ fn main() -> Result<(), anyhow::Error> {
 
     {
         let done = done.clone();
-        core.set_traps(hooks.fastforwarder_traps(tango::fastforwarder::State::new(
-            replay.local_player_index,
-            replay.input_pairs,
-            0,
-            0,
-            Box::new(move || {
-                done.store(true, std::sync::atomic::Ordering::Relaxed);
-            }),
-        )));
+        core.set_traps(
+            hooks.get_fastforwarder_traps(tango::fastforwarder::State::new(
+                replay.local_player_index,
+                replay.input_pairs,
+                0,
+                0,
+                Box::new(move || {
+                    done.store(true, std::sync::atomic::Ordering::Relaxed);
+                }),
+            )),
+        );
     }
+
+    let stream = tango::audio::open_stream(
+        &audio_device,
+        &supported_config,
+        tango::audio::timewarp_stream::TimewarpStream::new(
+            &core,
+            supported_config.sample_rate(),
+            supported_config.channels(),
+        ),
+    )?;
+    stream.play()?;
 
     let thread = mgba::thread::Thread::new(core);
     thread.start();
@@ -188,18 +201,6 @@ fn main() -> Result<(), anyhow::Error> {
             }
         });
     }
-
-    let stream = tango::audio::open_stream(
-        &audio_device,
-        &supported_config,
-        tango::audio::timewarp_stream::TimewarpStream::new(
-            thread.handle(),
-            supported_config.sample_rate(),
-            supported_config.channels(),
-        ),
-    )?;
-    stream.play()?;
-
     thread.handle().run_on_core(move |mut core| {
         core.load_state(&replay.state).expect("load state");
     });

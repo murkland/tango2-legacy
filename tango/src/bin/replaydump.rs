@@ -13,7 +13,7 @@ struct Cli {
     #[clap(parse(from_os_str))]
     output_path: Option<std::path::PathBuf>,
 
-    #[clap(short('a'), long, default_value = "-c:a aac -ar 48000 -b:a 384k -ac 2")]
+    #[clap(short('a'), long, default_value = "-c:a aac -ar 48000 -b:a 320k -ac 2")]
     ffmpeg_audio_flags: String,
 
     #[clap(
@@ -129,7 +129,7 @@ fn main() -> Result<(), anyhow::Error> {
     core.as_mut().load_rom(vf)?;
     core.as_mut().reset();
 
-    let done = std::sync::Arc::new(parking_lot::Mutex::new(false));
+    let done = std::rc::Rc::new(std::cell::RefCell::new(false));
 
     let ff_state = {
         let done = done.clone();
@@ -139,7 +139,7 @@ fn main() -> Result<(), anyhow::Error> {
             0,
             0,
             Box::new(move || {
-                *done.lock() = true;
+                *done.borrow_mut() = true;
             }),
         )
     };
@@ -149,7 +149,7 @@ fn main() -> Result<(), anyhow::Error> {
     hooks.prepare_for_fastforward(core.as_mut());
     {
         let ff_state = ff_state.clone();
-        core.set_traps(hooks.fastforwarder_traps(ff_state));
+        core.set_traps(hooks.get_fastforwarder_traps(ff_state));
     }
 
     core.as_mut().load_state(&replay.state)?;
@@ -195,7 +195,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut samples = vec![0i16; SAMPLE_RATE as usize];
     let mut vbuf = vec![0u8; (mgba::gba::SCREEN_WIDTH * mgba::gba::SCREEN_HEIGHT * 4) as usize];
     let bar = indicatif::ProgressBar::new(ff_state.inputs_pairs_left() as u64);
-    while !*done.lock() {
+    while !*done.borrow() {
         bar.inc(1);
         core.as_mut().run_frame();
         let clock_rate = core.as_ref().frequency();

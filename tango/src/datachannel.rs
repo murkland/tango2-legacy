@@ -1,16 +1,13 @@
-enum ReceiveState {
-    Ready(tokio::sync::mpsc::Receiver<Vec<u8>>),
-    Closed,
-}
+use std::sync::Arc;
 
-enum SendState {
-    Waiting(tokio::sync::oneshot::Receiver<()>),
-    Ready,
+enum ReceiveState {
+    Receiver(tokio::sync::mpsc::Receiver<Vec<u8>>),
+    Closed,
 }
 
 pub struct DataChannel {
     dc: std::sync::Arc<webrtc::data_channel::RTCDataChannel>,
-    send_state: tokio::sync::Mutex<SendState>,
+    opened: std::sync::Arc<tokio::sync::Notify>,
     receive_state: tokio::sync::Mutex<ReceiveState>,
 }
 
@@ -19,12 +16,12 @@ impl DataChannel {
         dc: std::sync::Arc<webrtc::data_channel::RTCDataChannel>,
     ) -> std::sync::Arc<DataChannel> {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        let (opened_sender, send_state) = tokio::sync::oneshot::channel();
+        let opened = Arc::new(tokio::sync::Notify::new());
         let sender = std::sync::Arc::new(sender);
         let dc2 = std::sync::Arc::new(DataChannel {
             dc,
-            send_state: tokio::sync::Mutex::new(SendState::Waiting(send_state)),
-            receive_state: tokio::sync::Mutex::new(ReceiveState::Ready(receiver)),
+            opened: opened.clone(),
+            receive_state: tokio::sync::Mutex::new(ReceiveState::Receiver(receiver)),
         });
         {
             let dc2 = dc2.clone();
@@ -58,7 +55,7 @@ impl DataChannel {
             dc2.dc
                 .on_open(Box::new(move || {
                     Box::pin(async move {
-                        let _ = opened_sender.send(());
+                        opened.notify_one();
                     })
                 }))
                 .await;
@@ -67,21 +64,14 @@ impl DataChannel {
     }
 
     pub async fn send(&self, data: &[u8]) -> Result<usize, webrtc::Error> {
-        let mut send_state = self.send_state.lock().await;
-        match &mut *send_state {
-            SendState::Waiting(receiver) => {
-                let _ = receiver.await;
-                *send_state = SendState::Ready;
-            }
-            SendState::Ready => {}
-        };
+        self.opened.notified().await;
         self.dc.send(&bytes::Bytes::copy_from_slice(data)).await
     }
 
     pub async fn receive(&self) -> Option<Vec<u8>> {
         match &mut *self.receive_state.lock().await {
             ReceiveState::Closed => None,
-            ReceiveState::Ready(receiver) => receiver.recv().await,
+            ReceiveState::Receiver(receiver) => receiver.recv().await,
         }
     }
 

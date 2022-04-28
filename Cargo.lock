@@ -2978,7 +2978,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
 dependencies = [
  "rand_core 0.6.3",
- "serde",
 ]
 
 [[package]]
@@ -3575,7 +3574,7 @@ dependencies = [
 
 [[package]]
 name = "tango"
-version = "2.0.0-alpha"
+version = "2.0.0-0.0.5-newmoon22cycle7"
 dependencies = [
  "anyhow",
  "bincode",

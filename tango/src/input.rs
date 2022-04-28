@@ -11,6 +11,7 @@ pub struct PairQueue<T>
 where
     T: Clone,
 {
+    max_length: usize,
     local_queue: std::collections::VecDeque<T>,
     remote_queue: std::collections::VecDeque<T>,
     local_delay: u32,
@@ -29,20 +30,29 @@ impl<T> PairQueue<T>
 where
     T: Clone,
 {
-    pub fn new(capacity: usize, local_delay: u32) -> Self {
+    pub fn new(max_length: usize, local_delay: u32) -> Self {
         PairQueue {
-            local_queue: std::collections::VecDeque::with_capacity(capacity),
-            remote_queue: std::collections::VecDeque::with_capacity(capacity),
+            max_length,
+            local_queue: std::collections::VecDeque::with_capacity(max_length),
+            remote_queue: std::collections::VecDeque::with_capacity(max_length),
             local_delay,
         }
     }
 
-    pub fn add_local_input(&mut self, v: T) {
+    pub fn add_local_input(&mut self, v: T) -> bool {
+        if self.local_queue.len() >= self.max_length {
+            return false;
+        }
         self.local_queue.push_back(v);
+        true
     }
 
-    pub fn add_remote_input(&mut self, v: T) {
+    pub fn add_remote_input(&mut self, v: T) -> bool {
+        if self.remote_queue.len() >= self.max_length {
+            return false;
+        }
         self.remote_queue.push_back(v);
+        true
     }
 
     pub fn local_delay(&self) -> u32 {
