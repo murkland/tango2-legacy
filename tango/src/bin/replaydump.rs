@@ -19,7 +19,7 @@ struct Cli {
     #[clap(
         short('v'),
         long,
-        default_value = "-c:v libx264 -vf scale=iw*4:ih*4:flags=neighbor,format=yuv420p -force_key_frames expr:gte(t,n_forced/2) -crf 18 -bf 2"
+        default_value = "-c:v libx264 -vf scale=iw*5:ih*5:flags=neighbor,format=yuv420p -force_key_frames expr:gte(t,n_forced/2) -crf 18 -bf 2"
     )]
     ffmpeg_video_flags: String,
 
