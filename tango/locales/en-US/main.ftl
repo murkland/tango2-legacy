@@ -21,6 +21,7 @@ debug = Debug
 connect = Connect
     .input-link-code = Link code
     .input-input-delay = Input delay
+    .input-replay-folder-name = Replay folder
     .description = Enter a link code that you and your opponent have decided on to connect to each other.
     .description-not-started = Connecting...
     .description-signalling = Waiting for opponent...

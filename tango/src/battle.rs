@@ -395,6 +395,8 @@ impl Match {
         settings: Settings,
     ) -> Self {
         let (remote_init_sender, remote_init_receiver) = tokio::sync::mpsc::channel(1);
+        let _ =
+            std::fs::create_dir(std::path::Path::new("replays").join(replay_folder_name.clone()));
         let r#impl = std::sync::Arc::new(MatchImpl {
             compat_list,
             negotiation: tokio::sync::Mutex::new(Negotiation::NotReady(
