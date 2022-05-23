@@ -1,4 +1,12 @@
-# tango
+# IMPORTANT / 注意
+
+**tango2-legacy is no longer supported. please use the tangobattle version of tango: <https://github.com/tangobattle/tango>.**
+
+**tango2-legacyのサポートは終了しました。tangobattleのtangoバージョンをご利用ください。<https://github.com/tangobattle/tango>**
+
+---
+
+# tango2-legacy
 
 ![tango](docs/logo.png)
 
